@@ -15,6 +15,8 @@ class CompressedDataStorage {
         // Destructor
         ~CompressedDataStorage();
 
+        int num_rows();
+        int num_cols();
     private: 
         int m_num_rows;
         int m_num_cols;
