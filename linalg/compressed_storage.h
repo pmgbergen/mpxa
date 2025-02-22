@@ -9,15 +9,23 @@ class CompressedDataStorage {
     public:
         // Constructor for an empty matrix.
         CompressedDataStorage(int num_rows, int num_cols) ;
-    
+
         // Constructor for a matrix with indices and values given.
         CompressedDataStorage(int num_rows, int num_cols, int* row_ptr, int* col_idx, T* values);
 
         // Destructor
         ~CompressedDataStorage();
 
-        int num_rows();
-        int num_cols();
+        const int num_rows();
+        const int num_cols();
+
+        const int* cols_in_row(int row);
+        const int* rows_in_col(int col);
+
+        const T* values();
+        const T* values_in_row(int row);
+
+
     private: 
         int m_num_rows;
         int m_num_cols;
