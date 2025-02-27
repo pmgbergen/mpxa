@@ -5,6 +5,10 @@ project(MPXA)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# Build shared libraries. Not sure if this is the best option in the long term, but stay
+# with it for now.
+set(BUILD_SHARED_LIBS ON)
+
 # Define the library name variable
 set(LIBRARY_NAME mpxa)
 # Define the test executable name variable
