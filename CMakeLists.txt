@@ -5,6 +5,10 @@ project(MPXA)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+# Add subdirectories for source and tests
+
+enable_testing()
+
 # Build shared libraries. Not sure if this is the best option in the long term, but stay
 # with it for now.
 set(BUILD_SHARED_LIBS ON)
@@ -14,10 +18,15 @@ set(LIBRARY_NAME mpxa)
 # Define the test executable name variable
 set(TEST_EXECUTABLE test_mpxa)
 
+# Set (empty) list of library dependencies
+set(LIBRARY_DEPENDENCIES)
+
 # Add the Google Test framework
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 
-# Add subdirectories for source and tests
 add_subdirectory(src)
 add_subdirectory(tests)
+
+
+add_test(NAME ${TEST_EXECUTABLE} COMMAND ${TEST_EXECUTABLE})
