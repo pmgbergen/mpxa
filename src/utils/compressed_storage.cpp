@@ -20,10 +20,13 @@ CompressedDataStorage<T>::CompressedDataStorage(int num_rows, int num_cols, int*
                                                 int* col_idx, T* values)
     : m_num_rows(num_rows),
       m_num_cols(num_cols),
-      m_row_ptr(row_ptr),
-      m_col_idx(col_idx),
-      m_values(values)
+      m_row_ptr(new int[num_rows + 1]),
+      m_col_idx(new int[row_ptr[num_rows]]),
+      m_values(new T[row_ptr[num_rows]])
 {
+    std::copy(row_ptr, row_ptr + num_rows + 1, m_row_ptr);
+    std::copy(col_idx, col_idx + row_ptr[num_rows], m_col_idx);
+    std::copy(values, values + row_ptr[num_rows], m_values);
 }
 
 // Destructor
