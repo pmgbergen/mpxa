@@ -2,18 +2,6 @@
 
 #include <vector>
 
-// Constructor for an empty matrix.
-template <typename T>
-CompressedDataStorage<T>::CompressedDataStorage(int num_rows, int num_cols)
-    : m_num_rows(num_rows),
-      m_num_cols(num_cols),
-      m_row_ptr(new int[num_rows + 1]),
-      m_col_idx(new int[0]),
-      m_values(new T[0])
-{
-    m_row_ptr[0] = 0;
-}
-
 // Constructor for a matrix with indices and values given.
 template <typename T>
 CompressedDataStorage<T>::CompressedDataStorage(int num_rows, int num_cols, int* row_ptr,
