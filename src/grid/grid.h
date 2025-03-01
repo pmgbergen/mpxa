@@ -6,7 +6,7 @@
 class Grid
 {
    public:
-    Grid(int dim, double** nodes, CompressedDataStorage<int>* cell_faces,
+    Grid(const int dim, double** nodes, CompressedDataStorage<int>* cell_faces,
          CompressedDataStorage<int>* face_nodes);
     ~Grid();
 
@@ -72,4 +72,7 @@ class Grid
 
     int* m_boundary_faces;
 };
+
+Grid* create_cartesian_grid(const int dim, const int* num_cells, const double* lengths);
+
 #endif  // GRID_GRID_H

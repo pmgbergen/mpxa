@@ -1,6 +1,8 @@
 #include "grid.h"
 
-Grid::Grid(int dim, double **nodes, CompressedDataStorage<int> *cell_faces,
+#include <vector>
+
+Grid::Grid(const int dim, double **nodes, CompressedDataStorage<int> *cell_faces,
            CompressedDataStorage<int> *face_nodes)
     : m_dim(dim), m_nodes(nodes), m_cell_faces(cell_faces), m_face_nodes(face_nodes)
 {
@@ -158,4 +160,377 @@ void Grid::set_cell_centers(double **cell_centers)
             m_cell_centers[i][j] = cell_centers[i][j];
         }
     }
+}
+
+// Cartesian grid creation
+Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *lengths)
+{
+    // Dim should be 2 or 3
+    if (dim < 2 || dim > 3)
+    {
+        return nullptr;
+    }
+
+    // Create node coordinates along each dimension
+    double *x = new double[num_cells[0] + 1];
+    double *y = new double[num_cells[1] + 1];
+    double *z = dim == 3 ? new double[num_cells[2] + 1] : nullptr;
+
+    double dx = lengths[0] / num_cells[0];
+    double dy = lengths[1] / num_cells[1];
+    double dz = dim == 3 ? lengths[2] / num_cells[2] : 0.0;
+
+    for (int i = 0; i < num_cells[0] + 1; ++i)
+    {
+        x[i] = i * dx;
+    }
+    for (int i = 0; i < num_cells[1] + 1; ++i)
+    {
+        y[i] = i * dy;
+    }
+
+    if (dim == 3)
+    {
+        for (int i = 0; i < num_cells[0] + 1; ++i)
+        {
+            z[i] = i * dz;
+        }
+    }
+
+    // Bookkeeping: First the total number of nodes..
+    int num_nodes = (num_cells[0] + 1) * (num_cells[1] + 1);
+    if (dim == 3)
+    {
+        num_nodes *= (num_cells[2] + 1);
+    }
+    // ..then the number of nodes along each dimension.
+    int *num_nodes_per_dim = new int[3];
+    num_nodes_per_dim[0] = num_cells[0] + 1;
+    num_nodes_per_dim[1] = num_cells[1] + 1;
+    // Set the number of nodes in the z-direction to 1 if dim is 2. The nodes will be 2d
+    // if dim==2, but this allows for a unified implementation.
+    num_nodes_per_dim[2] = dim == 3 ? num_cells[2] + 1 : 1;
+
+    // The faces will be ordered as follows: First the faces along the x-direction, then
+    // the faces along the y-direction. In 3d, the faces along the z-direction will be
+    // last.
+
+    // The number of faces along the x and y directions. This is true for 2d, for 3d,
+    // the number is adjusted below.
+    int num_faces_x = (num_cells[0] + 1) * num_cells[1];
+    int num_faces_y = num_cells[0] * (num_cells[1] + 1);
+    // In 3d, we also need to count the number of x- and y-faces in a single xy-layer.
+    const int num_faces_x_per_xy_layer = num_faces_x;
+    const int num_faces_y_per_xy_layer = num_faces_y;
+
+    // Total number of faces in 2d; 3d adjustment is done below.
+    int tot_num_faces = num_faces_x + num_faces_y;
+
+    if (dim == 3)
+    {
+        num_faces_x *= num_cells[2];
+        num_faces_y *= num_cells[2];
+        const int num_faces_z = num_cells[0] * num_cells[1] * (num_cells[2] + 1);
+        tot_num_faces += num_faces_z;
+    }
+
+    // Data structures for node coordinates and face nodes.
+    // Define node coordinates as a num_nodes x dim array.
+    double **nodes = new double *[num_nodes];
+    for (int i = 0; i < num_nodes; ++i)
+    {
+        nodes[i] = new double[dim];
+    }
+    // We will eventually create a compressed row data storage for the face nodes.
+    // However, for convenience store the column indices (the face numbers) in a vector
+    // first. Data for the compressed storage will be created later.
+    int *row_ptr_face_nodes = new int[num_nodes + 1];
+    std::vector<int> face_nodes_vector;
+
+    // Let the node indices increase along the x-direction first, then the y-direction.
+    // In 3d, the z-direction will be last.
+    for (int k = 0; k < num_nodes_per_dim[2]; ++k)
+    {
+        for (int j = 0; j < num_nodes_per_dim[1]; ++j)
+        {
+            for (int i = 0; i < num_nodes_per_dim[0]; ++i)
+            {
+                const int node_index =
+                    i + j * num_nodes_per_dim[0] + k * num_nodes_per_dim[0] * num_nodes_per_dim[1];
+                nodes[node_index][0] = x[i];
+                nodes[node_index][1] = y[j];
+                if (dim == 3)
+                {
+                    nodes[node_index][2] = z[k];
+                }
+
+                // Create face nodes
+                row_ptr_face_nodes[node_index] = face_nodes_vector.size();
+                // Local vector of face indices, to be appended to the global vector.
+                std::vector<int> face_nodes_loc;
+
+                if (i < num_nodes_per_dim[0] - 1)
+                {
+                    // Add the face to the right in the xy-plane
+                    face_nodes_loc.push_back(node_index + num_faces_x);
+                    if (dim == 3 && k > 0)
+                    {
+                        // Add the face to the right in the xz-plane
+                        face_nodes_loc.push_back(node_index + num_faces_x -
+                                                 num_faces_y_per_xy_layer);
+                    }
+                }
+                if (i > 0)
+                {
+                    // Add the face to the left in the xy-plane
+                    face_nodes_loc.push_back(node_index - 1);
+                    if (dim == 3 && k > 0)
+                    {
+                        // Add the face to the left in the xz-plane
+                        face_nodes_loc.push_back(node_index - 1 - num_faces_y_per_xy_layer);
+                    }
+                }
+                if (j > 0)
+                {
+                    // Add the face below in the xy-plane
+                    face_nodes_loc.push_back(node_index - num_nodes_per_dim[0]);
+                    if (dim == 3 && k > 0)
+                    {
+                        // Add the face below in the xz-plane
+                        face_nodes_loc.push_back(node_index - num_nodes_per_dim[0] -
+                                                 num_faces_x_per_xy_layer);
+                    }
+                }
+                if (j < num_nodes_per_dim[1] - 1)
+                {
+                    // Add face above in the xy-plane
+                    face_nodes_loc.push_back(node_index);
+                    if (dim == 3 && k > 0)
+                    {
+                        // Add the face above in the xz-plane
+                        face_nodes_loc.push_back(node_index - num_faces_x_per_xy_layer);
+                    }
+                }
+                if (dim == 3)
+                {
+                    if (i < num_cells[0] + 1 && j < num_cells[1] + 1)
+                    {
+                        // Add the face below in the xz-plane
+                        face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
+                                                 num_faces_y_per_xy_layer);
+                    }
+                    if (i < num_cells[0] + 1 && j > 0)
+                    {
+                        face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
+                                                 num_faces_y_per_xy_layer - num_faces_x);
+                    }
+                    if (i > 0 && j < num_cells[1] + 1)
+                    {
+                        face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
+                                                 num_faces_y_per_xy_layer - 1);
+                    }
+                    if (i > 0 && j > 0)
+                    {
+                        face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
+                                                 num_faces_y_per_xy_layer - num_faces_x - 1);
+                    }
+                }
+                face_nodes_vector.insert(face_nodes_vector.end(), face_nodes_loc.begin(),
+                                         face_nodes_loc.end());
+            }
+        }
+    }
+    // Turn the vector into an array
+    int *col_ptr_face_nodes = new int[face_nodes_vector.size()];
+    std::copy(face_nodes_vector.begin(), face_nodes_vector.end(), col_ptr_face_nodes);
+
+    // The data is an array of ones
+    int *data_face_nodes = new int[face_nodes_vector.size()];
+    for (int i = 0; i < face_nodes_vector.size(); ++i)
+    {
+        data_face_nodes[i] = 1;
+    }
+
+    CompressedDataStorage<int> *face_nodes = new CompressedDataStorage<int>(
+        num_nodes, tot_num_faces, row_ptr_face_nodes, col_ptr_face_nodes, data_face_nodes);
+
+    // Create cell faces
+    int tot_num_cells = num_cells[0] * num_cells[1];
+    tot_num_cells = dim == 3 ? tot_num_cells * num_cells[2] : tot_num_cells;
+
+    int *row_ptr = new int[tot_num_faces + 1];
+    std::vector<int> col_idx_vector;
+    std::vector<int> face_cell_sign_vector;
+
+    int face_index = 0;
+    int data_counter = 0;
+
+    const int num_faces_z = (dim == 3) ? num_cells[2] : 1;
+    // Create faces along the x and y directions. This loop is common for 2d and 3d, but
+    // will do a single iteration in 2d.
+    for (int k = 0; k < num_faces_z; ++k)
+    {
+        // First create the faces along the x-direction. The outer loop is over the
+        // y-direction.
+        for (int j = 0; j < num_cells[1]; ++j)
+        {
+            // The first face has a single neighboring cell.
+            row_ptr[face_index] = col_idx_vector.size();
+            // The normal vector will point into the first cell.
+            face_cell_sign_vector.push_back(-1);
+            // The neighboring cell is the one to the right.
+            col_idx_vector.push_back(j * num_cells[0] + k * num_cells[0] * num_cells[1]);
+
+            ++face_index;
+
+            // Next loop over the cells in the x-direction. Start at 1 because the first
+            // face has been created.
+            for (int i = 1; i < num_cells[0]; ++i)
+            {
+                row_ptr[face_index] = col_idx_vector.size();
+                // The normal vector will point out of the first cell.
+                face_cell_sign_vector.push_back(1);
+                // The neighboring cell is the one to the left.
+                col_idx_vector.push_back((i - 1) + j * num_cells[0] +
+                                         k * num_cells[0] * num_cells[1]);
+
+                // The normal vector will point into the second cell.
+                face_cell_sign_vector.push_back(-1);
+                // The neighboring cell is the one to the right.
+                col_idx_vector.push_back(i + j * num_cells[0] + k * num_cells[0] * num_cells[1]);
+
+                face_cell_sign_vector.push_back(1);
+                ++face_index;
+            }
+            // The last face has a single neighboring cell.
+            row_ptr[face_index] = col_idx_vector.size();
+            // The normal vector will point out of the last cell.
+            face_cell_sign_vector.push_back(1);
+            // The neighboring cell is the one to the left.
+            col_idx_vector.push_back((num_cells[1] - 1) + j * num_cells[0] +
+                                     k * num_cells[0] * num_cells[1]);
+            ++face_index;
+        }
+    }
+    for (int k = 0; k < num_faces_z; ++k)
+    {
+        // Next create the faces along the y-direction. The outer loop is over the
+        // x-direction.
+        for (int i = 0; i < num_cells[0]; ++i)
+        {
+            // The first face has a single neighboring cell.
+            row_ptr[face_index] = col_idx_vector.size();
+            // The normal vector will point into the first cell.
+            face_cell_sign_vector.push_back(-1);
+            // The neighboring cell is the one above.
+            col_idx_vector.push_back(i + k * num_cells[0] * num_cells[1]);
+            ++face_index;
+
+            // Next loop over the cells in the y-direction. Start at 1 because the first
+            // face has been created.
+            for (int j = 1; j < num_cells[1]; ++j)
+            {
+                row_ptr[face_index] = col_idx_vector.size();
+                // The normal vector will point out of the first cell.
+                face_cell_sign_vector.push_back(1);
+                // The neighboring cell is the one below.
+                col_idx_vector.push_back(i + (j - 1) * num_cells[0] +
+                                         k * num_cells[0] * num_cells[1]);
+                // The normal vector will point into the second cell.
+                face_cell_sign_vector.push_back(-1);
+                // The neighboring cell is the one above.
+                col_idx_vector.push_back(i + j * num_cells[0] + k * num_cells[0] * num_cells[1]);
+                ++face_index;
+            }
+            // The last face has a single neighboring cell.
+            row_ptr[face_index] = col_idx_vector.size();
+            // The normal vector will point out of the last cell.
+            face_cell_sign_vector.push_back(1);
+            // The neighboring cell is the one below.
+            col_idx_vector.push_back(i + (num_cells[1] * num_cells[0]) +
+                                     k * num_cells[0] * num_cells[1]);
+            ++face_index;
+        }
+    }
+    if (dim == 3)
+    {
+        // First create faces at the bottom of the domain.
+        for (int j = 0; j < num_cells[1]; ++j)
+        {
+            for (int i = 0; i < num_cells[0]; ++i)
+            {
+                // First create face at the bottom of the domain.
+                row_ptr[face_index] = col_idx_vector.size();
+                // The normal vector will point into the first cell.
+                face_cell_sign_vector.push_back(-1);
+                // The neighboring cell is the one above.
+                col_idx_vector.push_back(j * num_cells[0] + i);
+                ++face_index;
+            }
+        }
+        // Loop over the cells in the z-direction. Start at 1 because the first
+        // face has been created.
+        for (int k = 1; k < num_cells[2]; ++k)
+        {
+            for (int j = 0; j < num_cells[1]; ++j)
+            {
+                for (int i = 0; i < num_cells[0]; ++i)
+                {
+                    row_ptr[face_index] = col_idx_vector.size();
+                    // The normal vector will point out of the first cell.
+                    face_cell_sign_vector.push_back(1);
+                    // The neighboring cell is the one below.
+                    col_idx_vector.push_back(i + j * num_cells[0] +
+                                             (k - 1) * num_cells[0] * num_cells[1]);
+                    // The normal vector will point into the second cell.
+                    face_cell_sign_vector.push_back(-1);
+                    // The neighboring cell is the one above.
+                    col_idx_vector.push_back(i + j * num_cells[0] +
+                                             k * num_cells[0] * num_cells[1]);
+                    ++face_index;
+                }
+            }
+        }
+        // Last create faces at the top of the domain.
+        for (int j = 0; j < num_cells[1]; ++j)
+        {
+            for (int i = 0; i < num_cells[0]; ++i)
+            {
+                // First create face at the bottom of the domain.
+                row_ptr[face_index] = col_idx_vector.size();
+                // The normal vector will point out of the cell.
+                face_cell_sign_vector.push_back(1);
+                // The neighboring cell is the one above.
+                col_idx_vector.push_back(i + j * num_cells[0] +
+                                         num_cells[0] * num_cells[1] * num_cells[2]);
+                ++face_index;
+            }
+        }
+    }
+    int *col_idx = new int[col_idx_vector.size()];
+    std::copy(col_idx_vector.begin(), col_idx_vector.end(), col_idx);
+    int *face_cell_sign = new int[face_cell_sign_vector.size()];
+    std::copy(face_cell_sign_vector.begin(), face_cell_sign_vector.end(), face_cell_sign);
+    CompressedDataStorage<int> *face_cells = new CompressedDataStorage<int>(
+        tot_num_faces, tot_num_cells, row_ptr, col_idx, face_cell_sign);
+
+    Grid *grid = new Grid(dim, nodes, face_cells, face_nodes);
+
+    // Clean up temporary arrays
+    delete[] x;
+    delete[] y;
+    if (dim == 3)
+    {
+        delete[] z;
+    }
+    delete[] num_nodes_per_dim;
+    delete[] row_ptr_face_nodes;
+    delete[] col_ptr_face_nodes;
+    delete[] data_face_nodes;
+    delete[] row_ptr;
+    delete[] col_idx;
+    delete[] face_cell_sign;
+
+    // TODO: Add geometry computation
+    return grid;
 }
