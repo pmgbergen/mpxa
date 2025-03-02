@@ -192,7 +192,7 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
 
     if (dim == 3)
     {
-        for (int i = 0; i < num_cells[0] + 1; ++i)
+        for (int i = 0; i < num_cells[2] + 1; ++i)
         {
             z[i] = i * dz;
         }
