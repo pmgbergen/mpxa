@@ -79,7 +79,7 @@ TEST_F(GridTest, NodeCoordinates2dUnitSquareDomain)
 }
 
 // Test that
-TEST_F(GridTest, FaceNodesCart2d)
+TEST_F(GridTest, FacesOfNodeCartGrid2d)
 {
     EXPECT_EQ(grid_2d->num_faces(), 17);
 
@@ -116,6 +116,49 @@ TEST_F(GridTest, FaceNodesCart2d)
         for (size_t i = 0; i < expected_faces.size(); ++i)
         {
             EXPECT_EQ(face_nodes[i], expected_faces[i]);
+        }
+    }
+}
+
+TEST_F(GridTest, NodesOfFaceCartGrid2d)
+{
+    // Expected nodes of selected faces.
+    std::vector<int> nodes_of_face_0({0, 3});
+    std::vector<int> nodes_of_face_1({1, 4});
+    std::vector<int> nodes_of_face_2({2, 5});
+    std::vector<int> nodes_of_face_3({3, 6});
+    std::vector<int> nodes_of_face_5({5, 8});
+    std::vector<int> nodes_of_face_7({7, 10});
+    std::vector<int> nodes_of_face_8({8, 11});
+    std::vector<int> nodes_of_face_9({0, 1});
+    std::vector<int> nodes_of_face_10({1, 2});
+    std::vector<int> nodes_of_face_11({3, 4});
+    std::vector<int> nodes_of_face_16({10, 11});
+
+    std::map<int, std::vector<int>> expected_nodes_of_face;
+
+    expected_nodes_of_face[0] = nodes_of_face_0;
+    expected_nodes_of_face[1] = nodes_of_face_1;
+    expected_nodes_of_face[2] = nodes_of_face_2;
+    expected_nodes_of_face[3] = nodes_of_face_3;
+    expected_nodes_of_face[5] = nodes_of_face_5;
+    expected_nodes_of_face[7] = nodes_of_face_7;
+    expected_nodes_of_face[8] = nodes_of_face_8;
+    expected_nodes_of_face[9] = nodes_of_face_9;
+    expected_nodes_of_face[10] = nodes_of_face_10;
+    expected_nodes_of_face[11] = nodes_of_face_11;
+    expected_nodes_of_face[16] = nodes_of_face_16;
+
+    // Loop over the keys of the map, fetch the face nodes of the key and compare with the
+    // expected values.
+    for (auto const& [face, expected_nodes] : expected_nodes_of_face)
+    {
+        std::vector<int> face_nodes = grid_2d->nodes_of_face(face);
+        std::sort(face_nodes.begin(), face_nodes.end());
+        EXPECT_EQ(face_nodes.size(), expected_nodes.size());
+        for (size_t i = 0; i < expected_nodes.size(); ++i)
+        {
+            EXPECT_EQ(face_nodes[i], expected_nodes[i]);
         }
     }
 }

@@ -26,6 +26,7 @@ class Grid
     // Direct access to the compressed data storage
     // const int* cell_faces(int cell);
     const std::vector<int> faces_of_node(int node);
+    const std::vector<int> nodes_of_face(int face);
     // // Data that can be accessed through the compressed data storage.
     // // TODO: It may be desirable to accept arrays of indices as arguments to these functions.
     // const int* face_cells(int face);

@@ -76,6 +76,11 @@ const std::vector<int> Grid::faces_of_node(int node)
     return m_face_nodes->cols_in_row(node);
 }
 
+const std::vector<int> Grid::nodes_of_face(int face)
+{
+    return m_face_nodes->rows_in_col(face);
+}
+
 // Getters for geometric data
 const double **Grid::nodes()
 {
