@@ -5,6 +5,7 @@
 #define LINALG_SPARSE_MATRIX_H
 
 #include <algorithm>
+#include <vector>
 
 template <typename T>
 class CompressedDataStorage
@@ -14,7 +15,7 @@ class CompressedDataStorage
     CompressedDataStorage(int num_rows, int num_cols);
 
     // Constructor for a matrix with indices and values given.
-    CompressedDataStorage(int num_rows, int num_cols, int* row_ptr, int* col_idx, T* values);
+    CompressedDataStorage(int num_rows, int num_cols, const std::vector<int>& row_ptr, const std::vector<int>& col_idx, const std::vector<T>& values);
 
     // Destructor
     ~CompressedDataStorage();
@@ -23,42 +24,37 @@ class CompressedDataStorage
     const int num_cols();
 
     // Getters for the compressed data storage. These return *copies* of the data. TODO!
-    int* cols_in_row(int row);
-    int* rows_in_col(int col);
+    std::vector<int> cols_in_row(int row);
+    std::vector<int> rows_in_col(int col);  // Change from int* to std::vector<int>
 
-    const T* values();
-    T* values_in_row(int row);
+    std::vector<T> values();
+    std::vector<T> values_in_row(int row);
 
    private:
     int m_num_rows;
     int m_num_cols;
-    int* m_row_ptr;
-    int* m_col_idx;
-    T* m_values;
+    std::vector<int> m_row_ptr;
+    std::vector<int> m_col_idx;
+    std::vector<T> m_values;  // Change from T* to std::vector<T>
 };
 
 // Constructor for a matrix with indices and values given.
 template <typename T>
-CompressedDataStorage<T>::CompressedDataStorage(int num_rows, int num_cols, int* row_ptr,
-                                                int* col_idx, T* values)
+CompressedDataStorage<T>::CompressedDataStorage(int num_rows, int num_cols, const std::vector<int>& row_ptr,
+                                                const std::vector<int>& col_idx, const std::vector<T>& values)
     : m_num_rows(num_rows),
       m_num_cols(num_cols),
-      m_row_ptr(new int[num_rows + 1]),
-      m_col_idx(new int[row_ptr[num_rows]]),
-      m_values(new T[row_ptr[num_rows]])
+      m_row_ptr(row_ptr),
+      m_col_idx(col_idx),
+      m_values(values)
 {
-    std::copy(row_ptr, row_ptr + num_rows + 1, m_row_ptr);
-    std::copy(col_idx, col_idx + row_ptr[num_rows], m_col_idx);
-    std::copy(values, values + row_ptr[num_rows], m_values);
 }
 
 // Destructor
 template <typename T>
 CompressedDataStorage<T>::~CompressedDataStorage()
 {
-    delete[] m_row_ptr;
-    delete[] m_col_idx;
-    delete[] m_values;
+    // No need to manually delete arrays, std::vector handles it.
 }
 
 template <typename T>
@@ -74,10 +70,10 @@ const int CompressedDataStorage<T>::num_cols()
 }
 
 template <typename T>
-int* CompressedDataStorage<T>::cols_in_row(int row)
+std::vector<int> CompressedDataStorage<T>::cols_in_row(int row)
 {
     const int size = m_row_ptr[row + 1] - m_row_ptr[row];
-    int* cols = new int[size];
+    std::vector<int> cols(size);
     for (int i = 0; i < size; i++)
     {
         cols[i] = m_col_idx[m_row_ptr[row] + i];
@@ -86,7 +82,7 @@ int* CompressedDataStorage<T>::cols_in_row(int row)
 }
 
 template <typename T>
-int* CompressedDataStorage<T>::rows_in_col(int col)
+std::vector<int> CompressedDataStorage<T>::rows_in_col(int col)
 {
     std::vector<int> rows;
     // Loop over all rows, find the column index in the row. If the column of the row is
@@ -102,27 +98,25 @@ int* CompressedDataStorage<T>::rows_in_col(int col)
         }
     }
     // Convert the list to an array and return it.
-    int* result = new int[rows.size()];
-    std::copy(rows.begin(), rows.end(), result);
-    return result;
+    return rows;
 }
 
 template <typename T>
-const T* CompressedDataStorage<T>::values()
+std::vector<T> CompressedDataStorage<T>::values()
 {
     return m_values;
 }
 
 template <typename T>
-T* CompressedDataStorage<T>::values_in_row(int row)
+std::vector<T> CompressedDataStorage<T>::values_in_row(int row)
 {
     const int size = m_row_ptr[row + 1] - m_row_ptr[row];
-    T* values = new T[size];
+    std::vector<T> row_values(size);
     for (int i = 0; i < size; i++)
     {
-        values[i] = m_values[m_row_ptr[row] + i];
+        row_values[i] = m_values[m_row_ptr[row] + i];
     }
-    return values;
+    return row_values;
 }
 
 #endif  // LINALG_SPARSE_MATRIX_H

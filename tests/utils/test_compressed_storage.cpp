@@ -6,9 +6,9 @@
 class CompressedDataStorageTest : public ::testing::Test
 {
    protected:
-    int row_ptr[4] = {0, 2, 4, 4};
-    int col_idx[4] = {0, 1, 1, 2};
-    double values[4] = {1.0, 2.0, 3.0, 4.0};
+    std::vector<int> row_ptr = {0, 2, 4, 4};
+    std::vector<int> col_idx = {0, 1, 1, 2};
+    std::vector<double> values = {1.0, 2.0, 3.0, 4.0};
     CompressedDataStorage<double>* storage;
 
     void SetUp() override
@@ -36,28 +36,25 @@ TEST_F(CompressedDataStorageTest, ConstructorWithValues)
 // Test the cols_in_row method
 TEST_F(CompressedDataStorageTest, ColsInRow)
 {
-    const int* cols = storage->cols_in_row(1);
+    std::vector<int> cols = storage->cols_in_row(1);
     EXPECT_EQ(cols[0], 1);
     EXPECT_EQ(cols[1], 2);
-    delete[] cols;
 }
 
 // Test the rows_in_col method
 TEST_F(CompressedDataStorageTest, RowsInCol)
 {
-    const int* rows = storage->rows_in_col(1);
+    std::vector<int> rows = storage->rows_in_col(1);
     EXPECT_EQ(rows[0], 0);
     EXPECT_EQ(rows[1], 1);
-    delete[] rows;
 }
 
 // Test the values_in_row method
 TEST_F(CompressedDataStorageTest, ValuesInRow)
 {
-    const double* row_values = storage->values_in_row(1);
+    std::vector<double> row_values = storage->values_in_row(1);
     EXPECT_EQ(row_values[0], 3.0);
     EXPECT_EQ(row_values[1], 4.0);
-    delete[] row_values;
 }
 
 // Main function to run all tests
