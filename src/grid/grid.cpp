@@ -172,9 +172,10 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
     }
 
     // Create node coordinates along each dimension
-    double *x = new double[num_cells[0] + 1];
-    double *y = new double[num_cells[1] + 1];
-    double *z = dim == 3 ? new double[num_cells[2] + 1] : nullptr;
+    std::vector<double> x(num_cells[0] + 1);
+    std::vector<double> y(num_cells[1] + 1);
+    std::vector<double> z =
+        dim == 3 ? std::vector<double>(num_cells[2] + 1) : std::vector<double>();
 
     double dx = lengths[0] / num_cells[0];
     double dy = lengths[1] / num_cells[1];
@@ -204,7 +205,7 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
         num_nodes *= (num_cells[2] + 1);
     }
     // ..then the number of nodes along each dimension.
-    int *num_nodes_per_dim = new int[3];
+    std::vector<int> num_nodes_per_dim(3);
     num_nodes_per_dim[0] = num_cells[0] + 1;
     num_nodes_per_dim[1] = num_cells[1] + 1;
     // Set the number of nodes in the z-direction to 1 if dim is 2. The nodes will be 2d
@@ -244,7 +245,7 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
     // We will eventually create a compressed row data storage for the face nodes.
     // However, for convenience store the column indices (the face numbers) in a vector
     // first. Data for the compressed storage will be created later.
-    int *row_ptr_face_nodes = new int[num_nodes + 1];
+    std::vector<int> row_ptr_face_nodes(num_nodes + 1);
     std::vector<int> face_nodes_vector;
 
     // Let the node indices increase along the x-direction first, then the y-direction.
@@ -341,15 +342,10 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
         }
     }
     // Turn the vector into an array
-    int *col_ptr_face_nodes = new int[face_nodes_vector.size()];
-    std::copy(face_nodes_vector.begin(), face_nodes_vector.end(), col_ptr_face_nodes);
+    std::vector<int> col_ptr_face_nodes(face_nodes_vector.begin(), face_nodes_vector.end());
 
     // The data is an array of ones
-    int *data_face_nodes = new int[face_nodes_vector.size()];
-    for (int i = 0; i < face_nodes_vector.size(); ++i)
-    {
-        data_face_nodes[i] = 1;
-    }
+    std::vector<int> data_face_nodes(face_nodes_vector.size(), 1);
 
     CompressedDataStorage<int> *face_nodes = new CompressedDataStorage<int>(
         num_nodes, tot_num_faces, row_ptr_face_nodes, col_ptr_face_nodes, data_face_nodes);
@@ -358,7 +354,7 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
     int tot_num_cells = num_cells[0] * num_cells[1];
     tot_num_cells = dim == 3 ? tot_num_cells * num_cells[2] : tot_num_cells;
 
-    int *row_ptr = new int[tot_num_faces + 1];
+    std::vector<int> row_ptr(tot_num_faces + 1);
     std::vector<int> col_idx_vector;
     std::vector<int> face_cell_sign_vector;
 
@@ -507,29 +503,16 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
             }
         }
     }
-    int *col_idx = new int[col_idx_vector.size()];
-    std::copy(col_idx_vector.begin(), col_idx_vector.end(), col_idx);
-    int *face_cell_sign = new int[face_cell_sign_vector.size()];
-    std::copy(face_cell_sign_vector.begin(), face_cell_sign_vector.end(), face_cell_sign);
+    std::vector<int> col_idx(col_idx_vector.begin(), col_idx_vector.end());
+    std::vector<int> face_cell_sign(face_cell_sign_vector.begin(), face_cell_sign_vector.end());
     CompressedDataStorage<int> *face_cells = new CompressedDataStorage<int>(
         tot_num_faces, tot_num_cells, row_ptr, col_idx, face_cell_sign);
 
     Grid *grid = new Grid(dim, nodes, face_cells, face_nodes);
 
     // Clean up temporary arrays
-    delete[] x;
-    delete[] y;
-    if (dim == 3)
-    {
-        delete[] z;
-    }
-    delete[] num_nodes_per_dim;
-    delete[] row_ptr_face_nodes;
-    delete[] col_ptr_face_nodes;
-    delete[] data_face_nodes;
-    delete[] row_ptr;
-    delete[] col_idx;
-    delete[] face_cell_sign;
+    // No need to delete x, y, z, num_nodes_per_dim, row_ptr_face_nodes, col_ptr_face_nodes,
+    // data_face_nodes, row_ptr, col_idx, face_cell_sign as they are now vectors
 
     // TODO: Add geometry computation
     return grid;
