@@ -1,6 +1,8 @@
 #ifndef GRID_GRID_H
 #define GRID_GRID_H
 
+#include <algorithm>
+
 #include "../utils/compressed_storage.h"
 
 class Grid
@@ -73,6 +75,7 @@ class Grid
     int* m_boundary_faces;
 };
 
+// Cartesian grid creation
 Grid* create_cartesian_grid(const int dim, const int* num_cells, const double* lengths);
 
 #endif  // GRID_GRID_H
