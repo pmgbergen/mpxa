@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <map>
+#include <vector>
+
 #include "../../src/grid/grid.cpp"
 
 // Test fixture for Grid
@@ -25,8 +28,9 @@ class GridTest : public ::testing::Test
     }
 };
 
-// Test that the grid nodes are created correctly
-TEST_F(GridTest, Nodes)
+// Test that the grid nodes are created correctly. The nodes are created in a 2x3 grid
+// with unit cell size.
+TEST_F(GridTest, NodeCoordinates2dUnitCellSize)
 {
     EXPECT_EQ(grid_2d->num_nodes(), 12);
 
@@ -55,4 +59,63 @@ TEST_F(GridTest, Nodes)
     EXPECT_EQ(nodes[10][1], 3.0);
     EXPECT_EQ(nodes[11][0], 2.0);
     EXPECT_EQ(nodes[11][1], 3.0);
+}
+
+// Test that grid nodes correct for a unit square domain (non-unit size grids). Only
+// test a few nodes.
+TEST_F(GridTest, NodeCoordinates2dUnitSquareDomain)
+{
+    const int nx = 2;
+    const int ny = 3;
+
+    const double** nodes = unit_square->nodes();
+    EXPECT_EQ(nodes[0][0], 0.0);
+    EXPECT_EQ(nodes[0][1], 0.0);
+    EXPECT_EQ(nodes[1][0], 1.0 / nx);
+    EXPECT_EQ(nodes[1][1], 0.0);
+    EXPECT_EQ(nodes[2][0], 1.0);
+    EXPECT_EQ(nodes[3][1], 1.0 / ny);
+    EXPECT_EQ(nodes[9][1], 1.0);
+}
+
+// Test that
+TEST_F(GridTest, FaceNodesCart2d)
+{
+    EXPECT_EQ(grid_2d->num_faces(), 17);
+
+    // Expected faces of selected nodes.
+    std::vector<int> faces_of_node_0({0, 9});
+    std::vector<int> faces_of_node_1({1, 9, 10});
+    std::vector<int> faces_of_node_2({2, 10});
+    std::vector<int> faces_of_node_3({0, 3, 11});
+    std::vector<int> faces_of_node_4({1, 4, 11, 10});
+    std::vector<int> faces_of_node_5({2, 5, 12});
+    std::vector<int> faces_of_node_9({6, 15});
+    std::vector<int> faces_of_node_10({7, 15, 16});
+    std::vector<int> faces_of_node_11({8, 16});
+
+    std::map<int, std::vector<int>> expected_faces_of_node;
+
+    expected_faces_of_node[0] = faces_of_node_0;
+    expected_faces_of_node[1] = faces_of_node_1;
+    expected_faces_of_node[2] = faces_of_node_2;
+    expected_faces_of_node[3] = faces_of_node_3;
+    expected_faces_of_node[4] = faces_of_node_4;
+    expected_faces_of_node[5] = faces_of_node_5;
+    expected_faces_of_node[9] = faces_of_node_9;
+    expected_faces_of_node[10] = faces_of_node_10;
+    expected_faces_of_node[11] = faces_of_node_11;
+
+    // Loop over the keys of the map, fetch the face nodes of the key and compare with the
+    // expected values.
+    for (auto const& [node, expected_faces] : expected_faces_of_node)
+    {
+        std::vector<int> face_nodes = grid_2d->faces_of_node(node);
+        std::sort(face_nodes.begin(), face_nodes.end());
+        EXPECT_EQ(face_nodes.size(), expected_faces.size());
+        for (size_t i = 0; i < expected_faces.size(); ++i)
+        {
+            EXPECT_EQ(face_nodes[i], expected_faces[i]);
+        }
+    }
 }
