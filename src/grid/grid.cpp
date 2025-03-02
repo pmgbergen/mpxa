@@ -70,6 +70,11 @@ int Grid::num_faces()
     return m_num_faces;
 }
 
+const std::vector<int> Grid::faces_of_node(int node)
+{
+    return m_face_nodes->cols_in_row(node);
+}
+
 // Getters for geometric data
 const double **Grid::nodes()
 {
