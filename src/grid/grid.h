@@ -2,6 +2,7 @@
 #define GRID_GRID_H
 
 #include <algorithm>
+#include <vector>
 
 #include "../utils/compressed_storage.h"
 

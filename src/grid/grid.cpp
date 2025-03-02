@@ -1,5 +1,6 @@
 #include "grid.h"
 
+#include <iostream>
 #include <vector>
 
 Grid::Grid(const int dim, double **nodes, CompressedDataStorage<int> *cell_faces,
@@ -277,23 +278,28 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
 
                 if (i < num_nodes_per_dim[0] - 1)
                 {
-                    // Add the face to the right in the xy-plane
-                    face_nodes_loc.push_back(node_index + num_faces_x);
+                    // Add the face to the right in the xy-plane.
+                    face_nodes_loc.push_back(i + j * num_cells[0] +
+                                             k * num_cells[0] * num_cells[1] + num_faces_x);
                     if (dim == 3 && k > 0)
                     {
                         // Add the face to the right in the xz-plane
-                        face_nodes_loc.push_back(node_index + num_faces_x -
+                        face_nodes_loc.push_back(i + j * num_cells[0] +
+                                                 k * num_cells[0] * num_cells[1] + num_faces_x -
                                                  num_faces_y_per_xy_layer);
                     }
                 }
                 if (i > 0)
                 {
                     // Add the face to the left in the xy-plane
-                    face_nodes_loc.push_back(node_index - 1);
+                    face_nodes_loc.push_back(i - 1 + j * num_cells[0] +
+                                             k * num_cells[0] * num_cells[1] + num_faces_x);
                     if (dim == 3 && k > 0)
                     {
                         // Add the face to the left in the xz-plane
-                        face_nodes_loc.push_back(node_index - 1 - num_faces_y_per_xy_layer);
+                        face_nodes_loc.push_back(i - 1 + j * num_cells[0] +
+                                                 k * num_cells[0] * num_cells[1] + num_faces_x -
+                                                 num_faces_y_per_xy_layer);
                     }
                 }
                 if (j > 0)
@@ -341,11 +347,21 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
                                                  num_faces_y_per_xy_layer - num_faces_x - 1);
                     }
                 }
+                std::cout << "Face nodes for node " << node_index << ": ";
+                for (int face_node : face_nodes_loc)
+                {
+                    std::cout << face_node << " ";
+                }
+                std::cout << std::endl;
+
                 face_nodes_vector.insert(face_nodes_vector.end(), face_nodes_loc.begin(),
                                          face_nodes_loc.end());
             }
         }
     }
+    // Set the last element of row_ptr_face_nodes to the size of face_nodes_vector
+    row_ptr_face_nodes[num_nodes] = face_nodes_vector.size();
+
     // Turn the vector into an array
     std::vector<int> col_ptr_face_nodes(face_nodes_vector.begin(), face_nodes_vector.end());
 

@@ -88,7 +88,7 @@ TEST_F(GridTest, FaceNodesCart2d)
     std::vector<int> faces_of_node_1({1, 9, 10});
     std::vector<int> faces_of_node_2({2, 10});
     std::vector<int> faces_of_node_3({0, 3, 11});
-    std::vector<int> faces_of_node_4({1, 4, 11, 10});
+    std::vector<int> faces_of_node_4({1, 4, 11, 12});
     std::vector<int> faces_of_node_5({2, 5, 12});
     std::vector<int> faces_of_node_9({6, 15});
     std::vector<int> faces_of_node_10({7, 15, 16});
