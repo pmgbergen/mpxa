@@ -1,6 +1,5 @@
 #include "grid.h"
 
-#include <iostream>
 #include <vector>
 
 Grid::Grid(const int dim, double **nodes, CompressedDataStorage<int> *cell_faces,
@@ -79,6 +78,11 @@ const std::vector<int> Grid::faces_of_node(int node)
 const std::vector<int> Grid::nodes_of_face(int face)
 {
     return m_face_nodes->rows_in_col(face);
+}
+
+const std::vector<int> Grid::cells_of_face(int face)
+{
+    return m_cell_faces->rows_in_col(face);
 }
 
 // Getters for geometric data
@@ -352,13 +356,6 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
                                                  num_faces_y_per_xy_layer - num_faces_x - 1);
                     }
                 }
-                std::cout << "Face nodes for node " << node_index << ": ";
-                for (int face_node : face_nodes_loc)
-                {
-                    std::cout << face_node << " ";
-                }
-                std::cout << std::endl;
-
                 face_nodes_vector.insert(face_nodes_vector.end(), face_nodes_loc.begin(),
                                          face_nodes_loc.end());
             }
