@@ -15,7 +15,8 @@ class CompressedDataStorage
     CompressedDataStorage(int num_rows, int num_cols);
 
     // Constructor for a matrix with indices and values given.
-    CompressedDataStorage(int num_rows, int num_cols, const std::vector<int>& row_ptr, const std::vector<int>& col_idx, const std::vector<T>& values);
+    CompressedDataStorage(int num_rows, int num_cols, const std::vector<int>& row_ptr,
+                          const std::vector<int>& col_idx, const std::vector<T>& values);
 
     // Destructor
     ~CompressedDataStorage();
@@ -40,8 +41,10 @@ class CompressedDataStorage
 
 // Constructor for a matrix with indices and values given.
 template <typename T>
-CompressedDataStorage<T>::CompressedDataStorage(int num_rows, int num_cols, const std::vector<int>& row_ptr,
-                                                const std::vector<int>& col_idx, const std::vector<T>& values)
+CompressedDataStorage<T>::CompressedDataStorage(int num_rows, int num_cols,
+                                                const std::vector<int>& row_ptr,
+                                                const std::vector<int>& col_idx,
+                                                const std::vector<T>& values)
     : m_num_rows(num_rows),
       m_num_cols(num_cols),
       m_row_ptr(row_ptr),
