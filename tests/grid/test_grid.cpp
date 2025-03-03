@@ -84,27 +84,9 @@ TEST_F(GridTest, FacesOfNodeCartGrid2d)
     EXPECT_EQ(grid_2d->num_faces(), 17);
 
     // Expected faces of selected nodes.
-    std::vector<int> faces_of_node_0({0, 9});
-    std::vector<int> faces_of_node_1({1, 9, 10});
-    std::vector<int> faces_of_node_2({2, 10});
-    std::vector<int> faces_of_node_3({0, 3, 11});
-    std::vector<int> faces_of_node_4({1, 4, 11, 12});
-    std::vector<int> faces_of_node_5({2, 5, 12});
-    std::vector<int> faces_of_node_9({6, 15});
-    std::vector<int> faces_of_node_10({7, 15, 16});
-    std::vector<int> faces_of_node_11({8, 16});
-
-    std::map<int, std::vector<int>> expected_faces_of_node;
-
-    expected_faces_of_node[0] = faces_of_node_0;
-    expected_faces_of_node[1] = faces_of_node_1;
-    expected_faces_of_node[2] = faces_of_node_2;
-    expected_faces_of_node[3] = faces_of_node_3;
-    expected_faces_of_node[4] = faces_of_node_4;
-    expected_faces_of_node[5] = faces_of_node_5;
-    expected_faces_of_node[9] = faces_of_node_9;
-    expected_faces_of_node[10] = faces_of_node_10;
-    expected_faces_of_node[11] = faces_of_node_11;
+    std::map<int, std::vector<int>> expected_faces_of_node = {
+        {0, {0, 9}},     {1, {1, 9, 10}}, {2, {2, 10}},      {3, {0, 3, 11}}, {4, {1, 4, 11, 12}},
+        {5, {2, 5, 12}}, {9, {6, 15}},    {10, {7, 15, 16}}, {11, {8, 16}}};
 
     // Loop over the keys of the map, fetch the face nodes of the key and compare with the
     // expected values.
@@ -123,31 +105,9 @@ TEST_F(GridTest, FacesOfNodeCartGrid2d)
 TEST_F(GridTest, NodesOfFaceCartGrid2d)
 {
     // Expected nodes of selected faces.
-    std::vector<int> nodes_of_face_0({0, 3});
-    std::vector<int> nodes_of_face_1({1, 4});
-    std::vector<int> nodes_of_face_2({2, 5});
-    std::vector<int> nodes_of_face_3({3, 6});
-    std::vector<int> nodes_of_face_5({5, 8});
-    std::vector<int> nodes_of_face_7({7, 10});
-    std::vector<int> nodes_of_face_8({8, 11});
-    std::vector<int> nodes_of_face_9({0, 1});
-    std::vector<int> nodes_of_face_10({1, 2});
-    std::vector<int> nodes_of_face_11({3, 4});
-    std::vector<int> nodes_of_face_16({10, 11});
-
-    std::map<int, std::vector<int>> expected_nodes_of_face;
-
-    expected_nodes_of_face[0] = nodes_of_face_0;
-    expected_nodes_of_face[1] = nodes_of_face_1;
-    expected_nodes_of_face[2] = nodes_of_face_2;
-    expected_nodes_of_face[3] = nodes_of_face_3;
-    expected_nodes_of_face[5] = nodes_of_face_5;
-    expected_nodes_of_face[7] = nodes_of_face_7;
-    expected_nodes_of_face[8] = nodes_of_face_8;
-    expected_nodes_of_face[9] = nodes_of_face_9;
-    expected_nodes_of_face[10] = nodes_of_face_10;
-    expected_nodes_of_face[11] = nodes_of_face_11;
-    expected_nodes_of_face[16] = nodes_of_face_16;
+    std::map<int, std::vector<int>> expected_nodes_of_face = {
+        {0, {0, 3}},  {1, {1, 4}}, {2, {2, 5}},  {3, {3, 6}},  {5, {5, 8}},   {7, {7, 10}},
+        {8, {8, 11}}, {9, {0, 1}}, {10, {1, 2}}, {11, {3, 4}}, {16, {10, 11}}};
 
     // Loop over the keys of the map, fetch the face nodes of the key and compare with the
     // expected values.
