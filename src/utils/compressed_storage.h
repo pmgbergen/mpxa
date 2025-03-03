@@ -28,7 +28,7 @@ class CompressedDataStorage
     std::vector<int> rows_in_col(int col);  // Change from int* to std::vector<int>
 
     std::vector<T> values();
-    std::vector<T> values_in_row(int row);
+    T value(const int row, const int col);
 
    private:
     int m_num_rows;
@@ -108,15 +108,19 @@ std::vector<T> CompressedDataStorage<T>::values()
 }
 
 template <typename T>
-std::vector<T> CompressedDataStorage<T>::values_in_row(int row)
+T CompressedDataStorage<T>::value(const int row, const int col)
 {
-    const int size = m_row_ptr[row + 1] - m_row_ptr[row];
-    std::vector<T> row_values(size);
-    for (int i = 0; i < size; i++)
+    // Loop over all values in the row, find the column index in the row. If the column of the
+    // row is the same as the input column, return the value.
+    for (int i = m_row_ptr[row]; i < m_row_ptr[row + 1]; i++)
     {
-        row_values[i] = m_values[m_row_ptr[row] + i];
+        if (m_col_idx[i] == col)
+        {
+            return m_values[i];
+        }
     }
-    return row_values;
+    // If the column is not found, return 0.
+    return 0;
 }
 
 #endif  // LINALG_SPARSE_MATRIX_H

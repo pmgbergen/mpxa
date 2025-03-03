@@ -52,9 +52,9 @@ TEST_F(CompressedDataStorageTest, RowsInCol)
 // Test the values_in_row method
 TEST_F(CompressedDataStorageTest, ValuesInRow)
 {
-    std::vector<double> row_values = storage->values_in_row(1);
-    EXPECT_EQ(row_values[0], 3.0);
-    EXPECT_EQ(row_values[1], 4.0);
+    EXPECT_EQ(storage->value(1, 0), 0.0);
+    EXPECT_EQ(storage->value(1, 1), 3.0);
+    EXPECT_EQ(storage->value(1, 2), 4.0);
 }
 
 // Main function to run all tests
