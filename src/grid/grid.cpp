@@ -1,5 +1,6 @@
 #include "grid.h"
 
+#include <iostream>
 #include <vector>
 
 Grid::Grid(const int dim, double **nodes, CompressedDataStorage<int> *cell_faces,
@@ -82,7 +83,12 @@ const std::vector<int> Grid::nodes_of_face(int face)
 
 const std::vector<int> Grid::cells_of_face(int face)
 {
-    return m_cell_faces->rows_in_col(face);
+    return m_cell_faces->cols_in_row(face);
+}
+
+const int Grid::sign_of_face_cell(const int face, const int cell)
+{
+    return m_cell_faces->value(face, cell);
 }
 
 // Getters for geometric data
@@ -418,7 +424,6 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
                 // The neighboring cell is the one to the right.
                 col_idx_vector.push_back(i + j * num_cells[0] + k * num_cells[0] * num_cells[1]);
 
-                face_cell_sign_vector.push_back(1);
                 ++face_index;
             }
             // The last face has a single neighboring cell.
@@ -426,7 +431,7 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
             // The normal vector will point out of the last cell.
             face_cell_sign_vector.push_back(1);
             // The neighboring cell is the one to the left.
-            col_idx_vector.push_back((num_cells[1] - 1) + j * num_cells[0] +
+            col_idx_vector.push_back((num_cells[0] - 1) + j * num_cells[0] +
                                      k * num_cells[0] * num_cells[1]);
             ++face_index;
         }
@@ -444,10 +449,13 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
             // The neighboring cell is the one above.
             col_idx_vector.push_back(i + k * num_cells[0] * num_cells[1]);
             ++face_index;
+        }
 
-            // Next loop over the cells in the y-direction. Start at 1 because the first
-            // face has been created.
-            for (int j = 1; j < num_cells[1]; ++j)
+        // Next loop over the cells in the y-direction. Start at 1 because the first
+        // face has been created.
+        for (int j = 1; j < num_cells[1]; ++j)
+        {
+            for (int i = 0; i < num_cells[0]; ++i)
             {
                 row_ptr[face_index] = col_idx_vector.size();
                 // The normal vector will point out of the first cell.
@@ -461,12 +469,15 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
                 col_idx_vector.push_back(i + j * num_cells[0] + k * num_cells[0] * num_cells[1]);
                 ++face_index;
             }
-            // The last face has a single neighboring cell.
+        }
+        for (int i = 0; i < num_cells[0]; ++i)
+        {
+            // The first face has a single neighboring cell.
             row_ptr[face_index] = col_idx_vector.size();
-            // The normal vector will point out of the last cell.
+            // The normal vector will point out of this cell.
             face_cell_sign_vector.push_back(1);
-            // The neighboring cell is the one below.
-            col_idx_vector.push_back(i + (num_cells[1] * num_cells[0]) +
+            // The neighboring cell is the one above.
+            col_idx_vector.push_back(i + (num_cells[1] - 1) * num_cells[0] +
                                      k * num_cells[0] * num_cells[1]);
             ++face_index;
         }
@@ -526,10 +537,22 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
             }
         }
     }
-    std::vector<int> col_idx(col_idx_vector.begin(), col_idx_vector.end());
-    std::vector<int> face_cell_sign(face_cell_sign_vector.begin(), face_cell_sign_vector.end());
+    // Set the last element of row_ptr to the size of col_idx_vector
+    row_ptr[tot_num_faces] = col_idx_vector.size();
+
+    // Print the face-cell sign triplets
+    for (int i = 0; i < tot_num_faces; ++i)
+    {
+        std::cout << "Face " << i << ": ";
+        for (int j = row_ptr[i]; j < row_ptr[i + 1]; ++j)
+        {
+            std::cout << "(" << col_idx_vector[j] << ", " << face_cell_sign_vector[j] << ") ";
+        }
+        std::cout << std::endl;
+    }
+
     CompressedDataStorage<int> *face_cells = new CompressedDataStorage<int>(
-        tot_num_faces, tot_num_cells, row_ptr, col_idx, face_cell_sign);
+        tot_num_faces, tot_num_cells, row_ptr, col_idx_vector, face_cell_sign_vector);
 
     Grid *grid = new Grid(dim, nodes, face_cells, face_nodes);
 

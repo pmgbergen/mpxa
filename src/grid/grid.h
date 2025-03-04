@@ -24,15 +24,10 @@ class Grid
     // int num_boundary_faces();
 
     // Direct access to the compressed data storage
-    // const int* cell_faces(int cell);
     const std::vector<int> faces_of_node(int node);
     const std::vector<int> nodes_of_face(int face);
-    // // Data that can be accessed through the compressed data storage.
-    // // TODO: It may be desirable to accept arrays of indices as arguments to these functions.
-    // const int* face_cells(int face);
-    // const int* cell_nodes(int cell);
-    // const int* node_faces(int node);
-    // const int* node_cells(int node);
+    const std::vector<int> cells_of_face(int face);
+    const int sign_of_face_cell(const int face, const int cell);
 
     // Getters for geometric data
     const double** nodes();

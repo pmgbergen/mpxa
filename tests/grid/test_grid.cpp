@@ -122,3 +122,44 @@ TEST_F(GridTest, NodesOfFaceCartGrid2d)
         }
     }
 }
+
+TEST_F(GridTest, CellsOfFaceCartGrid2d)
+{
+    // Check the number of cells in the grid.
+    EXPECT_EQ(grid_2d->num_cells(), 6);
+    // Check the number of faces in the grid.
+    EXPECT_EQ(grid_2d->num_faces(), 17);
+
+    // Expected cells of selected faces.
+    std::map<int, std::vector<int>> expected_cells_of_face = {
+        {0, {0}},     {1, {0, 1}},  {2, {1}},     {3, {2}},  {4, {2, 3}}, {5, {3}},
+        {6, {4}},     {7, {4, 5}},  {8, {5}},     {9, {0}},  {10, {1}},   {11, {0, 2}},
+        {12, {1, 3}}, {13, {2, 4}}, {14, {3, 5}}, {15, {4}}, {16, {5}}};
+
+    // Loop over the keys of the map, fetch the face nodes of the key and compare with the
+    // expected values.
+    for (auto const& [face, expected_cells] : expected_cells_of_face)
+    {
+        std::vector<int> cells = grid_2d->cells_of_face(face);
+        std::sort(cells.begin(), cells.end());
+        EXPECT_EQ(cells.size(), expected_cells.size());
+        for (size_t i = 0; i < expected_cells.size(); ++i)
+        {
+            EXPECT_EQ(cells[i], expected_cells[i]);
+        }
+    }
+
+    // Check the sign of the face with respect to the cell.
+    std::map<std::pair<int, int>, int> expected_sign_of_face_cell = {
+        {{0, 0}, -1}, {{1, 0}, 1},   {{1, 1}, -1}, {{2, 1}, 1},   {{3, 2}, -1}, {{4, 2}, 1},
+        {{4, 3}, -1}, {{5, 3}, 1},   {{6, 4}, -1}, {{7, 4}, 1},   {{7, 5}, -1}, {{8, 5}, 1},
+        {{9, 0}, -1}, {{10, 1}, -1}, {{11, 0}, 1}, {{11, 2}, -1}, {{12, 1}, 1}, {{12, 3}, -1},
+        {{13, 2}, 1}, {{13, 4}, -1}, {{14, 3}, 1}, {{14, 5}, -1}, {{15, 4}, 1}, {{16, 5}, 1}};
+    for (auto const& [face_cell, expected_sign] : expected_sign_of_face_cell)
+    {
+        int face = face_cell.first;
+        int cell = face_cell.second;
+        int sign = grid_2d->sign_of_face_cell(face, cell);
+        EXPECT_EQ(sign, expected_sign);
+    }
+}
