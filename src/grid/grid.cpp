@@ -1,5 +1,6 @@
 #include "grid.h"
 
+#include <cmath>
 #include <iostream>
 #include <vector>
 
@@ -52,8 +53,6 @@ Grid::~Grid()
     delete m_cell_faces;
     delete m_face_nodes;
 }
-
-void Grid::compute_geometry() {}
 
 int *boundary_faces();
 
@@ -189,6 +188,192 @@ void Grid::set_cell_centers(double **cell_centers)
         for (int j = 0; j < m_dim; j++)
         {
             m_cell_centers[i][j] = cell_centers[i][j];
+        }
+    }
+}
+
+void Grid::compute_geometry()
+{
+    // Loop over all faces, get them_nodes of the face, compute the face center and area
+    // from the node coordinates. The loop does not work very well with the storage format
+    // for node-face relation (which is a mapping fromm_nodes to faces), but it will have
+    // to do for now.
+    for (int i{0}; i < num_faces(); ++i)
+    {
+        // Get them_nodes of the face
+        std::vector<int> loc_nodes = nodes_of_face(i);
+        // Get the number ofm_nodes of the face
+        const int num_nodes = loc_nodes.size();
+
+        // Compute the face center. Loop over the dimensions and them_nodes of the face
+        // and compute the center as the average of the node coordinates.
+        for (int j{0}; j < dim(); ++j)
+        {
+            m_face_centers[i][j] = 0.0;
+            for (int k{0}; k < num_nodes; ++k)
+            {
+                m_face_centers[i][j] += m_nodes[loc_nodes[k]][j];
+            }
+            m_face_centers[i][j] /= num_nodes;
+        }
+        // Compute the face area
+        if (m_dim == 2)
+        {
+            const double dx = m_nodes[loc_nodes[1]][0] - m_nodes[loc_nodes[0]][0];
+            const double dy = m_nodes[loc_nodes[1]][1] - m_nodes[loc_nodes[0]][1];
+            m_face_areas[i] = std::sqrt(dx * dx + dy * dy);
+
+            m_face_normals[i][0] = dy;
+            m_face_normals[i][1] = -dx;
+        }
+        else  // m_dim == 3
+        {
+            if (num_nodes == 3)
+            {
+                // The face is a triangle. We can compute the area using the cross product
+                // of two vectors in the plane of the triangle.
+                double v1[3], v2[3];
+                for (int j{0}; j < m_dim; ++j)
+                {
+                    v1[j] = m_nodes[loc_nodes[1]][j] - m_nodes[loc_nodes[0]][j];
+                    v2[j] = m_nodes[loc_nodes[2]][j] - m_nodes[loc_nodes[0]][j];
+                }
+                // Compute the face normal vector as the cross product of v1 and v2.
+                double normal[3];
+                normal[0] = (v1[1] * v2[2] - v1[2] * v2[1]);
+                normal[1] = v1[2] * v2[0] - v1[0] * v2[2];
+                normal[2] = v1[0] * v2[1] - v1[1] * v2[0];
+                // Compute the area as the magnitude of the normal vector.
+                m_face_areas[i] = 0.5 * std::sqrt(normal[0] * normal[0] + normal[1] * normal[1] +
+                                                  normal[2] * normal[2]);
+
+                // Set the face normal length to the face area. We may change the
+                // direction later.
+                for (int j{0}; j < m_dim; ++j)
+                {
+                    m_face_normals[i][j] = normal[j] / m_face_areas[i];
+                }
+            }
+
+            else  // num_nodes == 4
+            {
+                // This is a quadrilateral. We cannot trust that them_nodes are ordered
+                // in a circular fashion. Therefore, compute the maximum and minimum
+                // coordinates along each axis. For one of the dimension, the max and
+                // min will be equal. For the other two, we can compute the area by a
+                // Cartesian product.
+                double min_coords[3], max_coords[3];
+                for (int j{0}; j < m_dim; ++j)
+                {
+                    min_coords[j] = m_nodes[loc_nodes[0]][j];
+                    max_coords[j] = m_nodes[loc_nodes[0]][j];
+                }
+                for (int j{1}; j < num_nodes; ++j)
+                {
+                    for (int k{0}; k < m_dim; ++k)
+                    {
+                        min_coords[k] = std::min(min_coords[k], m_nodes[loc_nodes[j]][k]);
+                        max_coords[k] = std::max(max_coords[k], m_nodes[loc_nodes[j]][k]);
+                    }
+                }
+                // Compute the area as the product of the differences in the two dimensions
+                // where the max and min are different.
+                for (int j{0}; j < m_dim; ++j)
+                {
+                    // Initialize the face normal to zero
+                    m_face_normals[i][j] = 0.0;
+                }
+                for (int j{0}; j < m_dim; ++j)
+                    if (min_coords[j] == max_coords[j])
+                    {
+                        const int k = (j + 1) % m_dim;
+                        const int l = (j + 2) % m_dim;
+                        m_face_areas[i] =
+                            (max_coords[k] - min_coords[k]) * (max_coords[l] - min_coords[l]);
+                        // Set the face normal to an area weighted normal in the
+                        // dimension of the face (where min and max are equal). We may
+                        // change the direction later.
+                        m_face_normals[i][j] /= m_face_areas[i];
+                        break;
+                    }
+            }
+        }
+    }
+
+    // Loop over all cells, obtain the faces of the cell, compute the cell center and
+    // volume from face information.
+    for (int i{0}; i < m_num_cells; ++i)
+    {
+        std::vector<int> loc_faces = faces_of_cell(i);
+        const int num_faces = loc_faces.size();
+
+        m_cell_centers[i] = new double[m_dim];
+
+        // Compute the cell center. Loop over the dimensions and the faces of the cell
+        // and compute the center as the average of the face centers. This will not work
+        // for general polyhedra (nor polygons?), but it should do for simplices and
+        // Cartesian grids.
+        for (int j{0}; j < m_dim; ++j)
+        {
+            m_cell_centers[i][j] = 0.0;
+            for (int k{0}; k < num_faces; ++k)
+            {
+                m_cell_centers[i][j] += m_face_centers[loc_faces[k]][j];
+            }
+            // Take the mean value.
+            m_cell_centers[i][j] /= num_faces;
+        }
+
+        // Compute the cell volume. Loop over the faces of the cell and compute the
+        // volume as the sum of the face areas times the distance from the face center to
+        // the cell center.
+        m_cell_volumes[i] = 0.0;
+        for (int j{0}; j < num_faces; ++j)
+        {
+            // Create a vector from the face center to the cell center
+            double *face_to_cell = new double[m_dim];
+            for (int k{0}; k < m_dim; ++k)
+            {
+                face_to_cell[k] = m_cell_centers[i][k] - m_face_centers[loc_faces[j]][k];
+            }
+            // Project onto the face normal to get the distance from the face center to
+            // the cell center.
+            double dist = 0.0;
+            for (int k{0}; k < m_dim; ++k)
+            {
+                dist +=
+                    face_to_cell[k] * m_face_normals[loc_faces[j]][k] / m_face_areas[loc_faces[j]];
+            }
+            // Add the volume contribution from the face.
+            dist = std::abs(dist);
+            m_cell_volumes[i] += m_face_areas[loc_faces[j]] * dist / m_dim;
+
+            // Clean up the face_to_cell array
+            delete[] face_to_cell;
+        }
+    }
+    // Finally, loop over faces, check that the normal vectors point out of the cell
+    // for which face_cell_sign is positive. If not, change the sign of the normal
+    // vector.
+    for (int i{0}; i < m_num_faces; ++i)
+    {
+        const std::vector<int> loc_cells = cells_of_face(i);
+
+        // Create a vector from the face center to the cell center
+        double dot_prod = 0.0;
+        for (int j{0}; j < m_dim; ++j)
+        {
+            const double face_to_cell = m_face_centers[i][j] - m_cell_centers[loc_cells[0]][j];
+            dot_prod += face_to_cell * m_face_normals[i][j];
+        }
+
+        if ((sign_of_face_cell(i, loc_cells[0]) < 0 && dot_prod > 0) ||
+            (sign_of_face_cell(i, loc_cells[0]) > 0 && dot_prod < 0))
+        {
+            for (int j{0}; j < m_dim; ++j)
+            {
+                m_face_normals[i][j] *= -1;
+            }
         }
     }
 }
@@ -550,17 +735,6 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
     // Set the last element of row_ptr to the size of col_idx_vector
     row_ptr[tot_num_faces] = col_idx_vector.size();
 
-    // Print the face-cell sign triplets
-    for (int i = 0; i < tot_num_faces; ++i)
-    {
-        std::cout << "Face " << i << ": ";
-        for (int j = row_ptr[i]; j < row_ptr[i + 1]; ++j)
-        {
-            std::cout << "(" << col_idx_vector[j] << ", " << face_cell_sign_vector[j] << ") ";
-        }
-        std::cout << std::endl;
-    }
-
     CompressedDataStorage<int> *face_cells = new CompressedDataStorage<int>(
         tot_num_faces, tot_num_cells, row_ptr, col_idx_vector, face_cell_sign_vector);
 
@@ -571,5 +745,7 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
     // data_face_nodes, row_ptr, col_idx, face_cell_sign as they are now vectors
 
     // TODO: Add geometry computation
+    grid->compute_geometry();
+
     return grid;
 }
