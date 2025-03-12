@@ -57,33 +57,43 @@ void Grid::compute_geometry() {}
 
 int *boundary_faces();
 
+const int Grid::dim()
+{
+    return m_dim;
+}
+
 // Getters for topological data
-int Grid::num_nodes()
+const int Grid::num_nodes()
 {
     return m_num_nodes;
 }
-int Grid::num_cells()
+const int Grid::num_cells()
 {
     return m_num_cells;
 }
-int Grid::num_faces()
+const int Grid::num_faces()
 {
     return m_num_faces;
 }
 
-const std::vector<int> Grid::faces_of_node(int node)
+const std::vector<int> Grid::faces_of_node(const int node)
 {
     return m_face_nodes->cols_in_row(node);
 }
 
-const std::vector<int> Grid::nodes_of_face(int face)
+const std::vector<int> Grid::nodes_of_face(const int face)
 {
     return m_face_nodes->rows_in_col(face);
 }
 
-const std::vector<int> Grid::cells_of_face(int face)
+const std::vector<int> Grid::cells_of_face(const int face)
 {
     return m_cell_faces->cols_in_row(face);
+}
+
+const std::vector<int> Grid::faces_of_cell(const int cell)
+{
+    return m_cell_faces->rows_in_col(cell);
 }
 
 const int Grid::sign_of_face_cell(const int face, const int cell)

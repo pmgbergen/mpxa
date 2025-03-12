@@ -17,16 +17,19 @@ class Grid
 
     // int* boundary_faces();
 
+    const int dim();
+
     // Getters for topological data
-    int num_nodes();
-    int num_cells();
-    int num_faces();
+    const int num_nodes();
+    const int num_cells();
+    const int num_faces();
     // int num_boundary_faces();
 
     // Direct access to the compressed data storage
-    const std::vector<int> faces_of_node(int node);
-    const std::vector<int> nodes_of_face(int face);
-    const std::vector<int> cells_of_face(int face);
+    const std::vector<int> faces_of_node(const int node);
+    const std::vector<int> nodes_of_face(const int face);
+    const std::vector<int> cells_of_face(const int face);
+    const std::vector<int> faces_of_cell(const int cell);
     const int sign_of_face_cell(const int face, const int cell);
 
     // Getters for geometric data
