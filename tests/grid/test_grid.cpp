@@ -163,3 +163,66 @@ TEST_F(GridTest, CellsOfFaceCartGrid2d)
         EXPECT_EQ(sign, expected_sign);
     }
 }
+
+// Test that the face and cell geometries are computed correctly for a 2D Cartesian grid.
+TEST_F(GridTest, GeometryComputation2d)
+{
+    // Compute the face areas and normals.
+    unit_square->compute_geometry();
+    const double* face_areas = unit_square->face_areas();
+    const double** face_normals = unit_square->face_normals();
+
+    const double dx = 1.0 / 2;
+    const double dy = 1.0 / 3;
+
+    const double area_x = dy;
+    const double area_y = dx;
+
+    // Check the face areas and normals.
+    const int num_x_faces = 3 * 3;
+    for (int i = 0; i < num_x_faces; ++i)
+    {
+        EXPECT_DOUBLE_EQ(face_areas[i], area_x);
+        EXPECT_DOUBLE_EQ(face_normals[i][0], area_x);
+
+        EXPECT_DOUBLE_EQ(face_normals[i][1], 0.0);
+    }
+    for (int i{num_x_faces}; i < unit_square->num_faces(); ++i)
+    {
+        EXPECT_DOUBLE_EQ(face_areas[i], area_y);
+        EXPECT_DOUBLE_EQ(face_normals[i][0], 0);
+        EXPECT_DOUBLE_EQ(face_normals[i][1], area_y);
+    }
+
+    // Known face centers
+    std::vector<std::pair<double, double>> known_face_centers = {
+        {0, dy / 2},          {dx, dy / 2},         {2 * dx, dy / 2},     {0, 3 * dy / 2},
+        {dx, 3 * dy / 2},     {2 * dx, 3 * dy / 2}, {0, 5 * dy / 2},      {dx, 5 * dy / 2},
+        {2 * dx, 5 * dy / 2}, {dx / 2, 0},          {3 * dx / 2, 0},      {dx / 2, dy},
+        {3 * dx / 2, dy},     {dx / 2, 2 * dy},     {3 * dx / 2, 2 * dy}, {dx / 2, 3 * dy},
+        {3 * dx / 2, 3 * dy},
+    };
+    for (int i = 0; i < unit_square->num_faces(); ++i)
+    {
+        const double* face_center = unit_square->face_center(i);
+        EXPECT_DOUBLE_EQ(face_center[0], known_face_centers[i].first);
+        EXPECT_DOUBLE_EQ(face_center[1], known_face_centers[i].second);
+    }
+
+    std::vector<std::pair<double, double>> known_cell_centers = {
+        {dx / 2, dy / 2},         {3 * dx / 2, dy / 2}, {dx / 2, 3 * dy / 2},
+        {3 * dx / 2, 3 * dy / 2}, {dx / 2, 5 * dy / 2}, {3 * dx / 2, 5 * dy / 2},
+    };
+    for (int i = 0; i < unit_square->num_cells(); ++i)
+    {
+        const double* cell_center = unit_square->cell_center(i);
+        EXPECT_DOUBLE_EQ(cell_center[0], known_cell_centers[i].first);
+        EXPECT_DOUBLE_EQ(cell_center[1], known_cell_centers[i].second);
+    }
+
+    // All cell volumes should be equal to 1 / (dx * dy)
+    for (int i = 0; i < unit_square->num_cells(); ++i)
+    {
+        EXPECT_DOUBLE_EQ(unit_square->cell_volume(i), dx * dy);
+    }
+}
