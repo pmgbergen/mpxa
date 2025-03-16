@@ -22,11 +22,11 @@ SecondOrderTensor::SecondOrderTensor(const int dim, const double* k_xx)
 
 SecondOrderTensor::~SecondOrderTensor() {}
 
-bool SecondOrderTensor::is_isotropic()
+bool SecondOrderTensor::is_isotropic() const
 {
     return m_is_isotropic;
 }
-bool SecondOrderTensor::is_diagonal()
+bool SecondOrderTensor::is_diagonal() const
 {
     return m_is_diagonal;
 }
@@ -137,7 +137,7 @@ SecondOrderTensor& SecondOrderTensor::with_kyz(const double* k_yz)
 }
 
 // Getter methods
-const int SecondOrderTensor::dim()
+const int SecondOrderTensor::dim() const
 {
     return m_dim;
 }

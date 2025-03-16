@@ -16,10 +16,10 @@ class SecondOrderTensor
     SecondOrderTensor& with_kyz(const double* k_yz);
 
     // Get properties of the tensor
-    bool is_isotropic();
-    bool is_diagonal();
+    bool is_isotropic() const;
+    bool is_diagonal() const;
 
-    const int dim();
+    const int dim() const;
 
     const double* isotropic_data() const;
     const double* const* diagonal_data() const;
