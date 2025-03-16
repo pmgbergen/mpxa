@@ -56,93 +56,93 @@ Grid::~Grid()
 
 int *boundary_faces();
 
-const int Grid::dim()
+const int Grid::dim() const
 {
     return m_dim;
 }
 
 // Getters for topological data
-const int Grid::num_nodes()
+const int Grid::num_nodes() const
 {
     return m_num_nodes;
 }
-const int Grid::num_cells()
+const int Grid::num_cells() const
 {
     return m_num_cells;
 }
-const int Grid::num_faces()
+const int Grid::num_faces() const
 {
     return m_num_faces;
 }
 
-const std::vector<int> Grid::faces_of_node(const int node)
+const std::vector<int> Grid::faces_of_node(const int node) const
 {
     return m_face_nodes->cols_in_row(node);
 }
 
-const std::vector<int> Grid::nodes_of_face(const int face)
+const std::vector<int> Grid::nodes_of_face(const int face) const
 {
     return m_face_nodes->rows_in_col(face);
 }
 
-const std::vector<int> Grid::cells_of_face(const int face)
+const std::vector<int> Grid::cells_of_face(const int face) const
 {
     return m_cell_faces->cols_in_row(face);
 }
 
-const std::vector<int> Grid::faces_of_cell(const int cell)
+const std::vector<int> Grid::faces_of_cell(const int cell) const
 {
     return m_cell_faces->rows_in_col(cell);
 }
 
-const int Grid::sign_of_face_cell(const int face, const int cell)
+const int Grid::sign_of_face_cell(const int face, const int cell) const
 {
     return m_cell_faces->value(face, cell);
 }
 
 // Getters for geometric data
-const double **Grid::nodes()
+const double **Grid::nodes() const
 {
     return (const double **)m_nodes;
 }
-const double **Grid::cell_centers()
+const double **Grid::cell_centers() const
 {
     return (const double **)m_cell_centers;
 }
-const double *Grid::cell_volumes()
+const double *Grid::cell_volumes() const
 {
     return m_cell_volumes;
 }
-const double *Grid::face_areas()
+const double *Grid::face_areas() const
 {
     return m_face_areas;
 }
-const double **Grid::face_normals()
+const double **Grid::face_normals() const
 {
     return (const double **)m_face_normals;
 }
-const double **Grid::face_centers()
+const double **Grid::face_centers() const
 {
     return (const double **)m_face_centers;
 }
 // Getters for individual elements
-const double *Grid::cell_center(int cell)
+const double *Grid::cell_center(int cell) const
 {
     return m_cell_centers[cell];
 }
-const double &Grid::cell_volume(int cell)
+const double &Grid::cell_volume(int cell) const
 {
     return m_cell_volumes[cell];
 }
-const double &Grid::face_area(int face)
+const double &Grid::face_area(int face) const
 {
     return m_face_areas[face];
 }
-const double *Grid::face_normal(int face)
+const double *Grid::face_normal(int face) const
 {
     return m_face_normals[face];
 }
-const double *Grid::face_center(int face)
+const double *Grid::face_center(int face) const
 {
     return m_face_centers[face];
 }
