@@ -12,19 +12,13 @@ class GridTest : public ::testing::Test
     const int num_cells_2d[2] = {2, 3};
     const double lengths_2d[2] = {2.0, 3.0};
     const double unit_lengths_2d[2] = {1.0, 1.0};
-    Grid* grid_2d;
-    Grid* unit_square;
+    Grid grid_2d;
+    Grid unit_square;
 
     void SetUp() override
     {
-        grid_2d = create_cartesian_grid(2, num_cells_2d, lengths_2d);
-        unit_square = create_cartesian_grid(2, num_cells_2d, unit_lengths_2d);
-    }
-
-    void TearDown() override
-    {
-        delete grid_2d;
-        delete unit_square;
+        grid_2d = Grid::create_cartesian_grid(2, num_cells_2d, lengths_2d);
+        unit_square = Grid::create_cartesian_grid(2, num_cells_2d, unit_lengths_2d);
     }
 };
 
@@ -32,9 +26,9 @@ class GridTest : public ::testing::Test
 // with unit cell size.
 TEST_F(GridTest, NodeCoordinates2dUnitCellSize)
 {
-    EXPECT_EQ(grid_2d->num_nodes(), 12);
+    EXPECT_EQ(grid_2d.num_nodes(), 12);
 
-    const double** nodes = grid_2d->nodes();
+    const double** nodes = grid_2d.nodes();
     EXPECT_EQ(nodes[0][0], 0.0);
     EXPECT_EQ(nodes[0][1], 0.0);
     EXPECT_EQ(nodes[1][0], 1.0);
@@ -68,7 +62,7 @@ TEST_F(GridTest, NodeCoordinates2dUnitSquareDomain)
     const int nx = 2;
     const int ny = 3;
 
-    const double** nodes = unit_square->nodes();
+    const double** nodes = unit_square.nodes();
     EXPECT_EQ(nodes[0][0], 0.0);
     EXPECT_EQ(nodes[0][1], 0.0);
     EXPECT_EQ(nodes[1][0], 1.0 / nx);
@@ -81,7 +75,7 @@ TEST_F(GridTest, NodeCoordinates2dUnitSquareDomain)
 // Test that
 TEST_F(GridTest, FacesOfNodeCartGrid2d)
 {
-    EXPECT_EQ(grid_2d->num_faces(), 17);
+    EXPECT_EQ(grid_2d.num_faces(), 17);
 
     // Expected faces of selected nodes.
     std::map<int, std::vector<int>> expected_faces_of_node = {
@@ -92,7 +86,7 @@ TEST_F(GridTest, FacesOfNodeCartGrid2d)
     // expected values.
     for (auto const& [node, expected_faces] : expected_faces_of_node)
     {
-        std::vector<int> face_nodes = grid_2d->faces_of_node(node);
+        std::vector<int> face_nodes = grid_2d.faces_of_node(node);
         std::sort(face_nodes.begin(), face_nodes.end());
         EXPECT_EQ(face_nodes.size(), expected_faces.size());
         for (size_t i = 0; i < expected_faces.size(); ++i)
@@ -113,7 +107,7 @@ TEST_F(GridTest, NodesOfFaceCartGrid2d)
     // expected values.
     for (auto const& [face, expected_nodes] : expected_nodes_of_face)
     {
-        std::vector<int> face_nodes = grid_2d->nodes_of_face(face);
+        std::vector<int> face_nodes = grid_2d.nodes_of_face(face);
         std::sort(face_nodes.begin(), face_nodes.end());
         EXPECT_EQ(face_nodes.size(), expected_nodes.size());
         for (size_t i = 0; i < expected_nodes.size(); ++i)
@@ -126,9 +120,9 @@ TEST_F(GridTest, NodesOfFaceCartGrid2d)
 TEST_F(GridTest, CellsOfFaceCartGrid2d)
 {
     // Check the number of cells in the grid.
-    EXPECT_EQ(grid_2d->num_cells(), 6);
+    EXPECT_EQ(grid_2d.num_cells(), 6);
     // Check the number of faces in the grid.
-    EXPECT_EQ(grid_2d->num_faces(), 17);
+    EXPECT_EQ(grid_2d.num_faces(), 17);
 
     // Expected cells of selected faces.
     std::map<int, std::vector<int>> expected_cells_of_face = {
@@ -140,7 +134,7 @@ TEST_F(GridTest, CellsOfFaceCartGrid2d)
     // expected values.
     for (auto const& [face, expected_cells] : expected_cells_of_face)
     {
-        std::vector<int> cells = grid_2d->cells_of_face(face);
+        std::vector<int> cells = grid_2d.cells_of_face(face);
         std::sort(cells.begin(), cells.end());
         EXPECT_EQ(cells.size(), expected_cells.size());
         for (size_t i = 0; i < expected_cells.size(); ++i)
@@ -159,7 +153,7 @@ TEST_F(GridTest, CellsOfFaceCartGrid2d)
     {
         int face = face_cell.first;
         int cell = face_cell.second;
-        int sign = grid_2d->sign_of_face_cell(face, cell);
+        int sign = grid_2d.sign_of_face_cell(face, cell);
         EXPECT_EQ(sign, expected_sign);
     }
 }
@@ -168,9 +162,9 @@ TEST_F(GridTest, CellsOfFaceCartGrid2d)
 TEST_F(GridTest, GeometryComputation2d)
 {
     // Compute the face areas and normals.
-    unit_square->compute_geometry();
-    const double* face_areas = unit_square->face_areas();
-    const double** face_normals = unit_square->face_normals();
+    unit_square.compute_geometry();
+    const double* face_areas = unit_square.face_areas();
+    const double** face_normals = unit_square.face_normals();
 
     const double dx = 1.0 / 2;
     const double dy = 1.0 / 3;
@@ -187,7 +181,7 @@ TEST_F(GridTest, GeometryComputation2d)
 
         EXPECT_DOUBLE_EQ(face_normals[i][1], 0.0);
     }
-    for (int i{num_x_faces}; i < unit_square->num_faces(); ++i)
+    for (int i{num_x_faces}; i < unit_square.num_faces(); ++i)
     {
         EXPECT_DOUBLE_EQ(face_areas[i], area_y);
         EXPECT_DOUBLE_EQ(face_normals[i][0], 0);
@@ -202,9 +196,9 @@ TEST_F(GridTest, GeometryComputation2d)
         {3 * dx / 2, dy},     {dx / 2, 2 * dy},     {3 * dx / 2, 2 * dy}, {dx / 2, 3 * dy},
         {3 * dx / 2, 3 * dy},
     };
-    for (int i = 0; i < unit_square->num_faces(); ++i)
+    for (int i = 0; i < unit_square.num_faces(); ++i)
     {
-        const double* face_center = unit_square->face_center(i);
+        const double* face_center = unit_square.face_center(i);
         EXPECT_DOUBLE_EQ(face_center[0], known_face_centers[i].first);
         EXPECT_DOUBLE_EQ(face_center[1], known_face_centers[i].second);
     }
@@ -213,16 +207,16 @@ TEST_F(GridTest, GeometryComputation2d)
         {dx / 2, dy / 2},         {3 * dx / 2, dy / 2}, {dx / 2, 3 * dy / 2},
         {3 * dx / 2, 3 * dy / 2}, {dx / 2, 5 * dy / 2}, {3 * dx / 2, 5 * dy / 2},
     };
-    for (int i = 0; i < unit_square->num_cells(); ++i)
+    for (int i = 0; i < unit_square.num_cells(); ++i)
     {
-        const double* cell_center = unit_square->cell_center(i);
+        const double* cell_center = unit_square.cell_center(i);
         EXPECT_DOUBLE_EQ(cell_center[0], known_cell_centers[i].first);
         EXPECT_DOUBLE_EQ(cell_center[1], known_cell_centers[i].second);
     }
 
     // All cell volumes should be equal to 1 / (dx * dy)
-    for (int i = 0; i < unit_square->num_cells(); ++i)
+    for (int i = 0; i < unit_square.num_cells(); ++i)
     {
-        EXPECT_DOUBLE_EQ(unit_square->cell_volume(i), dx * dy);
+        EXPECT_DOUBLE_EQ(unit_square.cell_volume(i), dx * dy);
     }
 }

@@ -54,7 +54,19 @@ Grid::~Grid()
     delete m_face_nodes;
 }
 
-int *boundary_faces();
+const std::vector<int> Grid::boundary_faces() const
+{
+    std::vector<int> boundary_faces_list;
+
+    for (int face = 0; face < m_num_faces; ++face)
+    {
+        if (m_cell_faces->cols_in_row(face).size() == 1)
+        {
+            boundary_faces_list.push_back(face);
+        }
+    }
+    return boundary_faces_list;
+}
 
 const int Grid::dim() const
 {
@@ -379,12 +391,12 @@ void Grid::compute_geometry()
 }
 
 // Cartesian grid creation
-Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *lengths)
+Grid Grid::create_cartesian_grid(const int dim, const int *num_cells, const double *lengths)
 {
     // Dim should be 2 or 3
     if (dim < 2 || dim > 3)
     {
-        return nullptr;
+        throw std::invalid_argument("Invalid dimension: dim must be 2 or 3.");
     }
 
     // Create node coordinates along each dimension
@@ -738,14 +750,5 @@ Grid *create_cartesian_grid(const int dim, const int *num_cells, const double *l
     CompressedDataStorage<int> *face_cells = new CompressedDataStorage<int>(
         tot_num_faces, tot_num_cells, row_ptr, col_idx_vector, face_cell_sign_vector);
 
-    Grid *grid = new Grid(dim, nodes, face_cells, face_nodes);
-
-    // Clean up temporary arrays
-    // No need to delete x, y, z, num_nodes_per_dim, row_ptr_face_nodes, col_ptr_face_nodes,
-    // data_face_nodes, row_ptr, col_idx, face_cell_sign as they are now vectors
-
-    // TODO: Add geometry computation
-    grid->compute_geometry();
-
-    return grid;
+    return Grid(dim, nodes, face_cells, face_nodes);
 }

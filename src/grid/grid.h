@@ -13,9 +13,11 @@ class Grid
          CompressedDataStorage<int>* face_nodes);
     ~Grid();
 
+    static Grid create_cartesian_grid(const int dim, const int* num_cells, const double* lengths);
+
     void compute_geometry();
 
-    // int* boundary_faces();
+    const std::vector<int> boundary_faces() const;
 
     const int dim() const;
 
@@ -74,8 +76,5 @@ class Grid
 
     int* m_boundary_faces;
 };
-
-// Cartesian grid creation
-Grid* create_cartesian_grid(const int dim, const int* num_cells, const double* lengths);
 
 #endif  // GRID_GRID_H
