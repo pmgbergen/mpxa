@@ -17,8 +17,12 @@ class GridTest : public ::testing::Test
 
     void SetUp() override
     {
+        // Create grids, compute geometry.
         grid_2d = Grid::create_cartesian_grid(2, num_cells_2d, lengths_2d);
         unit_square = Grid::create_cartesian_grid(2, num_cells_2d, unit_lengths_2d);
+
+        grid_2d->compute_geometry();
+        unit_square->compute_geometry();
     }
 };
 

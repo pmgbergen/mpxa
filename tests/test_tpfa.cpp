@@ -20,7 +20,7 @@ class TPFA : public ::testing::Test
         int* num_cells = new int[2]{2, 2};
         double* lengths = new double[2]{1.0, 2.0};
         grid = Grid::create_cartesian_grid(2, num_cells, lengths);
-        // grid = create_cartesian_grid(2, new int[2]{2, 2}, new double[2]{1.0, 2.0});
+        grid->compute_geometry();
         delete[] num_cells;
         delete[] lengths;
 
