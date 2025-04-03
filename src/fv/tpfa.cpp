@@ -115,6 +115,8 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor)
 
             // Store the flux in the compressed data storage.
             // flux->set_value(face_ind, flux);
+
+            delete[] face_cell_b_vec;
         }
         else  // Boundary face.
         {
@@ -125,6 +127,8 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor)
             // bound_flux->set_value(face_ind, flux);
         }
         row_ptr_flux.push_back(col_idx_flux.size());
+
+        delete[] face_cell_a_vec;
     }
 
     CompressedDataStorage<double>* flux = new CompressedDataStorage<double>(
