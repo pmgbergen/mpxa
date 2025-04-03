@@ -4,7 +4,7 @@
 class SecondOrderTensor
 {
    public:
-    SecondOrderTensor(const int dim, const double* k_xx);
+    SecondOrderTensor(const int dim, const int num_cells, const double* k_xx);
     ~SecondOrderTensor();
 
     // Setters for optional tensor components in 2d
@@ -26,17 +26,18 @@ class SecondOrderTensor
     const double* const* full_data() const;
 
    private:
-    int m_dim;
+    const int m_dim;
+    const int m_num_cells;
 
     bool m_is_isotropic;
     bool m_is_diagonal;
 
-    const double* m_k_xx;
-    const double* m_k_yy;
-    const double* m_k_xy;
-    const double* m_k_zz;
-    const double* m_k_xz;
-    const double* m_k_yz;
+    double* m_k_xx;
+    double* m_k_yy;
+    double* m_k_xy;
+    double* m_k_zz;
+    double* m_k_xz;
+    double* m_k_yz;
 
     mutable const double* m_diagonal_data[3];
     mutable const double* m_full_data[6];

@@ -2,15 +2,17 @@
 
 #include <stdexcept>
 
-SecondOrderTensor::SecondOrderTensor(const int dim, const double* k_xx)
+SecondOrderTensor::SecondOrderTensor(const int dim, const int num_cells, const double* k_xx)
     : m_dim(dim),
-      m_k_xx(k_xx),
+      m_num_cells(num_cells),
+      m_k_xx(new double[num_cells]),
       m_k_yy(nullptr),
       m_k_xy(nullptr),
       m_k_zz(nullptr),
       m_k_xz(nullptr),
       m_k_yz(nullptr)
 {
+    std::copy(k_xx, k_xx + num_cells, m_k_xx);
     m_is_isotropic = true;
     m_is_diagonal = true;
     m_k_yy = nullptr;
@@ -20,7 +22,15 @@ SecondOrderTensor::SecondOrderTensor(const int dim, const double* k_xx)
     m_k_yz = nullptr;
 }
 
-SecondOrderTensor::~SecondOrderTensor() {}
+SecondOrderTensor::~SecondOrderTensor()
+{
+    delete[] m_k_xx;
+    delete[] m_k_yy;
+    delete[] m_k_xy;
+    delete[] m_k_zz;
+    delete[] m_k_xz;
+    delete[] m_k_yz;
+}
 
 bool SecondOrderTensor::is_isotropic() const
 {
@@ -35,7 +45,9 @@ bool SecondOrderTensor::is_diagonal() const
 
 SecondOrderTensor& SecondOrderTensor::with_kyy(const double* k_yy)
 {
-    m_k_yy = k_yy;
+    delete[] m_k_yy;                              // Free existing memory
+    m_k_yy = new double[m_num_cells];             // Allocate new memory
+    std::copy(k_yy, k_yy + m_num_cells, m_k_yy);  // Copy data
     // If the yy component is set, we assume it is not the same as the xx component. The
     // tensor is no longer isotropic (but it can still be diagonal).
     m_is_isotropic = false;
@@ -44,7 +56,9 @@ SecondOrderTensor& SecondOrderTensor::with_kyy(const double* k_yy)
 
 SecondOrderTensor& SecondOrderTensor::with_kxy(const double* k_xy)
 {
-    m_k_xy = k_xy;
+    delete[] m_k_xy;                              // Free existing memory
+    m_k_xy = new double[m_num_cells];             // Allocate new memory
+    std::copy(k_xy, k_xy + m_num_cells, m_k_xy);  // Copy data
     // If the xy component is set, the tensor is no longer diagonal.
     m_is_diagonal = false;
 
@@ -53,11 +67,13 @@ SecondOrderTensor& SecondOrderTensor::with_kxy(const double* k_xy)
     // component to be the same as the xx component.
     if (m_k_yy == nullptr)
     {
-        m_k_yy = m_k_xx;
+        m_k_yy = new double[m_num_cells];
+        std::copy(m_k_xx, m_k_xx + m_num_cells, m_k_yy);
     }
     if (m_k_zz == nullptr && m_dim == 3)
     {
-        m_k_zz = m_k_xx;
+        m_k_zz = new double[m_num_cells];
+        std::copy(m_k_xx, m_k_xx + m_num_cells, m_k_zz);
     }
     // After this operation, the tensor is no longer considered isotropic.
     m_is_isotropic = false;
@@ -72,7 +88,9 @@ SecondOrderTensor& SecondOrderTensor::with_kzz(const double* k_zz)
     {
         throw std::runtime_error("Cannot set zz component for 2D tensor.");
     }
-    m_k_zz = k_zz;
+    delete[] m_k_zz;                              // Free existing memory
+    m_k_zz = new double[m_num_cells];             // Allocate new memory
+    std::copy(k_zz, k_zz + m_num_cells, m_k_zz);  // Copy data
     // If the zz component is set, we assume it is not the same as the xx component. The
     // tensor is no longer isotropic (but it can still be diagonal).
     m_is_isotropic = false;
@@ -85,7 +103,9 @@ SecondOrderTensor& SecondOrderTensor::with_kxz(const double* k_xz)
     {
         throw std::runtime_error("Cannot set xz component for 2D tensor.");
     }
-    m_k_xz = k_xz;
+    delete[] m_k_xz;                              // Free existing memory
+    m_k_xz = new double[m_num_cells];             // Allocate new memory
+    std::copy(k_xz, k_xz + m_num_cells, m_k_xz);  // Copy data
     // If the xz component is set, the tensor is no longer diagonal.
     m_is_diagonal = false;
 
@@ -94,14 +114,14 @@ SecondOrderTensor& SecondOrderTensor::with_kxz(const double* k_xz)
     // it to be the same as the xx component.
     if (m_k_yy == nullptr)
     {
-        m_k_yy = m_k_xx;
+        m_k_yy = new double[m_num_cells];
+        std::copy(m_k_xx, m_k_xx + m_num_cells, m_k_yy);
     }
-
     if (m_k_zz == nullptr)
     {
-        m_k_zz = m_k_xx;
+        m_k_zz = new double[m_num_cells];
+        std::copy(m_k_xx, m_k_xx + m_num_cells, m_k_zz);
     }
-
     m_is_isotropic = false;
     m_is_diagonal = false;
     return *this;
@@ -113,7 +133,9 @@ SecondOrderTensor& SecondOrderTensor::with_kyz(const double* k_yz)
     {
         throw std::runtime_error("Cannot set yz component for 2D tensor.");
     }
-    m_k_yz = k_yz;
+    delete[] m_k_yz;                              // Free existing memory
+    m_k_yz = new double[m_num_cells];             // Allocate new memory
+    std::copy(k_yz, k_yz + m_num_cells, m_k_yz);  // Copy data
     // If the yz component is set, the tensor is no longer diagonal.
     m_is_diagonal = false;
 
@@ -122,14 +144,14 @@ SecondOrderTensor& SecondOrderTensor::with_kyz(const double* k_yz)
     // it to be the same as the xx component.
     if (m_k_yy == nullptr)
     {
-        m_k_yy = m_k_xx;
+        m_k_yy = new double[m_num_cells];
+        std::copy(m_k_xx, m_k_xx + m_num_cells, m_k_yy);
     }
-
     if (m_k_zz == nullptr)
     {
-        m_k_zz = m_k_xx;
+        m_k_zz = new double[m_num_cells];
+        std::copy(m_k_xx, m_k_xx + m_num_cells, m_k_zz);
     }
-
     m_is_isotropic = false;
     m_is_diagonal = false;
 
