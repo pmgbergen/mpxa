@@ -134,7 +134,7 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor)
         grid.num_faces(), grid.num_cells(), row_ptr_bound_flux, col_idx_bound_flux, trm_bound);
 
     ScalarDiscretization discr;
-    discr.flux = flux;
-    discr.bound_flux = bound_flux;
+    discr.flux = std::unique_ptr<CompressedDataStorage<double>>(flux);
+    discr.bound_flux = std::unique_ptr<CompressedDataStorage<double>>(bound_flux);
     return discr;
 }
