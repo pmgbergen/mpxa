@@ -2,6 +2,7 @@
 #define GRID_GRID_H
 
 #include <algorithm>
+#include <memory>
 #include <vector>
 
 #include "../utils/compressed_storage.h"
@@ -13,7 +14,8 @@ class Grid
          CompressedDataStorage<int>* face_nodes);
     ~Grid();
 
-    static Grid create_cartesian_grid(const int dim, const int* num_cells, const double* lengths);
+    static std::unique_ptr<Grid> create_cartesian_grid(const int dim, const int* num_cells,
+                                                       const double* lengths);
 
     void compute_geometry();
 

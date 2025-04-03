@@ -8,7 +8,7 @@
 class TPFA : public ::testing::Test
 {
    protected:
-    Grid grid;
+    std::unique_ptr<Grid> grid;
     SecondOrderTensor tensor;
     ScalarDiscretization discr;
 
@@ -28,7 +28,7 @@ class TPFA : public ::testing::Test
         // delete[] tensor_data;
 
         // Compute the discretization
-        discr = tpfa(grid, tensor);
+        discr = tpfa(*grid, tensor);
     }
 };
 

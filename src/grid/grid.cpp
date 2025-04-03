@@ -391,7 +391,8 @@ void Grid::compute_geometry()
 }
 
 // Cartesian grid creation
-Grid Grid::create_cartesian_grid(const int dim, const int *num_cells, const double *lengths)
+std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const int *num_cells,
+                                                  const double *lengths)
 {
     // Dim should be 2 or 3
     if (dim < 2 || dim > 3)
@@ -750,5 +751,6 @@ Grid Grid::create_cartesian_grid(const int dim, const int *num_cells, const doub
     CompressedDataStorage<int> *face_cells = new CompressedDataStorage<int>(
         tot_num_faces, tot_num_cells, row_ptr, col_idx_vector, face_cell_sign_vector);
 
-    return Grid(dim, nodes, face_cells, face_nodes);
+    Grid *g = new Grid(dim, nodes, face_cells, face_nodes);
+    return std::unique_ptr<Grid>(g);
 }
