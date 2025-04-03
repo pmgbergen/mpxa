@@ -12,6 +12,8 @@ class TPFA : public ::testing::Test
     SecondOrderTensor tensor;
     ScalarDiscretization discr;
 
+    TPFA() : grid(nullptr), tensor(0, nullptr), discr() {}
+
     void SetUp() override
     {
         // Create a simple grid. Extension of the grid is 1.0 in x and 2.0 in y.
