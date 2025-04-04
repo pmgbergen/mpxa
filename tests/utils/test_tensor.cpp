@@ -9,7 +9,7 @@ TEST(TensorTest, IsotropicSecondOrderTensor2d)
     const int num_data = 4;
     const double data[] = {1.0, 2.0, 3.0, 4.0};
 
-    SecondOrderTensor tensor_2d(2, data);
+    SecondOrderTensor tensor_2d(2, num_data, data);
     EXPECT_TRUE(tensor_2d.is_isotropic());
     EXPECT_TRUE(tensor_2d.is_diagonal());
 
@@ -40,7 +40,7 @@ TEST(TensorTest, IsotropicSecondOrderTensor3d)
     const int num_data = 4;
     const double data[] = {1.0, 2.0, 3.0, 4.0};
 
-    SecondOrderTensor tensor_3d(3, data);
+    SecondOrderTensor tensor_3d(3, num_data, data);
     EXPECT_TRUE(tensor_3d.is_isotropic());
     EXPECT_TRUE(tensor_3d.is_diagonal());
 
@@ -73,7 +73,7 @@ TEST(TensorTest, NonIsotropicSecondOrderTensor2d)
     const double data_xx[] = {1.0, 2.0, 3.0, 4.0};
     const double data_yy[] = {5.0, 6.0, 7.0, 8.0};
 
-    SecondOrderTensor tensor_2d(2, data_xx);
+    SecondOrderTensor tensor_2d(2, num_data, data_xx);
     tensor_2d.with_kyy(data_yy);
 
     EXPECT_FALSE(tensor_2d.is_isotropic());
@@ -105,7 +105,7 @@ TEST(TensorTest, NonIsotropicSecondOrderTensor3d)
     const double data_yy[] = {5.0, 6.0, 7.0, 8.0};
     const double data_zz[] = {9.0, 10.0, 11.0, 12.0};
 
-    SecondOrderTensor tensor_3d(3, data_xx);
+    SecondOrderTensor tensor_3d(3, num_data, data_xx);
     tensor_3d.with_kyy(data_yy);
     tensor_3d.with_kzz(data_zz);
 
@@ -136,7 +136,7 @@ TEST(TensorTest, NonDiagonalSecondOrderTensor2d)
     const double data_yy[] = {5.0, 6.0, 7.0, 8.0};
     const double data_xy[] = {9.0, 10.0, 11.0, 12.0};
 
-    SecondOrderTensor tensor_2d(2, data_xx);
+    SecondOrderTensor tensor_2d(2, num_data, data_xx);
     tensor_2d.with_kyy(data_yy);
     tensor_2d.with_kxy(data_xy);
 
@@ -170,7 +170,7 @@ TEST(TensorTest, NonDiagonalSecondOrderTensor3d)
     const double data_xz[] = {17.0, 18.0, 19.0, 20.0};
     const double data_yz[] = {21.0, 22.0, 23.0, 24.0};
 
-    SecondOrderTensor tensor_3d(3, data_xx);
+    SecondOrderTensor tensor_3d(3, num_data, data_xx);
     tensor_3d.with_kyy(data_yy);
     tensor_3d.with_kzz(data_zz);
     tensor_3d.with_kxy(data_xy);
