@@ -1,6 +1,8 @@
 #ifndef TENSOR_H
 #define TENSOR_H
 
+#include <memory>
+
 class SecondOrderTensor
 {
    public:
@@ -32,12 +34,12 @@ class SecondOrderTensor
     bool m_is_isotropic;
     bool m_is_diagonal;
 
-    double* m_k_xx;
-    double* m_k_yy;
-    double* m_k_xy;
-    double* m_k_zz;
-    double* m_k_xz;
-    double* m_k_yz;
+    std::unique_ptr<double[]> m_k_xx;
+    std::unique_ptr<double[]> m_k_yy;
+    std::unique_ptr<double[]> m_k_xy;
+    std::unique_ptr<double[]> m_k_zz;
+    std::unique_ptr<double[]> m_k_xz;
+    std::unique_ptr<double[]> m_k_yz;
 
     mutable const double* m_diagonal_data[3];
     mutable const double* m_full_data[6];
