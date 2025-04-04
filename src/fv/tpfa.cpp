@@ -1,3 +1,4 @@
+#include <iostream>
 #include <vector>
 
 #include "discr.h"
@@ -9,14 +10,24 @@ namespace  // Anonymous namespace for helper functions.
 const double nKproj(const double* face_normal, const SecondOrderTensor& tensor,
                     const double* cell_face_vec, const int dim, const int cell_ind)
 {
+    // Compute the squared distance between the cell center and the face center. We get
+    // one power of the distance to make the cell-face vector a unit vector, and a second
+    // power to get a distance measure (a gradient).
+    double dist = 0.0;
+    for (int i{0}; i < dim; ++i)
+    {
+        dist += cell_face_vec[i] * cell_face_vec[i];
+    }
+
     if (tensor.is_isotropic())
     {
         double proj = 0.0;
+
         for (int i{0}; i < dim; ++i)
         {
-            proj += face_normal[i] * cell_face_vec[i];
+            proj += std::abs(face_normal[i] * cell_face_vec[i]);
         }
-        return tensor.isotropic_data()[cell_ind] * proj;
+        return tensor.isotropic_data()[cell_ind] * proj / dist;
     }
     else if (tensor.is_diagonal())
     {
@@ -25,7 +36,7 @@ const double nKproj(const double* face_normal, const SecondOrderTensor& tensor,
         {
             prod += face_normal[i] * cell_face_vec[i] * tensor.diagonal_data()[i][cell_ind];
         }
-        return prod;
+        return prod / dist;
     }
     else
     {
@@ -51,7 +62,7 @@ const double nKproj(const double* face_normal, const SecondOrderTensor& tensor,
                 prod += face_normal[i] * cell_face_vec[j] * tensor_val;
             }
         }
-        return prod;
+        return prod / dist;
     }
 }
 }  // namespace
