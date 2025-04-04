@@ -12,7 +12,7 @@ class TPFA : public ::testing::Test
     SecondOrderTensor tensor;
     ScalarDiscretization discr;
 
-    TPFA() : grid(nullptr), tensor(0, nullptr), discr() {}
+    TPFA() : grid(nullptr), tensor(2, 4, new double[4]{1.0, 2.0, 3.0, 4.0}), discr() {}
 
     void SetUp() override
     {
@@ -24,11 +24,6 @@ class TPFA : public ::testing::Test
         delete[] num_cells;
         delete[] lengths;
 
-        // Create a simple tensor
-        double* tensor_data = new double[4]{1.0, 2.0, 3.0, 4.0};
-        tensor = SecondOrderTensor(2, tensor_data);
-        // delete[] tensor_data;
-
         // Compute the discretization
         discr = tpfa(*grid, tensor);
     }
@@ -37,14 +32,18 @@ class TPFA : public ::testing::Test
 // Test the flux values on a Cartesian 2d grid.
 TEST_F(TPFA, FluxValuesCart2d)
 {
+    // Distance between the cell centers in the two directions.
     const double dx = 0.5;
     const double dy = 1.0;
 
-    // Expected flux values for the internal faces.
-    const double t_1 = dy / (dx / 1.0 + dx / 2.0);
-    const double t_4 = dy / (dx / 3.0 + dx / 4.0);
-    const double t_8 = dx / (dy / 1.0 + dy / 3.0);
-    const double t_9 = dx / (dy / 2.0 + dy / 4.0);
+    // Expected flux values for the internal faces. The nominator represents the area
+    // of the face. The denominator represents the harmonic mean of the permeability
+    // in the two cells adjacent to the face, divided by the distance to the face.
+    // The factor 0.5 is needed to get the face-cell distance.
+    const double t_1 = dy / (0.5 * dx / 1.0 + 0.5 * dx / 2.0);
+    const double t_4 = dy / (0.5 * dx / 3.0 + 0.5 * dx / 4.0);
+    const double t_8 = dx / (0.5 * dy / 1.0 + 0.5 * dy / 3.0);
+    const double t_9 = dx / (0.5 * dy / 2.0 + 0.5 * dy / 4.0);
 
     // Check the flux values.
     EXPECT_EQ(discr.flux->value(1, 0), t_1);
