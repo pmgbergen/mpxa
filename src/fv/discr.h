@@ -21,6 +21,7 @@ struct ScalarDiscretization
     std::unique_ptr<CompressedDataStorage<double>> bound_flux;
 };
 
-ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor);
+ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
+                          const std::map<int, BoundaryCondition>& bc_map);
 
 #endif  // FV_DISCR_H

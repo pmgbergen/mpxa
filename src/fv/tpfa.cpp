@@ -1,4 +1,5 @@
 #include <iostream>
+#include <map>
 #include <vector>
 
 #include "discr.h"
@@ -11,8 +12,8 @@ const double nKproj(const double* face_normal, const SecondOrderTensor& tensor,
                     const double* cell_face_vec, const int dim, const int cell_ind)
 {
     // Compute the squared distance between the cell center and the face center. We get
-    // one power of the distance to make the cell-face vector a unit vector, and a second
-    // power to get a distance measure (a gradient).
+    // one power of the distance to make the cell-face vector a unit vector, and a
+    // second power to get a distance measure (a gradient).
     double dist = 0.0;
     for (int i{0}; i < dim; ++i)
     {
@@ -67,27 +68,34 @@ const double nKproj(const double* face_normal, const SecondOrderTensor& tensor,
 }
 }  // namespace
 
-ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor)
+ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
+                          const std::map<int, BoundaryCondition>& bc_map)
 {
-    std::vector<double> trm;
-    trm.reserve(grid.num_faces());  // Should be 2 * num_internal_faces + num_boundary_faces.
+    const int num_boundary_faces = bc_map.size();
+    const int num_internal_faces = grid.num_faces() - num_boundary_faces;
 
     std::vector<int> row_ptr_flux;
     row_ptr_flux.reserve(grid.num_faces() + 1);
     row_ptr_flux.push_back(0);
 
+    // Reserve space for the transmissibility matrix. The size is 2 * num_internal_faces
+    // + num_boundary_faces.
+    std::vector<double> trm;
     std::vector<int> col_idx_flux;
-    col_idx_flux.reserve(2 * grid.num_faces());
+    trm.reserve(2 * num_internal_faces + num_boundary_faces);
+    col_idx_flux.reserve(2 * num_internal_faces + num_boundary_faces);
 
+    // Boundary flux matrix. There will be an estimated num_boundary_faces entries in the
+    // matrix.
     std::vector<double> trm_bound;
-    trm_bound.reserve(grid.num_faces());  // Should be 2 * num_internal_faces + num_boundary_faces.
+    trm_bound.reserve(num_boundary_faces);
 
     std::vector<int> row_ptr_bound_flux;
     row_ptr_bound_flux.reserve(grid.num_faces() + 1);
     row_ptr_bound_flux.push_back(0);
 
     std::vector<int> col_idx_bound_flux;
-    col_idx_bound_flux.reserve(2 * grid.num_faces());
+    col_idx_bound_flux.reserve(num_boundary_faces);
 
     for (int face_ind{0}; face_ind < grid.num_faces(); ++face_ind)
     {
@@ -103,6 +111,7 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor)
             face_cell_a_vec[i] = center[i] - grid.cell_center(cell_a)[i];
         }
         const double trm_a = nKproj(normal, tensor, face_cell_a_vec, grid.dim(), cell_a);
+        delete[] face_cell_a_vec;
 
         if (cells.size() == 2)  // Internal face.
         {
@@ -131,15 +140,40 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor)
         }
         else  // Boundary face.
         {
-            trm.push_back(trm_a * sign_a);
-            col_idx_flux.push_back(cell_a);
+            const BoundaryCondition bc = bc_map.at(face_ind);
 
-            // Store the flux in the compressed data storage.
-            // bound_flux->set_value(face_ind, flux);
+            switch (bc)  // Corrected to use the scoped enum directly.
+            {
+                case BoundaryCondition::Dirichlet:
+                    // The transmissibility for Dirichlet conditions are the same as the
+                    // (half) transmissibility for the internal face.
+                    trm.push_back(trm_a * sign_a);
+                    col_idx_flux.push_back(cell_a);
+                    // The transmissibility for the boundary face is the negative of
+                    // the transmissibility for the internal face.
+                    trm_bound.push_back(-trm_a * sign_a);
+                    col_idx_bound_flux.push_back(face_ind);
+                    break;
+
+                case BoundaryCondition::Neumann:
+                    // Neumann conditions have no transmissibility for the flux matrix.
+                    // The bounday flux is set to unity, as this will transmit the
+                    // Neumann condition to the cell.
+                    trm_bound.push_back(1.0 * sign_a);
+                    col_idx_bound_flux.push_back(face_ind);
+                    break;
+
+                case BoundaryCondition::Robin:
+                    // Handle Robin boundary condition.
+                    throw std::logic_error("Robin boundary condition not implemented");
+
+                default:
+                    throw std::runtime_error("Unknown boundary condition type");
+            }
         }
+        // Move the row pointers to the next face. Apply to both flux and bound_flux.
         row_ptr_flux.push_back(col_idx_flux.size());
-
-        delete[] face_cell_a_vec;
+        row_ptr_bound_flux.push_back(col_idx_bound_flux.size());
     }
 
     CompressedDataStorage<double>* flux = new CompressedDataStorage<double>(
