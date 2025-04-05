@@ -1,11 +1,19 @@
 #ifndef FV_DISCR_H
 #define FV_DISCR_H
 
+#include <map>     // std::map
 #include <memory>  // std::unique_ptr
 
 #include "../grid/grid.h"
 #include "../utils/compressed_storage.h"
 #include "../utils/tensor.h"
+
+enum class BoundaryCondition
+{
+    Dirichlet,
+    Neumann,
+    Robin,
+};
 
 struct ScalarDiscretization
 {
