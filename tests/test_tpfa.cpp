@@ -22,12 +22,10 @@ class TPFA : public ::testing::Test
     void SetUp() override
     {
         // Create a simple grid. Extension of the grid is 1.0 in x and 2.0 in y.
-        int* num_cells = new int[2]{2, 2};
-        double* lengths = new double[2]{1.0, 2.0};
+        std::vector<int> num_cells = {2, 2};
+        std::vector<double> lengths = {1.0, 2.0};
         grid = Grid::create_cartesian_grid(2, num_cells, lengths);
         grid->compute_geometry();
-        delete[] num_cells;
-        delete[] lengths;
 
         // Set Dirichlet conditions on the left and right boundaries, face indices {0,
         // 2, 3, 5}.

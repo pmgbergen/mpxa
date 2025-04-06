@@ -11,9 +11,9 @@ class GridTest : public ::testing::Test
    protected:
     std::unique_ptr<Grid> grid_2d;
     std::unique_ptr<Grid> unit_square;
-    const int num_cells_2d[2] = {2, 3};
-    const double lengths_2d[2] = {2.0, 3.0};
-    const double unit_lengths_2d[2] = {1.0, 1.0};
+    const std::vector<int> num_cells_2d = {2, 3};
+    const std::vector<double> lengths_2d = {2.0, 3.0};
+    const std::vector<double> unit_lengths_2d = {1.0, 1.0};
 
     void SetUp() override
     {
@@ -32,7 +32,7 @@ TEST_F(GridTest, NodeCoordinates2dUnitCellSize)
 {
     EXPECT_EQ(grid_2d->num_nodes(), 12);
 
-    const double** nodes = grid_2d->nodes();
+    const auto& nodes = grid_2d->nodes();
     EXPECT_EQ(nodes[0][0], 0.0);
     EXPECT_EQ(nodes[0][1], 0.0);
     EXPECT_EQ(nodes[1][0], 1.0);
@@ -66,7 +66,7 @@ TEST_F(GridTest, NodeCoordinates2dUnitSquareDomain)
     const int nx = 2;
     const int ny = 3;
 
-    const double** nodes = unit_square->nodes();
+    const auto& nodes = unit_square->nodes();
     EXPECT_EQ(nodes[0][0], 0.0);
     EXPECT_EQ(nodes[0][1], 0.0);
     EXPECT_EQ(nodes[1][0], 1.0 / nx);
@@ -167,8 +167,8 @@ TEST_F(GridTest, GeometryComputation2d)
 {
     // Compute the face areas and normals.
     unit_square->compute_geometry();
-    const double* face_areas = unit_square->face_areas();
-    const double** face_normals = unit_square->face_normals();
+    const auto& face_areas = unit_square->face_areas();
+    const auto& face_normals = unit_square->face_normals();
 
     const double dx = 1.0 / 2;
     const double dy = 1.0 / 3;
@@ -202,7 +202,7 @@ TEST_F(GridTest, GeometryComputation2d)
     };
     for (int i = 0; i < unit_square->num_faces(); ++i)
     {
-        const double* face_center = unit_square->face_center(i);
+        const auto& face_center = unit_square->face_center(i);
         EXPECT_DOUBLE_EQ(face_center[0], known_face_centers[i].first);
         EXPECT_DOUBLE_EQ(face_center[1], known_face_centers[i].second);
     }
@@ -213,7 +213,7 @@ TEST_F(GridTest, GeometryComputation2d)
     };
     for (int i = 0; i < unit_square->num_cells(); ++i)
     {
-        const double* cell_center = unit_square->cell_center(i);
+        const auto& cell_center = unit_square->cell_center(i);
         EXPECT_DOUBLE_EQ(cell_center[0], known_cell_centers[i].first);
         EXPECT_DOUBLE_EQ(cell_center[1], known_cell_centers[i].second);
     }

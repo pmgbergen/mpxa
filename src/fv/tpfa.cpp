@@ -8,8 +8,8 @@ namespace  // Anonymous namespace for helper functions.
 {
 // Helper function to compute the product between normal vector, tensor, and cell-face
 // vector.
-const double nKproj(const double* face_normal, const SecondOrderTensor& tensor,
-                    const double* cell_face_vec, const int dim, const int cell_ind)
+const double nKproj(const std::vector<double> face_normal, const SecondOrderTensor& tensor,
+                    const std::vector<double> cell_face_vec, const int dim, const int cell_ind)
 {
     // Compute the squared distance between the cell center and the face center. We get
     // one power of the distance to make the cell-face vector a unit vector, and a
@@ -102,23 +102,22 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
         const std::vector<int> cells = grid.cells_of_face(face_ind);
         const int cell_a = cells[0];
         const int sign_a = grid.sign_of_face_cell(face_ind, cell_a);
-        const double* normal = grid.face_normal(face_ind);
-        const double* center = grid.face_center(face_ind);
-        double* face_cell_a_vec = new double[grid.dim()];
+        const auto& normal = grid.face_normal(face_ind);
+        const auto& center = grid.face_center(face_ind);
+        std::vector<double> face_cell_a_vec(grid.dim());
 
         for (int i{0}; i < grid.dim(); ++i)
         {
             face_cell_a_vec[i] = center[i] - grid.cell_center(cell_a)[i];
         }
         const double trm_a = nKproj(normal, tensor, face_cell_a_vec, grid.dim(), cell_a);
-        delete[] face_cell_a_vec;
 
         if (cells.size() == 2)  // Internal face.
         {
             const int cell_b = cells[1];
             const int sign_b = grid.sign_of_face_cell(face_ind, cell_b);
 
-            double* face_cell_b_vec = new double[grid.dim()];
+            std::vector<double> face_cell_b_vec(grid.dim());
             for (int i{0}; i < grid.dim(); ++i)
             {
                 face_cell_b_vec[i] = center[i] - grid.cell_center(cell_b)[i];
@@ -135,8 +134,6 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
             // Store the flux in the compressed data storage.
             // flux->set_value(face_ind, flux);
-
-            delete[] face_cell_b_vec;
         }
         else  // Boundary face.
         {

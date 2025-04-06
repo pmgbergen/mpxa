@@ -4,52 +4,22 @@
 #include <iostream>
 #include <vector>
 
-Grid::Grid(const int dim, double **nodes, CompressedDataStorage<int> *cell_faces,
-           CompressedDataStorage<int> *face_nodes)
-    : m_dim(dim), m_nodes(nodes), m_cell_faces(cell_faces), m_face_nodes(face_nodes)
+Grid::Grid(const int dim, std::vector<std::vector<double>> nodes,
+           CompressedDataStorage<int>* cell_faces, CompressedDataStorage<int>* face_nodes)
+    : m_dim(dim), m_nodes(std::move(nodes)), m_cell_faces(cell_faces), m_face_nodes(face_nodes)
 {
     m_num_nodes = m_face_nodes->num_rows();
     m_num_faces = m_face_nodes->num_cols();
     m_num_cells = m_cell_faces->num_cols();
-    m_cell_volumes = new double[m_num_cells];
-    m_face_areas = new double[m_num_faces];
-    m_face_normals = new double *[m_num_faces];
-    m_face_centers = new double *[m_num_faces];
-    m_cell_centers = new double *[m_num_cells];
-    for (int i = 0; i < m_num_faces; i++)
-    {
-        m_face_normals[i] = new double[m_dim];
-        m_face_centers[i] = new double[m_dim];
-    }
-    for (int i = 0; i < m_num_cells; i++)
-    {
-        m_cell_centers[i] = new double[m_dim];
-    }
+    m_cell_volumes.resize(m_num_cells);
+    m_face_areas.resize(m_num_faces);
+    m_face_normals.resize(m_num_faces, std::vector<double>(m_dim));
+    m_face_centers.resize(m_num_faces, std::vector<double>(m_dim));
+    m_cell_centers.resize(m_num_cells, std::vector<double>(m_dim));
 }
 
 Grid::~Grid()
 {
-    delete[] m_cell_volumes;
-    delete[] m_face_areas;
-    for (int i = 0; i < num_faces(); i++)
-    {
-        delete[] m_face_normals[i];
-        delete[] m_face_centers[i];
-    }
-    for (int i = 0; i < num_cells(); i++)
-    {
-        delete[] m_cell_centers[i];
-    }
-
-    for (int i = 0; i < m_num_nodes; i++)
-    {
-        delete[] m_nodes[i];
-    }
-
-    delete[] m_face_normals;
-    delete[] m_face_centers;
-    delete[] m_cell_centers;
-    delete[] m_nodes;
     delete m_cell_faces;
     delete m_face_nodes;
 }
@@ -113,95 +83,71 @@ const int Grid::sign_of_face_cell(const int face, const int cell) const
 }
 
 // Getters for geometric data
-const double **Grid::nodes() const
+const std::vector<std::vector<double>>& Grid::nodes() const
 {
-    return (const double **)m_nodes;
+    return m_nodes;
 }
-const double **Grid::cell_centers() const
+const std::vector<std::vector<double>>& Grid::cell_centers() const
 {
-    return (const double **)m_cell_centers;
+    return m_cell_centers;
 }
-const double *Grid::cell_volumes() const
+const std::vector<double>& Grid::cell_volumes() const
 {
     return m_cell_volumes;
 }
-const double *Grid::face_areas() const
+const std::vector<double>& Grid::face_areas() const
 {
     return m_face_areas;
 }
-const double **Grid::face_normals() const
+const std::vector<std::vector<double>>& Grid::face_normals() const
 {
-    return (const double **)m_face_normals;
+    return m_face_normals;
 }
-const double **Grid::face_centers() const
+const std::vector<std::vector<double>>& Grid::face_centers() const
 {
-    return (const double **)m_face_centers;
+    return m_face_centers;
 }
 // Getters for individual elements
-const double *Grid::cell_center(int cell) const
+const std::vector<double>& Grid::cell_center(int cell) const
 {
     return m_cell_centers[cell];
 }
-const double &Grid::cell_volume(int cell) const
+const double& Grid::cell_volume(int cell) const
 {
     return m_cell_volumes[cell];
 }
-const double &Grid::face_area(int face) const
+const double& Grid::face_area(int face) const
 {
     return m_face_areas[face];
 }
-const double *Grid::face_normal(int face) const
+const std::vector<double>& Grid::face_normal(int face) const
 {
     return m_face_normals[face];
 }
-const double *Grid::face_center(int face) const
+const std::vector<double>& Grid::face_center(int face) const
 {
     return m_face_centers[face];
 }
 // Setters for the geometry data, in case these are computed externally.
-void Grid::set_cell_volumes(double *cell_volumes)
+void Grid::set_cell_volumes(const std::vector<double>& cell_volumes)
 {
-    for (int i = 0; i < m_num_cells; i++)
-    {
-        m_cell_volumes[i] = cell_volumes[i];
-    }
+    m_cell_volumes = cell_volumes;
 }
-void Grid::set_face_areas(double *face_areas)
+void Grid::set_face_areas(const std::vector<double>& face_areas)
 {
-    for (int i = 0; i < m_num_faces; i++)
-    {
-        m_face_areas[i] = face_areas[i];
-    }
+    m_face_areas = face_areas;
 }
-void Grid::set_face_normals(double **face_normals)
+void Grid::set_face_normals(const std::vector<std::vector<double>>& face_normals)
 {
-    for (int i = 0; i < m_num_faces; i++)
-    {
-        for (int j = 0; j < m_dim; j++)
-        {
-            m_face_normals[i][j] = face_normals[i][j];
-        }
-    }
+    m_face_normals = face_normals;
 }
-void Grid::set_face_centers(double **face_centers)
+void Grid::set_face_centers(const std::vector<std::vector<double>>& face_centers)
 {
-    for (int i = 0; i < m_num_faces; i++)
-    {
-        for (int j = 0; j < m_dim; j++)
-        {
-            m_face_centers[i][j] = face_centers[i][j];
-        }
-    }
+    m_face_centers = face_centers;
 }
-void Grid::set_cell_centers(double **cell_centers)
+void Grid::set_cell_centers(const std::vector<std::vector<double>>& cell_centers)
 {
-    for (int i = 0; i < m_num_cells; i++)
-    {
-        for (int j = 0; j < m_dim; j++)
-        {
-            m_cell_centers[i][j] = cell_centers[i][j];
-        }
-    }
+    m_cell_centers = cell_centers;
 }
 
 void Grid::compute_geometry()
@@ -244,14 +190,14 @@ void Grid::compute_geometry()
             {
                 // The face is a triangle. We can compute the area using the cross product
                 // of two vectors in the plane of the triangle.
-                double v1[3], v2[3];
+                std::vector<double> v1(3), v2(3);
                 for (int j{0}; j < m_dim; ++j)
                 {
                     v1[j] = m_nodes[loc_nodes[1]][j] - m_nodes[loc_nodes[0]][j];
                     v2[j] = m_nodes[loc_nodes[2]][j] - m_nodes[loc_nodes[0]][j];
                 }
                 // Compute the face normal vector as the cross product of v1 and v2.
-                double normal[3];
+                std::vector<double> normal(3);
                 normal[0] = (v1[1] * v2[2] - v1[2] * v2[1]);
                 normal[1] = v1[2] * v2[0] - v1[0] * v2[2];
                 normal[2] = v1[0] * v2[1] - v1[1] * v2[0];
@@ -274,7 +220,7 @@ void Grid::compute_geometry()
                 // coordinates along each axis. For one of the dimension, the max and
                 // min will be equal. For the other two, we can compute the area by a
                 // Cartesian product.
-                double min_coords[3], max_coords[3];
+                std::vector<double> min_coords(3), max_coords(3);
                 for (int j{0}; j < m_dim; ++j)
                 {
                     min_coords[j] = m_nodes[loc_nodes[0]][j];
@@ -319,7 +265,7 @@ void Grid::compute_geometry()
         std::vector<int> loc_faces = faces_of_cell(i);
         const int num_faces = loc_faces.size();
 
-        m_cell_centers[i] = new double[m_dim];
+        m_cell_centers[i] = std::vector<double>(m_dim);
 
         // Compute the cell center. Loop over the dimensions and the faces of the cell
         // and compute the center as the average of the face centers. This will not work
@@ -343,7 +289,7 @@ void Grid::compute_geometry()
         for (int j{0}; j < num_faces; ++j)
         {
             // Create a vector from the face center to the cell center
-            double *face_to_cell = new double[m_dim];
+            std::vector<double> face_to_cell(m_dim);
             for (int k{0}; k < m_dim; ++k)
             {
                 face_to_cell[k] = m_cell_centers[i][k] - m_face_centers[loc_faces[j]][k];
@@ -359,9 +305,6 @@ void Grid::compute_geometry()
             // Add the volume contribution from the face.
             dist = std::abs(dist);
             m_cell_volumes[i] += m_face_areas[loc_faces[j]] * dist / m_dim;
-
-            // Clean up the face_to_cell array
-            delete[] face_to_cell;
         }
     }
     // Finally, loop over faces, check that the normal vectors point out of the cell
@@ -391,8 +334,8 @@ void Grid::compute_geometry()
 }
 
 // Cartesian grid creation
-std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const int *num_cells,
-                                                  const double *lengths)
+std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vector<int> num_cells,
+                                                  const std::vector<double> lengths)
 {
     // Dim should be 2 or 3
     if (dim < 2 || dim > 3)
@@ -466,11 +409,7 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const int *num_
 
     // Data structures for node coordinates and face nodes.
     // Define node coordinates as a num_nodes x dim array.
-    double **nodes = new double *[num_nodes];
-    for (int i = 0; i < num_nodes; ++i)
-    {
-        nodes[i] = new double[dim];
-    }
+    std::vector<std::vector<double>> nodes(num_nodes, std::vector<double>(dim));
     // We will eventually create a compressed row data storage for the face nodes.
     // However, for convenience store the column indices (the face numbers) in a vector
     // first. Data for the compressed storage will be created later.
@@ -584,7 +523,7 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const int *num_
     // The data is an array of ones
     std::vector<int> data_face_nodes(face_nodes_vector.size(), 1);
 
-    CompressedDataStorage<int> *face_nodes = new CompressedDataStorage<int>(
+    CompressedDataStorage<int>* face_nodes = new CompressedDataStorage<int>(
         num_nodes, tot_num_faces, row_ptr_face_nodes, col_ptr_face_nodes, data_face_nodes);
 
     // Create cell faces
@@ -748,9 +687,9 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const int *num_
     // Set the last element of row_ptr to the size of col_idx_vector
     row_ptr[tot_num_faces] = col_idx_vector.size();
 
-    CompressedDataStorage<int> *face_cells = new CompressedDataStorage<int>(
+    CompressedDataStorage<int>* face_cells = new CompressedDataStorage<int>(
         tot_num_faces, tot_num_cells, row_ptr, col_idx_vector, face_cell_sign_vector);
 
-    Grid *g = new Grid(dim, nodes, face_cells, face_nodes);
+    Grid* g = new Grid(dim, std::move(nodes), face_cells, face_nodes);
     return std::unique_ptr<Grid>(g);
 }

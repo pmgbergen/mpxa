@@ -10,12 +10,13 @@
 class Grid
 {
    public:
-    Grid(const int dim, double** nodes, CompressedDataStorage<int>* cell_faces,
-         CompressedDataStorage<int>* face_nodes);
+    Grid(const int dim, std::vector<std::vector<double>> nodes,
+         CompressedDataStorage<int>* cell_faces, CompressedDataStorage<int>* face_nodes);
     ~Grid();
 
-    static std::unique_ptr<Grid> create_cartesian_grid(const int dim, const int* num_cells,
-                                                       const double* lengths);
+    static std::unique_ptr<Grid> create_cartesian_grid(const int dim,
+                                                       const std::vector<int> num_cells,
+                                                       const std::vector<double> lengths);
 
     void compute_geometry();
 
@@ -37,27 +38,27 @@ class Grid
     const int sign_of_face_cell(const int face, const int cell) const;
 
     // Getters for geometric data
-    const double** nodes() const;
+    const std::vector<std::vector<double>>& nodes() const;
 
-    const double** cell_centers() const;
-    const double* cell_volumes() const;
-    const double* face_areas() const;
-    const double** face_normals() const;
-    const double** face_centers() const;
+    const std::vector<std::vector<double>>& cell_centers() const;
+    const std::vector<double>& cell_volumes() const;
+    const std::vector<double>& face_areas() const;
+    const std::vector<std::vector<double>>& face_normals() const;
+    const std::vector<std::vector<double>>& face_centers() const;
 
     // Also provide access to individual elements
-    const double* cell_center(int cell) const;
+    const std::vector<double>& cell_center(int cell) const;
     const double& cell_volume(int cell) const;
     const double& face_area(int face) const;
-    const double* face_normal(int face) const;
-    const double* face_center(int face) const;
+    const std::vector<double>& face_normal(int face) const;
+    const std::vector<double>& face_center(int face) const;
 
     // Setters for the geometry data, in case these are computed externally.
-    void set_cell_volumes(double* cell_volumes);
-    void set_face_areas(double* face_areas);
-    void set_face_normals(double** face_normals);
-    void set_face_centers(double** face_centers);
-    void set_cell_centers(double** cell_centers);
+    void set_cell_volumes(const std::vector<double>& cell_volumes);
+    void set_face_areas(const std::vector<double>& face_areas);
+    void set_face_normals(const std::vector<std::vector<double>>& face_normals);
+    void set_face_centers(const std::vector<std::vector<double>>& face_centers);
+    void set_cell_centers(const std::vector<std::vector<double>>& cell_centers);
 
    private:
     int m_dim;
@@ -69,12 +70,12 @@ class Grid
     CompressedDataStorage<int>* m_cell_faces;
     CompressedDataStorage<int>* m_face_nodes;
 
-    double** m_nodes;
-    double* m_cell_volumes;
-    double* m_face_areas;
-    double** m_face_normals;
-    double** m_face_centers;
-    double** m_cell_centers;
+    std::vector<std::vector<double>> m_nodes;
+    std::vector<double> m_cell_volumes;
+    std::vector<double> m_face_areas;
+    std::vector<std::vector<double>> m_face_normals;
+    std::vector<std::vector<double>> m_face_centers;
+    std::vector<std::vector<double>> m_cell_centers;
 
     int* m_boundary_faces;
 };
