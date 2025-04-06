@@ -2,20 +2,21 @@
 #define TENSOR_H
 
 #include <memory>
+#include <vector>
 
 class SecondOrderTensor
 {
    public:
-    SecondOrderTensor(const int dim, const int num_cells, const double* k_xx);
+    SecondOrderTensor(const int dim, const int num_cells, const std::vector<double>& k_xx);
     ~SecondOrderTensor();
 
     // Setters for optional tensor components in 2d
-    SecondOrderTensor& with_kyy(const double* k_yy);
-    SecondOrderTensor& with_kxy(const double* k_xy);
+    SecondOrderTensor& with_kyy(const std::vector<double>& k_yy);
+    SecondOrderTensor& with_kxy(const std::vector<double>& k_xy);
     // Setters for optional tensor components in 3d
-    SecondOrderTensor& with_kzz(const double* k_zz);
-    SecondOrderTensor& with_kxz(const double* k_xz);
-    SecondOrderTensor& with_kyz(const double* k_yz);
+    SecondOrderTensor& with_kzz(const std::vector<double>& k_zz);
+    SecondOrderTensor& with_kxz(const std::vector<double>& k_xz);
+    SecondOrderTensor& with_kyz(const std::vector<double>& k_yz);
 
     // Get properties of the tensor
     bool is_isotropic() const;
@@ -23,9 +24,9 @@ class SecondOrderTensor
 
     const int dim() const;
 
-    const double* isotropic_data() const;
-    const double* const* diagonal_data() const;
-    const double* const* full_data() const;
+    const std::vector<double>& isotropic_data() const;
+    const std::vector<const double*> diagonal_data() const;
+    const std::vector<const double*> full_data() const;
 
    private:
     const int m_dim;
@@ -34,15 +35,15 @@ class SecondOrderTensor
     bool m_is_isotropic;
     bool m_is_diagonal;
 
-    std::unique_ptr<double[]> m_k_xx;
-    std::unique_ptr<double[]> m_k_yy;
-    std::unique_ptr<double[]> m_k_xy;
-    std::unique_ptr<double[]> m_k_zz;
-    std::unique_ptr<double[]> m_k_xz;
-    std::unique_ptr<double[]> m_k_yz;
+    std::vector<double> m_k_xx;
+    std::vector<double> m_k_yy;
+    std::vector<double> m_k_xy;
+    std::vector<double> m_k_zz;
+    std::vector<double> m_k_xz;
+    std::vector<double> m_k_yz;
 
-    mutable const double* m_diagonal_data[3];
-    mutable const double* m_full_data[6];
+    mutable std::vector<const double*> m_diagonal_data;
+    mutable std::vector<const double*> m_full_data;
 };
 
 #endif  // TENSOR_H

@@ -17,7 +17,7 @@ class TPFA : public ::testing::Test
     // the tensor contains unique_ptrs, and cannot be copied without a move constructor,
     // which is not implemneted. Hency it is easier to define the tensor in full in the
     // constructor of the test fixture.
-    TPFA() : grid(nullptr), tensor(2, 4, new double[4]{1.0, 2.0, 3.0, 4.0}), discr(), bc_map() {}
+    TPFA() : grid(nullptr), tensor(2, 4, {1.0, 2.0, 3.0, 4.0}), discr(), bc_map() {}
 
     void SetUp() override
     {

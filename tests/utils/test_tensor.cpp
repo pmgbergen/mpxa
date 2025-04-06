@@ -7,15 +7,15 @@
 TEST(TensorTest, IsotropicSecondOrderTensor2d)
 {
     const int num_data = 4;
-    const double data[] = {1.0, 2.0, 3.0, 4.0};
+    const std::vector<double> data = {1.0, 2.0, 3.0, 4.0};
 
     SecondOrderTensor tensor_2d(2, num_data, data);
     EXPECT_TRUE(tensor_2d.is_isotropic());
     EXPECT_TRUE(tensor_2d.is_diagonal());
 
-    const double* isotropic_data = tensor_2d.isotropic_data();
-    const double* const* diagonal_data = tensor_2d.diagonal_data();
-    const double* const* full_data = tensor_2d.full_data();
+    const std::vector<double>& isotropic_data = tensor_2d.isotropic_data();
+    const std::vector<const double*> diagonal_data = tensor_2d.diagonal_data();
+    const std::vector<const double*> full_data = tensor_2d.full_data();
 
     // Verify that diagonal_data[1, 2] are nullptr
     for (size_t i = 1; i < 3; ++i)
@@ -38,15 +38,15 @@ TEST(TensorTest, IsotropicSecondOrderTensor2d)
 TEST(TensorTest, IsotropicSecondOrderTensor3d)
 {
     const int num_data = 4;
-    const double data[] = {1.0, 2.0, 3.0, 4.0};
+    const std::vector<double> data = {1.0, 2.0, 3.0, 4.0};
 
     SecondOrderTensor tensor_3d(3, num_data, data);
     EXPECT_TRUE(tensor_3d.is_isotropic());
     EXPECT_TRUE(tensor_3d.is_diagonal());
 
-    const double* isotropic_data = tensor_3d.isotropic_data();
-    const double* const* diagonal_data = tensor_3d.diagonal_data();
-    const double* const* full_data = tensor_3d.full_data();
+    const std::vector<double>& isotropic_data = tensor_3d.isotropic_data();
+    const std::vector<const double*> diagonal_data = tensor_3d.diagonal_data();
+    const std::vector<const double*> full_data = tensor_3d.full_data();
 
     // Verify that diagonal_data[1, 2] are nullptr
     for (size_t i = 1; i < 3; ++i)
@@ -70,8 +70,8 @@ TEST(TensorTest, IsotropicSecondOrderTensor3d)
 TEST(TensorTest, NonIsotropicSecondOrderTensor2d)
 {
     const int num_data = 4;
-    const double data_xx[] = {1.0, 2.0, 3.0, 4.0};
-    const double data_yy[] = {5.0, 6.0, 7.0, 8.0};
+    const std::vector<double> data_xx = {1.0, 2.0, 3.0, 4.0};
+    const std::vector<double> data_yy = {5.0, 6.0, 7.0, 8.0};
 
     SecondOrderTensor tensor_2d(2, num_data, data_xx);
     tensor_2d.with_kyy(data_yy);
@@ -79,9 +79,9 @@ TEST(TensorTest, NonIsotropicSecondOrderTensor2d)
     EXPECT_FALSE(tensor_2d.is_isotropic());
     EXPECT_TRUE(tensor_2d.is_diagonal());
 
-    const double* isotropic_data = tensor_2d.isotropic_data();
-    const double* const* diagonal_data = tensor_2d.diagonal_data();
-    const double* const* full_data = tensor_2d.full_data();
+    const std::vector<double>& isotropic_data = tensor_2d.isotropic_data();
+    const std::vector<const double*> diagonal_data = tensor_2d.diagonal_data();
+    const std::vector<const double*> full_data = tensor_2d.full_data();
 
     EXPECT_EQ(diagonal_data[2], nullptr);
     // Verify that full_data[1:5] are nullptr
@@ -101,9 +101,9 @@ TEST(TensorTest, NonIsotropicSecondOrderTensor2d)
 TEST(TensorTest, NonIsotropicSecondOrderTensor3d)
 {
     const int num_data = 4;
-    const double data_xx[] = {1.0, 2.0, 3.0, 4.0};
-    const double data_yy[] = {5.0, 6.0, 7.0, 8.0};
-    const double data_zz[] = {9.0, 10.0, 11.0, 12.0};
+    const std::vector<double> data_xx = {1.0, 2.0, 3.0, 4.0};
+    const std::vector<double> data_yy = {5.0, 6.0, 7.0, 8.0};
+    const std::vector<double> data_zz = {9.0, 10.0, 11.0, 12.0};
 
     SecondOrderTensor tensor_3d(3, num_data, data_xx);
     tensor_3d.with_kyy(data_yy);
@@ -112,9 +112,9 @@ TEST(TensorTest, NonIsotropicSecondOrderTensor3d)
     EXPECT_FALSE(tensor_3d.is_isotropic());
     EXPECT_TRUE(tensor_3d.is_diagonal());
 
-    const double* isotropic_data = tensor_3d.isotropic_data();
-    const double* const* diagonal_data = tensor_3d.diagonal_data();
-    const double* const* full_data = tensor_3d.full_data();
+    const std::vector<double>& isotropic_data = tensor_3d.isotropic_data();
+    const std::vector<const double*> diagonal_data = tensor_3d.diagonal_data();
+    const std::vector<const double*> full_data = tensor_3d.full_data();
 
     EXPECT_EQ(full_data[2], nullptr);
     EXPECT_EQ(full_data[4], nullptr);
@@ -132,9 +132,9 @@ TEST(TensorTest, NonIsotropicSecondOrderTensor3d)
 TEST(TensorTest, NonDiagonalSecondOrderTensor2d)
 {
     const int num_data = 4;
-    const double data_xx[] = {1.0, 2.0, 3.0, 4.0};
-    const double data_yy[] = {5.0, 6.0, 7.0, 8.0};
-    const double data_xy[] = {9.0, 10.0, 11.0, 12.0};
+    const std::vector<double> data_xx = {1.0, 2.0, 3.0, 4.0};
+    const std::vector<double> data_yy = {5.0, 6.0, 7.0, 8.0};
+    const std::vector<double> data_xy = {9.0, 10.0, 11.0, 12.0};
 
     SecondOrderTensor tensor_2d(2, num_data, data_xx);
     tensor_2d.with_kyy(data_yy);
@@ -143,7 +143,7 @@ TEST(TensorTest, NonDiagonalSecondOrderTensor2d)
     EXPECT_FALSE(tensor_2d.is_isotropic());
     EXPECT_FALSE(tensor_2d.is_diagonal());
 
-    const double* const* full_data = tensor_2d.full_data();
+    const std::vector<const double*> full_data = tensor_2d.full_data();
 
     // Verify that full_data[3:5] are nullptr
     for (size_t i = 3; i < 6; i++)
@@ -163,12 +163,12 @@ TEST(TensorTest, NonDiagonalSecondOrderTensor2d)
 TEST(TensorTest, NonDiagonalSecondOrderTensor3d)
 {
     const int num_data = 4;
-    const double data_xx[] = {1.0, 2.0, 3.0, 4.0};
-    const double data_yy[] = {5.0, 6.0, 7.0, 8.0};
-    const double data_zz[] = {9.0, 10.0, 11.0, 12.0};
-    const double data_xy[] = {13.0, 14.0, 15.0, 16.0};
-    const double data_xz[] = {17.0, 18.0, 19.0, 20.0};
-    const double data_yz[] = {21.0, 22.0, 23.0, 24.0};
+    const std::vector<double> data_xx = {1.0, 2.0, 3.0, 4.0};
+    const std::vector<double> data_yy = {5.0, 6.0, 7.0, 8.0};
+    const std::vector<double> data_zz = {9.0, 10.0, 11.0, 12.0};
+    const std::vector<double> data_xy = {13.0, 14.0, 15.0, 16.0};
+    const std::vector<double> data_xz = {17.0, 18.0, 19.0, 20.0};
+    const std::vector<double> data_yz = {21.0, 22.0, 23.0, 24.0};
 
     SecondOrderTensor tensor_3d(3, num_data, data_xx);
     tensor_3d.with_kyy(data_yy);
@@ -180,9 +180,7 @@ TEST(TensorTest, NonDiagonalSecondOrderTensor3d)
     EXPECT_FALSE(tensor_3d.is_isotropic());
     EXPECT_FALSE(tensor_3d.is_diagonal());
 
-    const double* const* full_data = tensor_3d.full_data();
-
-    // Check that the data has the expected size
+    const std::vector<const double*> full_data = tensor_3d.full_data();
 
     for (size_t i = 0; i < num_data; ++i)
     {
