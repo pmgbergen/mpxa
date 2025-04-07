@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 
-#include "../include/grid.h"
-#include "../include/tensor.h"
-#include "../src/tpfa.cpp"
+#include "../../include/grid.h"
+#include "../../include/tensor.h"
+#include "../../src/tpfa.cpp"
 
 // Test fixture for TPFA
 class TPFA : public ::testing::Test
