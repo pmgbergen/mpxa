@@ -3,7 +3,7 @@
 #include <map>
 #include <vector>
 
-#include "../../src/grid/grid.cpp"
+#include "../../src/grid.cpp"
 
 // Test fixture for Grid
 class GridTest : public ::testing::Test

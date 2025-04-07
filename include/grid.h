@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-#include "../utils/compressed_storage.h"
+#include "../include/compressed_storage.h"
 
 class Grid
 {

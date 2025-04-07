@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "../../src/utils/tensor.cpp"
+#include "../../src/tensor.cpp"
 
 TEST(TensorTest, IsotropicSecondOrderTensor2d)
 {

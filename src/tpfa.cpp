@@ -2,7 +2,7 @@
 #include <map>
 #include <vector>
 
-#include "discr.h"
+#include "../include/discr.h"
 
 namespace  // Anonymous namespace for helper functions.
 {

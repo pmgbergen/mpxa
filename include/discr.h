@@ -4,9 +4,9 @@
 #include <map>     // std::map
 #include <memory>  // std::unique_ptr
 
-#include "../grid/grid.h"
-#include "../utils/compressed_storage.h"
-#include "../utils/tensor.h"
+#include "../include/compressed_storage.h"
+#include "../include/grid.h"
+#include "../include/tensor.h"
 
 enum class BoundaryCondition
 {
