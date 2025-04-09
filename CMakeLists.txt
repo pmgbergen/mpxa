@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.15)
 project(MPXA)
 
 # Set the C++ standard
@@ -9,11 +9,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 # find_package(pybind11 REQUIRED)
 
 # If pybind11 is installed via pip, you can use the following:
-execute_process(
-    COMMAND python3 -m pybind11 --cmakedir
-    OUTPUT_VARIABLE PYBIND11_CMAKE_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
+# execute_process(
+#     COMMAND python3 -m pybind11 --cmakedir
+#     OUTPUT_VARIABLE PYBIND11_CMAKE_DIR
+#     OUTPUT_STRIP_TRAILING_WHITESPACE
+# )
 find_package(pybind11 REQUIRED PATHS ${PYBIND11_CMAKE_DIR})
 
 # Build shared libraries. Not sure if this is the best option in the long term, but stay
@@ -37,5 +37,18 @@ include_directories(${GTEST_INCLUDE_DIRS})
 add_subdirectory(src)
 add_subdirectory(tests)
 
+# Add a target for the Python bindings
+add_library(grid MODULE bindings/python/grid_bindings.cpp src/grid.cpp) # Change target name to 'grid'
+target_link_libraries(grid PRIVATE pybind11::module ${LIBRARY_DEPENDENCIES})
+
+# Ensure the output is placed in the correct directory for Python to find
+set_target_properties(grid PROPERTIES
+    PREFIX ""
+    SUFFIX ".so"
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bindings/python
+)
+
+# Add a message to guide the user during development
+message(STATUS "Python bindings will be available in: ${CMAKE_BINARY_DIR}/bindings/python")
 
 add_test(NAME ${TEST_EXECUTABLE} COMMAND ${TEST_EXECUTABLE})
