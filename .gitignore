@@ -39,3 +39,8 @@ CMakeCache.txt
 cmake_install.cmake
 CTestTestfile.cmake
 Makefile
+
+mpxa.egg-info/*
+src/mpxa.egg-info/*
+.vscode/*
+Testing/Temporary
