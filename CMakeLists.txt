@@ -15,18 +15,33 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 #     OUTPUT_STRIP_TRAILING_WHITESPACE
 # )
 find_package(pybind11 REQUIRED PATHS ${PYBIND11_CMAKE_DIR})
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 
 # Build shared libraries. Not sure if this is the best option in the long term, but stay
 # with it for now.
 set(BUILD_SHARED_LIBS ON)
 
 # Define the library name variable
-set(LIBRARY_NAME mpxa)
+set(LIBRARY_NAME libmpxa)
 # Define the test executable name variable
 set(TEST_EXECUTABLE test_mpxa)
 
 # Set (empty) list of library dependencies
 set(LIBRARY_DEPENDENCIES)
+
+# Define the Python package name
+set(PYTHON_PACKAGE_NAME "mpxa")
+
+# Configure the binding files
+# configure_file(
+#     ${CMAKE_CURRENT_SOURCE_DIR}/bindings/python/grid_bindings.cpp.in
+#     ${CMAKE_CURRENT_BINARY_DIR}/bindings/python/grid_bindings.cpp
+#     @ONLY
+# )
+
+# # Update the include paths and sources
+# include_directories(${CMAKE_CURRENT_BINARY_DIR}/bindings/python)
+# add_library(python_bindings ${CMAKE_CURRENT_BINARY_DIR}/bindings/python/grid_bindings.cpp)
 
 # Add the Google Test framework
 enable_testing()
@@ -38,11 +53,11 @@ add_subdirectory(src)
 add_subdirectory(tests)
 
 # Add a target for the Python bindings
-add_library(grid MODULE bindings/python/grid_bindings.cpp src/grid.cpp) # Change target name to 'grid'
-target_link_libraries(grid PRIVATE pybind11::module ${LIBRARY_DEPENDENCIES})
+add_library(${PYTHON_PACKAGE_NAME} MODULE bindings/python/grid_bindings.cpp src/grid.cpp)
+target_link_libraries(${PYTHON_PACKAGE_NAME} PRIVATE pybind11::module ${LIBRARY_DEPENDENCIES})
 
 # Ensure the output is placed in the correct directory for Python to find
-set_target_properties(grid PROPERTIES
+set_target_properties(${PYTHON_PACKAGE_NAME} PROPERTIES
     PREFIX ""
     SUFFIX ".so"
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bindings/python

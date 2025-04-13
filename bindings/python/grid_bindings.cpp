@@ -5,7 +5,7 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(grid, m)
+PYBIND11_MODULE(mpxa, m)
 {
     py::class_<Grid>(m, "Grid")
         .def(py::init<int, std::vector<std::vector<double>>, CompressedDataStorage<int>*,
