@@ -58,11 +58,23 @@ endforeach()
 add_library(${PYTHON_PACKAGE_NAME} MODULE ${PYTHON_BINDINGS_SOURCES} ${SRC_IMPLEMENTATION_FILES})
 target_link_libraries(${PYTHON_PACKAGE_NAME} PRIVATE pybind11::module ${LIBRARY_DEPENDENCIES})
 
+# Link the libmpxa library to the Python bindings
+target_link_libraries(${PYTHON_PACKAGE_NAME} PRIVATE pybind11::module ${LIBRARY_NAME})
+
+# Directly specify the path to liblibmpxa.so for linking
+target_link_libraries(${PYTHON_PACKAGE_NAME} PRIVATE ${CMAKE_BINARY_DIR}/src/liblibmpxa.so)
+
 # Ensure the output is placed in the correct directory for Python to find
 set_target_properties(${PYTHON_PACKAGE_NAME} PROPERTIES
     PREFIX ""
     SUFFIX ".so"
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bindings/python
+)
+
+# Add RPATH to ensure runtime linking to liblibmpxa.so
+set_target_properties(${PYTHON_PACKAGE_NAME} PROPERTIES
+    BUILD_RPATH "${CMAKE_BINARY_DIR}/src"
+    INSTALL_RPATH "${CMAKE_BINARY_DIR}/src"
 )
 
 # Add a message to guide the user during development
