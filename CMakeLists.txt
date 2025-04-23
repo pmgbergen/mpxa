@@ -44,8 +44,18 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 add_subdirectory(src)
 add_subdirectory(tests)
 
-# Add a target for the Python bindings
-add_library(${PYTHON_PACKAGE_NAME} MODULE bindings/python/grid_bindings.cpp src/grid.cpp)
+# Dynamically search for all binding files in bindings/python and their corresponding implementation files in src
+file(GLOB_RECURSE PYTHON_BINDINGS_SOURCES bindings/python/*_bindings.cpp)
+
+# Extract the corresponding implementation files from src
+set(SRC_IMPLEMENTATION_FILES)
+foreach(BINDING_FILE ${PYTHON_BINDINGS_SOURCES})
+    get_filename_component(FILE_NAME ${BINDING_FILE} NAME_WE)
+    string(REPLACE "_bindings" "" IMPLEMENTATION_FILE_NAME ${FILE_NAME})
+    list(APPEND SRC_IMPLEMENTATION_FILES src/${IMPLEMENTATION_FILE_NAME}.cpp)
+endforeach()
+
+add_library(${PYTHON_PACKAGE_NAME} MODULE ${PYTHON_BINDINGS_SOURCES} ${SRC_IMPLEMENTATION_FILES})
 target_link_libraries(${PYTHON_PACKAGE_NAME} PRIVATE pybind11::module ${LIBRARY_DEPENDENCIES})
 
 # Ensure the output is placed in the correct directory for Python to find
