@@ -9,4 +9,5 @@ version = "0.0.1"
 dependencies = [
     "numpy>=2.2.4",
     "pybind11>=2.13.6",
+    "scipy>=1.15.2",
 ]
