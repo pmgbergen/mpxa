@@ -32,21 +32,13 @@ set(LIBRARY_DEPENDENCIES)
 # Define the Python package name
 set(PYTHON_PACKAGE_NAME "mpxa")
 
-# Configure the binding files
-# configure_file(
-#     ${CMAKE_CURRENT_SOURCE_DIR}/bindings/python/grid_bindings.cpp.in
-#     ${CMAKE_CURRENT_BINARY_DIR}/bindings/python/grid_bindings.cpp
-#     @ONLY
-# )
-
-# # Update the include paths and sources
-# include_directories(${CMAKE_CURRENT_BINARY_DIR}/bindings/python)
-# add_library(python_bindings ${CMAKE_CURRENT_BINARY_DIR}/bindings/python/grid_bindings.cpp)
-
 # Add the Google Test framework
 enable_testing()
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
+
+# Add the include directory globally to all targets
+include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # Add subdirectories for source and tests
 add_subdirectory(src)
