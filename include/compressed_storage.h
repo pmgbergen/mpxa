@@ -12,10 +12,10 @@ class CompressedDataStorage
 {
    public:
     // Constructor for an empty matrix.
-    CompressedDataStorage(int num_rows, int num_cols);
+    CompressedDataStorage(const int num_rows, const int num_cols);
 
     // Constructor for a matrix with indices and values given.
-    CompressedDataStorage(int num_rows, int num_cols, const std::vector<int>& row_ptr,
+    CompressedDataStorage(const int num_rows, const int num_cols, const std::vector<int>& row_ptr,
                           const std::vector<int>& col_idx, const std::vector<T>& values);
 
     // Destructor

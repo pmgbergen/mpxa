@@ -22,7 +22,7 @@ CompressedDataStorage<T>::CompressedDataStorage(const int num_rows, const int nu
 
 // Constructor for a matrix with indices and values given.
 template <typename T>
-CompressedDataStorage<T>::CompressedDataStorage(int num_rows, int num_cols,
+CompressedDataStorage<T>::CompressedDataStorage(const int num_rows, const int num_cols,
                                                 const std::vector<int>& row_ptr,
                                                 const std::vector<int>& col_idx,
                                                 const std::vector<T>& values)
@@ -106,9 +106,3 @@ T CompressedDataStorage<T>::value(const int row, const int col)
     // If the column is not found, return 0.
     return 0;
 }
-
-// Explicit template instantiation for CompressedDataStorage with double
-template class CompressedDataStorage<double>;
-
-// Explicit template instantiation for CompressedDataStorage with int
-template class CompressedDataStorage<int>;
