@@ -1,0 +1,28 @@
+import scipy.sparse as sps
+import numpy as np
+import pytest
+
+import mpxa
+
+@pytest.mark.parametrize("fmt", [int, float])
+def test_storage(fmt):
+    # Create a 4 x 3 sparse matrix with a few non-zero elements
+    indptr = np.array([0, 2, 3, 3, 4], dtype=int)
+    indices = np.array([0, 2, 1, 3], dtype=int)
+    data = np.array([1, 2, 3, 4], dtype=fmt)
+
+    if fmt == int:
+        storage_class = mpxa.CompressedDataStorageInt
+    else:
+        storage_class = mpxa.CompressedDataStorageDouble
+
+
+    num_rows = 4
+    num_cols = 3
+    cpp_mat = storage_class(num_rows, num_cols, indptr, indices, data)
+    sps_mat = sps.csr_matrix((data, indices, indptr), shape=(num_rows, num_cols))
+
+    row, col, val = sps.find(sps_mat)
+    
+    for (r, c, v) in zip(row, col, val):
+        assert cpp_mat.value(r, c) == v
