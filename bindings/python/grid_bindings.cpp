@@ -5,11 +5,12 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(mpxa, m)
+// PYBIND11_MODULE(mpxa, m)
+void init_grid(py::module_ &m)
 {
     py::class_<Grid>(m, "Grid")
-        .def(py::init<int, std::vector<std::vector<double>>, CompressedDataStorage<int>*,
-                      CompressedDataStorage<int>*>())
+        .def(py::init<int, std::vector<std::vector<double>>, CompressedDataStorage<int> *,
+                      CompressedDataStorage<int> *>())
         .def("dim", &Grid::dim)
         .def("compute_geometry", &Grid::compute_geometry)
         .def("create_cartesian_grid", &Grid::create_cartesian_grid)
