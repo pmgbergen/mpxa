@@ -45,36 +45,39 @@ add_subdirectory(src)
 add_subdirectory(tests)
 
 # Dynamically search for all binding files in bindings/python and their corresponding implementation files in src
-file(GLOB_RECURSE PYTHON_BINDINGS_SOURCES bindings/python/*_bindings.cpp)
+file(GLOB_RECURSE PYTHON_BINDINGS_FILES bindings/python/*_bindings.cpp)
 
 # Extract the corresponding implementation files from src
 set(SRC_IMPLEMENTATION_FILES)
-foreach(BINDING_FILE ${PYTHON_BINDINGS_SOURCES})
+foreach(BINDING_FILE ${PYTHON_BINDINGS_FILES})
     get_filename_component(FILE_NAME ${BINDING_FILE} NAME_WE)
-    string(REPLACE "_bindings" "" IMPLEMENTATION_FILE_NAME ${FILE_NAME})
-    list(APPEND SRC_IMPLEMENTATION_FILES src/${IMPLEMENTATION_FILE_NAME}.cpp)
+    if(NOT FILE_NAME STREQUAL "mpxa_bindings")  # Exclude mpxa_bindings.cpp
+        string(REPLACE "_bindings" "" IMPLEMENTATION_FILE_NAME ${FILE_NAME})
+        list(APPEND SRC_IMPLEMENTATION_FILES src/${IMPLEMENTATION_FILE_NAME}.cpp)
+    endif()
 endforeach()
 
-add_library(${PYTHON_PACKAGE_NAME} MODULE ${PYTHON_BINDINGS_SOURCES} ${SRC_IMPLEMENTATION_FILES})
-target_link_libraries(${PYTHON_PACKAGE_NAME} PRIVATE pybind11::module ${LIBRARY_DEPENDENCIES})
+pybind11_add_module(${PYTHON_PACKAGE_NAME}
+    MODULE
+    bindings/python/mpxa_bindings.cpp
+    ${SRC_IMPLEMENTATION_FILES}
+)
+# target_link_libraries(${PYTHON_PACKAGE_NAME} PRIVATE libmpxa)
 
-# Link the libmpxa library to the Python bindings
-target_link_libraries(${PYTHON_PACKAGE_NAME} PRIVATE pybind11::module ${LIBRARY_NAME})
+# Bundle the Python bindings and implementation files into a single library.
+# add_library(${PYTHON_PACKAGE_NAME} MODULE "bindings/python/mpxa_bindings.cpp" ${SRC_IMPLEMENTATION_FILES})
+
+# Link pybind11 library to the Python bindings.
+# target_link_libraries(${PYTHON_PACKAGE_NAME} PRIVATE pybind11::module)
 
 # Directly specify the path to liblibmpxa.so for linking
-target_link_libraries(${PYTHON_PACKAGE_NAME} PRIVATE ${CMAKE_BINARY_DIR}/src/liblibmpxa.so)
+# target_link_libraries(${PYTHON_PACKAGE_NAME} PRIVATE ${CMAKE_BINARY_DIR}/src/liblibmpxa.so)
 
 # Ensure the output is placed in the correct directory for Python to find
 set_target_properties(${PYTHON_PACKAGE_NAME} PROPERTIES
     PREFIX ""
     SUFFIX ".so"
     LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bindings/python
-)
-
-# Add RPATH to ensure runtime linking to liblibmpxa.so
-set_target_properties(${PYTHON_PACKAGE_NAME} PROPERTIES
-    BUILD_RPATH "${CMAKE_BINARY_DIR}/src"
-    INSTALL_RPATH "${CMAKE_BINARY_DIR}/src"
 )
 
 # Add a message to guide the user during development
