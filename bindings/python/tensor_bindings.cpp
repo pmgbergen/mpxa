@@ -1,6 +1,6 @@
 #include <pybind11/pybind11.h>
 
-#include "../include/tensor.h"
+#include "../../include/tensor.h"
 
 namespace py = pybind11;
 
