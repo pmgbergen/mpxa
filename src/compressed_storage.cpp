@@ -1,5 +1,25 @@
 #include "../include/compressed_storage.h"
 
+// Explicit template instantiation for CompressedDataStorage with double
+template class CompressedDataStorage<int>;
+template class CompressedDataStorage<double>;
+
+template <typename T>
+// Constructor for an empty matrix.
+CompressedDataStorage<T>::CompressedDataStorage(const int num_rows, const int num_cols)
+    : m_num_rows(num_rows),
+      m_num_cols(num_cols),
+      m_row_ptr(num_rows + 1, 0),
+      m_col_idx(),
+      m_values()
+{
+    // Initialize the row pointer to zero.
+    for (int i = 0; i < num_rows + 1; i++)
+    {
+        m_row_ptr[i] = 0;
+    }
+}
+
 // Constructor for a matrix with indices and values given.
 template <typename T>
 CompressedDataStorage<T>::CompressedDataStorage(int num_rows, int num_cols,
