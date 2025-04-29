@@ -12,19 +12,19 @@ namespace py = pybind11;
 
 void init_compressed_storage(py::module_& m)
 {
-    // py::bind_vector<std::vector<int>>(m, "VectorInt");
-    // py::bind_vector<std::vector<double>>(m, "VectorDouble");
-
-    py::class_<CompressedDataStorage<double>>(m, "CompressedDataStorageDouble")
+    // Bindings for CompressedDataStorage.
+    // Note to self: This tells pybind11 to use std::shared_ptr for the CompressedDataStorage
+    // class (and not the unique_ptr, which is the default). This is necessary because we
+    // want to use CompressedStorage in the python-binding of the Grid class, with memory
+    // shared between the python and c++ side.
+    // TODO: Not sure if this actually makes sense, since we copy the data into a std::vector
+    // (actually, I believe it makes no sence), but it will have to do for now.
+    py::class_<CompressedDataStorage<double>, std::shared_ptr<CompressedDataStorage<double>>>(
+        m, "CompressedDataStorageDouble")
         .def(py::init(
             [](int num_rows, int num_cols, py::array_t<int> indptr, py::array_t<int> indices,
                py::array_t<double> data)
             {
-                // Get const pointers to the numpy array data
-                const int* indptr_ptr = indptr.data();
-                const int* indices_ptr = indices.data();
-                const double* data_ptr = data.data();
-
                 // Convert numpy arrays to std::vector. Note to self: This creates a
                 // copy of the data (which on the one hand is not ideal, but on the
                 // other hand, it seems necessary if we want to use std::vector on the
@@ -45,7 +45,8 @@ void init_compressed_storage(py::module_& m)
         .def("values", &CompressedDataStorage<double>::values)
         .def("value", &CompressedDataStorage<double>::value);
 
-    py::class_<CompressedDataStorage<int>>(m, "CompressedDataStorageInt")
+    py::class_<CompressedDataStorage<int>, std::shared_ptr<CompressedDataStorage<int>>>(
+        m, "CompressedDataStorageInt")
         .def(py::init(
             [](int num_rows, int num_cols, py::array_t<int> indptr, py::array_t<int> indices,
                py::array_t<int> data)
