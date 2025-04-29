@@ -11,8 +11,10 @@ class Grid
 {
    public:
     Grid(const int dim, std::vector<std::vector<double>> nodes,
-         CompressedDataStorage<int>* cell_faces, CompressedDataStorage<int>* face_nodes);
-    ~Grid();
+         std::shared_ptr<CompressedDataStorage<int>> cell_faces,
+         std::shared_ptr<CompressedDataStorage<int>> face_nodes);
+
+    ~Grid() = default;  // No need for manual deletion
 
     static std::unique_ptr<Grid> create_cartesian_grid(const int dim,
                                                        const std::vector<int> num_cells,
@@ -67,8 +69,8 @@ class Grid
     int m_num_cells;
     int m_num_faces;
 
-    CompressedDataStorage<int>* m_cell_faces;
-    CompressedDataStorage<int>* m_face_nodes;
+    std::shared_ptr<CompressedDataStorage<int>> m_cell_faces;
+    std::shared_ptr<CompressedDataStorage<int>> m_face_nodes;
 
     std::vector<std::vector<double>> m_nodes;
     std::vector<double> m_cell_volumes;
