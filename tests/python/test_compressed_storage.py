@@ -8,7 +8,7 @@ import mpxa
 def test_storage(fmt):
     # Create a 4 x 3 sparse matrix with a few non-zero elements
     indptr = np.array([0, 2, 3, 3, 4], dtype=int)
-    indices = np.array([0, 2, 1, 3], dtype=int)
+    indices = np.array([0, 2, 1, 0], dtype=int)
     data = np.array([1, 2, 3, 4], dtype=fmt)
 
     if fmt == int:
@@ -26,3 +26,9 @@ def test_storage(fmt):
     
     for (r, c, v) in zip(row, col, val):
         assert cpp_mat.value(r, c) == v
+
+    # Check the number of rows and columns
+    assert cpp_mat.num_rows() == num_rows
+    assert cpp_mat.num_cols() == num_cols
+    # Check the data array
+    np.testing.assert_allclose(cpp_mat.values(), data)
