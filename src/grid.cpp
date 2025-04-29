@@ -5,8 +5,12 @@
 #include <vector>
 
 Grid::Grid(const int dim, std::vector<std::vector<double>> nodes,
-           CompressedDataStorage<int>* cell_faces, CompressedDataStorage<int>* face_nodes)
-    : m_dim(dim), m_nodes(std::move(nodes)), m_cell_faces(cell_faces), m_face_nodes(face_nodes)
+           std::shared_ptr<CompressedDataStorage<int>> cell_faces,
+           std::shared_ptr<CompressedDataStorage<int>> face_nodes)
+    : m_dim(dim),
+      m_nodes(std::move(nodes)),
+      m_cell_faces(std::move(cell_faces)),
+      m_face_nodes(std::move(face_nodes))
 {
     m_num_nodes = m_face_nodes->num_rows();
     m_num_faces = m_face_nodes->num_cols();
@@ -16,12 +20,6 @@ Grid::Grid(const int dim, std::vector<std::vector<double>> nodes,
     m_face_normals.resize(m_num_faces, std::vector<double>(m_dim));
     m_face_centers.resize(m_num_faces, std::vector<double>(m_dim));
     m_cell_centers.resize(m_num_cells, std::vector<double>(m_dim));
-}
-
-Grid::~Grid()
-{
-    delete m_cell_faces;
-    delete m_face_nodes;
 }
 
 const std::vector<int> Grid::boundary_faces() const
@@ -523,7 +521,7 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
     // The data is an array of ones
     std::vector<int> data_face_nodes(face_nodes_vector.size(), 1);
 
-    CompressedDataStorage<int>* face_nodes = new CompressedDataStorage<int>(
+    auto face_nodes = std::make_shared<CompressedDataStorage<int>>(
         num_nodes, tot_num_faces, row_ptr_face_nodes, col_ptr_face_nodes, data_face_nodes);
 
     // Create cell faces
@@ -687,7 +685,7 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
     // Set the last element of row_ptr to the size of col_idx_vector
     row_ptr[tot_num_faces] = col_idx_vector.size();
 
-    CompressedDataStorage<int>* face_cells = new CompressedDataStorage<int>(
+    auto face_cells = std::make_shared<CompressedDataStorage<int>>(
         tot_num_faces, tot_num_cells, row_ptr, col_idx_vector, face_cell_sign_vector);
 
     Grid* g = new Grid(dim, std::move(nodes), face_cells, face_nodes);
