@@ -10,7 +10,8 @@ void init_grid(py::module_ &m)
 {
     py::class_<Grid>(m, "Grid")
         .def(py::init<int, std::vector<std::vector<double>>, CompressedDataStorage<int> *,
-                      CompressedDataStorage<int> *>())
+                      CompressedDataStorage<int> *>(),
+             py::arg("dim"), py::arg("nodes"), py::arg("faces_of_node"), py::arg("nodes_of_face"))
         .def("dim", &Grid::dim)
         .def("compute_geometry", &Grid::compute_geometry)
         .def("create_cartesian_grid", &Grid::create_cartesian_grid)
