@@ -1,4 +1,5 @@
 #include <pybind11/pybind11.h>
+// #include <pybind11/smart_holder.h>
 #include <pybind11/stl.h>
 
 #include "../../include/grid.h"  // Include only the header file
@@ -9,9 +10,10 @@ namespace py = pybind11;
 void init_grid(py::module_ &m)
 {
     py::class_<Grid>(m, "Grid")
-        .def(py::init<int, std::vector<std::vector<double>>, CompressedDataStorage<int> *,
-                      CompressedDataStorage<int> *>(),
-             py::arg("dim"), py::arg("nodes"), py::arg("faces_of_node"), py::arg("nodes_of_face"))
+        .def(py::init<int, std::vector<std::vector<double>>,
+                      std::shared_ptr<CompressedDataStorage<int>>,
+                      std::shared_ptr<CompressedDataStorage<int>>>(),
+             py::arg("dim"), py::arg("nodes"), py::arg("faces_of_cell"), py::arg("nodes_of_face"))
         .def("dim", &Grid::dim)
         .def("compute_geometry", &Grid::compute_geometry)
         .def("create_cartesian_grid", &Grid::create_cartesian_grid)
