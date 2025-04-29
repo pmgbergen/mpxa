@@ -11,9 +11,6 @@ template <typename T>
 class CompressedDataStorage
 {
    public:
-    // Constructor for an empty matrix.
-    CompressedDataStorage(const int num_rows, const int num_cols);
-
     // Constructor for a matrix with indices and values given.
     CompressedDataStorage(const int num_rows, const int num_cols, const std::vector<int>& row_ptr,
                           const std::vector<int>& col_idx, const std::vector<T>& values);
