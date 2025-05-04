@@ -17,6 +17,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 find_package(pybind11 REQUIRED PATHS ${PYBIND11_CMAKE_DIR})
 find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 
+# Output the Python version being used
+message(STATUS "Using Python version: ${Python3_VERSION}")
+message(STATUS "Python executable: ${Python3_EXECUTABLE}")
+message(STATUS "Python include directory: ${Python3_INCLUDE_DIRS}")
+message(STATUS "Python library: ${Python3_LIBRARIES}")
+
 # Build shared libraries. Not sure if this is the best option in the long term, but stay
 # with it for now.
 set(BUILD_SHARED_LIBS ON)
