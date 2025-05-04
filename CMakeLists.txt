@@ -71,19 +71,11 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 add_subdirectory(src)
 add_subdirectory(tests)
 
-# Dynamically search for all binding files in bindings/python and their corresponding implementation files in src
-file(GLOB_RECURSE PYTHON_BINDINGS_FILES bindings/python/*_bindings.cpp)
+# Find the implementation files in src.
+file(GLOB_RECURSE SRC_IMPLEMENTATION_FILES src/*.cpp)
 
-# Extract the corresponding implementation files from src
-set(SRC_IMPLEMENTATION_FILES)
-foreach(BINDING_FILE ${PYTHON_BINDINGS_FILES})
-    get_filename_component(FILE_NAME ${BINDING_FILE} NAME_WE)
-    if(NOT FILE_NAME STREQUAL "mpxa_bindings")  # Exclude mpxa_bindings.cpp
-        string(REPLACE "_bindings" "" IMPLEMENTATION_FILE_NAME ${FILE_NAME})
-        list(APPEND SRC_IMPLEMENTATION_FILES src/${IMPLEMENTATION_FILE_NAME}.cpp)
-    endif()
-endforeach()
-
+# Compile all the bindings specified in the file mpxa_bindings.cpp. Compile with all the
+# source files in the src directory.
 pybind11_add_module(${PYTHON_PACKAGE_NAME}
     MODULE
     bindings/python/mpxa_bindings.cpp
