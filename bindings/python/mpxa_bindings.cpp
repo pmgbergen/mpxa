@@ -1,6 +1,7 @@
 #include <pybind11/pybind11.h>
 
 #include "compressed_storage_bindings.cpp"  // Include the header or source file
+#include "discr_bindings.cpp"               // Include the header or source file
 #include "grid_bindings.cpp"                // Include the header or source file
 #include "tensor_bindings.cpp"              // Include the header or source file
 
@@ -16,6 +17,6 @@ PYBIND11_MODULE(mpxa, m)
     init_grid(m);
     // Initialize bindings for tensor
     init_tensor(m);
-
-    // Add other bindings here (e.g., init_tensor(m), etc.)
+    // Bindings for the discretizations
+    init_discr(m);
 }
