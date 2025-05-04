@@ -40,6 +40,9 @@ cmake_install.cmake
 CTestTestfile.cmake
 Makefile
 
+# Python cache
+__pycache__/
+*.py[cod]
 mpxa.egg-info/*
 src/mpxa.egg-info/*
 .vscode/*
