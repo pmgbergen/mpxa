@@ -17,8 +17,8 @@ enum class BoundaryCondition
 
 struct ScalarDiscretization
 {
-    std::unique_ptr<CompressedDataStorage<double>> flux;
-    std::unique_ptr<CompressedDataStorage<double>> bound_flux;
+    std::shared_ptr<CompressedDataStorage<double>> flux;
+    std::shared_ptr<CompressedDataStorage<double>> bound_flux;
 };
 
 ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
