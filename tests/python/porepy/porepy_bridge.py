@@ -26,8 +26,8 @@ def _sparse_matrix_conversion(sparse_matrix):
 def grid_conversion(source_grid):
     dim = source_grid.dim
     nodes = source_grid.nodes.T
-    cell_faces = _sparse_matrix_conversion(source_grid.cell_faces)
-    face_nodes = _sparse_matrix_conversion(source_grid.face_nodes)
+    cell_faces = _sparse_matrix_conversion(source_grid.cell_faces.tocsr())
+    face_nodes = _sparse_matrix_conversion(source_grid.face_nodes.tocsr())
     target_grid = mpxa.Grid(dim, nodes, cell_faces, face_nodes)
     target_grid.set_cell_volumes(source_grid.cell_volumes)
     target_grid.set_face_areas(source_grid.face_areas)
