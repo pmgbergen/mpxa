@@ -21,6 +21,10 @@ class CompressedDataStorage
     const int num_rows();
     const int num_cols();
 
+    const std::vector<int> row_ptr();
+    const std::vector<int> col_idx();
+    const std::vector<T> data();
+
     // Getters for the compressed data storage. These return *copies* of the data. TODO!
     std::vector<int> cols_in_row(int row);
     std::vector<int> rows_in_col(int col);  // Change from int* to std::vector<int>

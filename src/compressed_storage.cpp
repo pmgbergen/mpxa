@@ -70,6 +70,24 @@ std::vector<int> CompressedDataStorage<T>::rows_in_col(int col)
 }
 
 template <typename T>
+const std::vector<int> CompressedDataStorage<T>::row_ptr()
+{
+    return m_row_ptr;
+}
+
+template <typename T>
+const std::vector<int> CompressedDataStorage<T>::col_idx()
+{
+    return m_col_idx;
+}
+
+template <typename T>
+const std::vector<T> CompressedDataStorage<T>::data()
+{
+    return m_values;
+}
+
+template <typename T>
 std::vector<T> CompressedDataStorage<T>::values()
 {
     return m_values;
