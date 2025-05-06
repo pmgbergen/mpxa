@@ -1,15 +1,25 @@
 import porepy as pp
 import mpxa
+import numpy as np
 
 
 def _sparse_matrix_conversion(sparse_matrix):
     """Convert a sparse matrix to the mpxa format."""
-    return mpxa.CompressedDataStorageInt(
+    if sparse_matrix.data.dtype == int:
+        matrix_class = mpxa.CompressedDataStorageInt
+    elif sparse_matrix.data.dtype == float:
+        matrix_class = mpxa.CompressedDataStorageDouble
+    else:
+        raise ValueError(
+            f"Unsupported data type {sparse_matrix.data.dtype} for sparse matrix."
+        )
+
+    return matrix_class(
         sparse_matrix.shape[0],
         sparse_matrix.shape[1],
         sparse_matrix.indptr,
         sparse_matrix.indices,
-        sparse_matrix.data,
+        np.ascontiguousarray(sparse_matrix.data),
     )
 
 
