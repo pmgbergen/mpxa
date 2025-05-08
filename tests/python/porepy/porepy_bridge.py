@@ -23,7 +23,7 @@ def _sparse_matrix_conversion(sparse_matrix):
     )
 
 
-def grid_conversion(source_grid):
+def convert_grid(source_grid):
     dim = source_grid.dim
     nodes = source_grid.nodes.T
     cell_faces = _sparse_matrix_conversion(source_grid.cell_faces.tocsr())
@@ -39,16 +39,44 @@ def grid_conversion(source_grid):
 
 def convert_tensor(T: pp.SecondOrderTensor, dim: int):
     """Convert a SecondOrderTensor to the mpxa format."""
-    return mpxa.SecondOrderTensor(
-        dim,
-        T.values[0, 0].size,
-        T.values[0, 0],
-        # T.values[1, 1],
-        # T.values[2, 2],
-        # T.values[0, 1],
-        # T.values[0, 2],
-        # T.values[1, 2],
-    )
+
+    if dim == 2:
+        if not np.allclose(T.values[0, 1], 0):
+            return mpxa.SecondOrderTensor(
+                dim,
+                T.values[0, 0].size,
+                T.values[0, 0],
+                T.values[1, 1],
+                T.values[0, 1],
+            )
+        elif not np.allclose(T.values[0, 0], T.values[1, 1]):
+            return mpxa.SecondOrderTensor(
+                dim,
+                T.values[0, 0].size,
+                T.values[0, 0],
+                T.values[1, 1],
+            )
+        else:
+            return mpxa.SecondOrderTensor(
+                dim,
+                T.values[0, 0].size,
+                T.values[0, 0],
+            )
+    elif dim == 3:
+        return mpxa.SecondOrderTensor(
+            dim,
+            T.values[0, 0].size,
+            T.values[0, 0],
+            T.values[1, 1],
+            T.values[2, 2],
+            T.values[0, 1],
+            T.values[0, 2],
+            T.values[1, 2],
+        )
+    else:
+        raise ValueError(
+            f"Unsupported dimension {dim} for SecondOrderTensor conversion."
+        )
 
 
 def convert_bc(bc: pp.BoundaryCondition):

@@ -11,7 +11,7 @@ def grids_2d():
     """Fixture to construct the grids and their porepy counterparts."""
     g_pp = pp.CartGrid(np.array([3, 3]))
     g_pp.compute_geometry()
-    g = porepy_bridge.grid_conversion(g_pp)
+    g = porepy_bridge.convert_grid(g_pp)
 
     return (g, g_pp)
 
@@ -20,7 +20,7 @@ def grids_2d():
 def grids_3d():
     g_3d_pp = pp.CartGrid(np.array([3, 3, 3]))
     g_3d_pp.compute_geometry()
-    g_3d = porepy_bridge.grid_conversion(g_3d_pp)
+    g_3d = porepy_bridge.convert_grid(g_3d_pp)
     return (g_3d, g_3d_pp)
 
 
