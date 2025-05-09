@@ -42,6 +42,7 @@ def convert_tensor(T: pp.SecondOrderTensor, dim: int):
 
     if dim == 2:
         if not np.allclose(T.values[0, 1], 0):
+            # This is a full tensor in 2d.
             return mpxa.SecondOrderTensor(
                 dim,
                 T.values[0, 0].size,
@@ -50,6 +51,7 @@ def convert_tensor(T: pp.SecondOrderTensor, dim: int):
                 T.values[0, 1],
             )
         elif not np.allclose(T.values[0, 0], T.values[1, 1]):
+            # This is an anisotropic, but diagonal tensor in 2d.
             return mpxa.SecondOrderTensor(
                 dim,
                 T.values[0, 0].size,
@@ -57,22 +59,48 @@ def convert_tensor(T: pp.SecondOrderTensor, dim: int):
                 T.values[1, 1],
             )
         else:
+            # This is an isotropic tensor in 2d.
             return mpxa.SecondOrderTensor(
                 dim,
                 T.values[0, 0].size,
                 T.values[0, 0],
             )
     elif dim == 3:
-        return mpxa.SecondOrderTensor(
-            dim,
-            T.values[0, 0].size,
-            T.values[0, 0],
-            T.values[1, 1],
-            T.values[2, 2],
-            T.values[0, 1],
-            T.values[0, 2],
-            T.values[1, 2],
-        )
+        if not (
+            np.allclose(T.values[0, 1], 0)
+            | np.allclose(T.values[0, 2], 0)
+            | np.allclose(T.values[1, 2], 0)
+        ):
+            # This is a full tensor in 3d.
+            return mpxa.SecondOrderTensor(
+                dim,
+                T.values[0, 0].size,
+                T.values[0, 0],
+                T.values[1, 1],
+                T.values[2, 2],
+                T.values[0, 1],
+                T.values[0, 2],
+                T.values[1, 2],
+            )
+        elif not (
+            np.allclose(T.values[0, 0], T.values[1, 1])
+            | np.allclose(T.values[0, 0], T.values[2, 2])
+        ):
+            # This is an anisotropic, but diagonal tensor in 3d.
+            return mpxa.SecondOrderTensor(
+                dim,
+                T.values[0, 0].size,
+                T.values[0, 0],
+                T.values[1, 1],
+                T.values[2, 2],
+            )
+        else:
+            # This is an isotropic tensor in 3d.
+            return mpxa.SecondOrderTensor(
+                dim,
+                T.values[0, 0].size,
+                T.values[0, 0],
+            )
     else:
         raise ValueError(
             f"Unsupported dimension {dim} for SecondOrderTensor conversion."
