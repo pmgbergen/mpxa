@@ -39,9 +39,9 @@ def _compare_matrices(m_0: mpxa.CompressedDataStorageDouble, m_1: sps.spmatrix):
     """Compare two matrices for equality."""
     assert m_0.num_rows() == m_1.shape[0]
     assert m_0.num_cols() == m_1.shape[1]
-    assert np.array_equal(m_0.row_ptr(), m_1.indptr)
-    assert np.array_equal(m_0.col_idx(), m_1.indices)
-    assert np.allclose(m_0.data(), m_1.data)
+    for i in range(m_0.num_rows()):
+        for j in range(m_0.num_cols()):
+            assert m_0.value(i, j) == m_1[i, j], f"Mismatch at ({i}, {j})"
 
 
 @pytest.mark.parametrize("g_pp", grid_list)
@@ -81,3 +81,6 @@ def test_tpfa(g_pp, tensor_func):
         m_0 = getattr(discr_cpp, attribute)
         m_1 = data[pp.DISCRETIZATION_MATRICES][key][attribute]
         _compare_matrices(m_0, m_1)
+
+
+# test_tpfa(grid_list[3], isotropic_tensor)
