@@ -13,10 +13,10 @@ class TPFA : public ::testing::Test
     ScalarDiscretization discr;
     std::map<int, BoundaryCondition> bc_map;
 
-    // EK note to self: We can use the default constructor for the grid and discr. However,
-    // the tensor contains unique_ptrs, and cannot be copied without a move constructor,
-    // which is not implemneted. Hency it is easier to define the tensor in full in the
-    // constructor of the test fixture.
+    // EK note to self: We can use the default constructor for the grid and discr.
+    // However, the tensor contains unique_ptrs, and cannot be copied without a move
+    // constructor, which is not implemented. Hence it is easier to define the tensor in
+    // full in the constructor of the test fixture.
     TPFA() : grid(nullptr), tensor(2, 4, {1.0, 2.0, 3.0, 4.0}), discr(), bc_map() {}
 
     void SetUp() override
