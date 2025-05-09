@@ -19,6 +19,23 @@ void init_tensor(py::module_ &m)
         // Constructor for tensor with three components. Will be intepreted as a full 2d tensor
         // if dim == 2, and as a diagonal tensor if dim == 3.
         .def(py::init(
+            [](int dim, int num_cells, py::array_t<double> k_xx, py::array_t<double> k_yy)
+            {
+                if (dim != 2)
+                {
+                    throw std::invalid_argument(
+                        "SecondOrderTensor constructor with k_xx and k_yy "
+                        "only works for 2D tensors.");
+                }
+
+                // Convert numpy arrays to std::vector
+                std::vector<double> k_xx_vec(k_xx.data(), k_xx.data() + k_xx.size());
+                std::vector<double> k_yy_vec(k_yy.data(), k_yy.data() + k_yy.size());
+                auto tensor = std::make_shared<SecondOrderTensor>(dim, num_cells, k_xx_vec);
+                tensor->with_kyy(k_yy_vec);
+                return tensor;
+            }))
+        .def(py::init(
             [](int dim, int num_cells, py::array_t<double> k_xx, py::array_t<double> k_yy,
                py::array_t<double> k_zz)
             {
