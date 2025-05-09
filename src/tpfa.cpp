@@ -9,12 +9,14 @@ namespace  // Anonymous namespace for helper functions.
 // Helper function to compute the product between normal vector, tensor, and cell-face
 // vector.
 const double nKproj(const std::vector<double> face_normal, const SecondOrderTensor& tensor,
-                    const std::vector<double> cell_face_vec, const int dim, const int cell_ind)
+                    const std::vector<double> cell_face_vec, const int sign, const int cell_ind)
 {
     // Compute the squared distance between the cell center and the face center. We get
     // one power of the distance to make the cell-face vector a unit vector, and a
     // second power to get a distance measure (a gradient).
     double dist = 0.0;
+    const int dim = face_normal.size();
+
     for (int i{0}; i < dim; ++i)
     {
         dist += cell_face_vec[i] * cell_face_vec[i];
@@ -26,7 +28,7 @@ const double nKproj(const std::vector<double> face_normal, const SecondOrderTens
 
         for (int i{0}; i < dim; ++i)
         {
-            proj += std::abs(face_normal[i] * cell_face_vec[i]);
+            proj += sign * face_normal[i] * cell_face_vec[i];
         }
         return tensor.isotropic_data()[cell_ind] * proj / dist;
     }
@@ -35,7 +37,7 @@ const double nKproj(const std::vector<double> face_normal, const SecondOrderTens
         double prod = 0.0;
         for (int i{0}; i < dim; ++i)
         {
-            prod += face_normal[i] * cell_face_vec[i] * tensor.diagonal_data()[i][cell_ind];
+            prod += sign * face_normal[i] * cell_face_vec[i] * tensor.diagonal_data()[i][cell_ind];
         }
         return prod / dist;
     }
@@ -103,12 +105,12 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
         const int cell_a = cells[0];
         const int sign_a = grid.sign_of_face_cell(face_ind, cell_a);
         const auto& normal = grid.face_normal(face_ind);
-        const auto& center = grid.face_center(face_ind);
+        const auto& face_center = grid.face_center(face_ind);
         std::vector<double> face_cell_a_vec(grid.dim());
 
         for (int i{0}; i < grid.dim(); ++i)
         {
-            face_cell_a_vec[i] = center[i] - grid.cell_center(cell_a)[i];
+            face_cell_a_vec[i] = face_center[i] - grid.cell_center(cell_a)[i];
         }
         const double trm_a = nKproj(normal, tensor, face_cell_a_vec, grid.dim(), cell_a);
 
@@ -120,10 +122,10 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
             std::vector<double> face_cell_b_vec(grid.dim());
             for (int i{0}; i < grid.dim(); ++i)
             {
-                face_cell_b_vec[i] = center[i] - grid.cell_center(cell_b)[i];
+                face_cell_b_vec[i] = face_center[i] - grid.cell_center(cell_b)[i];
             }
 
-            const double trm_b = nKproj(normal, tensor, face_cell_b_vec, grid.dim(), cell_b);
+            const double trm_b = nKproj(normal, tensor, face_cell_b_vec, sign_b, cell_b);
 
             const double harmonic_mean = 1.0 / (1.0 / trm_a + 1.0 / trm_b);
 
