@@ -154,40 +154,42 @@ const std::vector<double>& SecondOrderTensor::isotropic_data() const
 
 const std::vector<const double*> SecondOrderTensor::diagonal_data() const
 {
+    std::vector<const double*> diagonal_data(3, nullptr);
     if (m_dim == 2)
     {
-        m_diagonal_data[0] = m_k_xx.data();
-        m_diagonal_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
-        m_diagonal_data[2] = nullptr;
+        diagonal_data[0] = m_k_xx.data();
+        diagonal_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
+        diagonal_data[2] = nullptr;
     }
     else
     {
-        m_diagonal_data[0] = m_k_xx.data();
-        m_diagonal_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
-        m_diagonal_data[2] = m_k_zz.empty() ? nullptr : m_k_zz.data();
+        diagonal_data[0] = m_k_xx.data();
+        diagonal_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
+        diagonal_data[2] = m_k_zz.empty() ? nullptr : m_k_zz.data();
     }
-    return m_diagonal_data;
+    return diagonal_data;
 }
 
 const std::vector<const double*> SecondOrderTensor::full_data() const
 {
+    std::vector<const double*> full_data(6, nullptr);
     if (m_dim == 2)
     {
-        m_full_data[0] = m_k_xx.data();
-        m_full_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
-        m_full_data[2] = m_k_xy.empty() ? nullptr : m_k_xy.data();
-        m_full_data[3] = nullptr;
-        m_full_data[4] = nullptr;
-        m_full_data[5] = nullptr;
+        full_data[0] = m_k_xx.data();
+        full_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
+        full_data[2] = m_k_xy.empty() ? nullptr : m_k_xy.data();
+        full_data[3] = nullptr;
+        full_data[4] = nullptr;
+        full_data[5] = nullptr;
     }
     else
     {
-        m_full_data[0] = m_k_xx.data();
-        m_full_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
-        m_full_data[2] = m_k_xy.empty() ? nullptr : m_k_xy.data();
-        m_full_data[3] = m_k_zz.empty() ? nullptr : m_k_zz.data();
-        m_full_data[4] = m_k_xz.empty() ? nullptr : m_k_xz.data();
-        m_full_data[5] = m_k_yz.empty() ? nullptr : m_k_yz.data();
+        full_data[0] = m_k_xx.data();
+        full_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
+        full_data[2] = m_k_xy.empty() ? nullptr : m_k_xy.data();
+        full_data[3] = m_k_zz.empty() ? nullptr : m_k_zz.data();
+        full_data[4] = m_k_xz.empty() ? nullptr : m_k_xz.data();
+        full_data[5] = m_k_yz.empty() ? nullptr : m_k_yz.data();
     }
-    return m_full_data;
+    return full_data;
 }
