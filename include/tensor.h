@@ -41,6 +41,7 @@ class SecondOrderTensor
     std::vector<double> m_k_zz;
     std::vector<double> m_k_xz;
     std::vector<double> m_k_yz;
+    std::vector<double> m_zeros;
 
     mutable std::vector<const double*> m_diagonal_data;
     mutable std::vector<const double*> m_full_data;

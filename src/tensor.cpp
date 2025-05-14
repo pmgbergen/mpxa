@@ -1,6 +1,7 @@
 #include "../include/tensor.h"
 
 #include <algorithm>
+#include <iostream>
 #include <stdexcept>
 
 SecondOrderTensor::SecondOrderTensor(const int dim, const int num_cells,
@@ -12,9 +13,7 @@ SecondOrderTensor::SecondOrderTensor(const int dim, const int num_cells,
       m_k_xy(),
       m_k_zz(),
       m_k_xz(),
-      m_k_yz(),
-      m_diagonal_data(3, nullptr),
-      m_full_data(6, nullptr)
+      m_k_yz()
 {
     if (k_xx.size() != static_cast<size_t>(num_cells))
     {
@@ -22,6 +21,9 @@ SecondOrderTensor::SecondOrderTensor(const int dim, const int num_cells,
     }
     m_is_isotropic = true;
     m_is_diagonal = true;
+
+    // Initialize a vector of zeros for the off-diagonal components.
+    m_zeros.resize(num_cells, 0.0);
 }
 
 SecondOrderTensor::~SecondOrderTensor() = default;
@@ -45,6 +47,7 @@ SecondOrderTensor& SecondOrderTensor::with_kyy(const std::vector<double>& k_yy)
         throw std::invalid_argument("Size of k_yy does not match num_cells.");
     }
     m_k_yy = k_yy;
+    std::cout << "k_yy: " << m_k_yy[0] << std::endl;
     m_is_isotropic = false;
     return *this;
 }
@@ -155,41 +158,25 @@ const std::vector<double>& SecondOrderTensor::isotropic_data() const
 const std::vector<const double*> SecondOrderTensor::diagonal_data() const
 {
     std::vector<const double*> diagonal_data(3, nullptr);
-    if (m_dim == 2)
-    {
-        diagonal_data[0] = m_k_xx.data();
-        diagonal_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
-        diagonal_data[2] = nullptr;
-    }
-    else
-    {
-        diagonal_data[0] = m_k_xx.data();
-        diagonal_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
-        diagonal_data[2] = m_k_zz.empty() ? nullptr : m_k_zz.data();
-    }
+    diagonal_data[0] = m_k_xx.data();
+    diagonal_data[1] = m_k_yy.empty() ? m_k_xx.data() : m_k_yy.data();
+    diagonal_data[2] = m_k_zz.empty() ? m_k_xx.data() : m_k_zz.data();
     return diagonal_data;
 }
 
 const std::vector<const double*> SecondOrderTensor::full_data() const
 {
-    std::vector<const double*> full_data(6, nullptr);
-    if (m_dim == 2)
-    {
-        full_data[0] = m_k_xx.data();
-        full_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
-        full_data[2] = m_k_xy.empty() ? nullptr : m_k_xy.data();
-        full_data[3] = nullptr;
-        full_data[4] = nullptr;
-        full_data[5] = nullptr;
-    }
-    else
-    {
-        full_data[0] = m_k_xx.data();
-        full_data[1] = m_k_yy.empty() ? nullptr : m_k_yy.data();
-        full_data[2] = m_k_xy.empty() ? nullptr : m_k_xy.data();
-        full_data[3] = m_k_zz.empty() ? nullptr : m_k_zz.data();
-        full_data[4] = m_k_xz.empty() ? nullptr : m_k_xz.data();
-        full_data[5] = m_k_yz.empty() ? nullptr : m_k_yz.data();
-    }
+    std::vector<const double*> full_data(6);
+    // The diagonal data is set to its own data pointer if set, otherwise to the
+    // k_xx data pointer.
+    full_data[0] = m_k_xx.data();
+    full_data[1] = m_k_yy.empty() ? m_k_xx.data() : m_k_yy.data();
+    full_data[2] = m_k_zz.empty() ? m_k_xx.data() : m_k_zz.data();
+    // The off-diagonal data is set to its own data pointer if set, otherwise to a vector of
+    // zeros.
+    full_data[3] = m_k_xy.empty() ? m_zeros.data() : m_k_xy.data();
+    full_data[4] = m_k_xz.empty() ? m_zeros.data() : m_k_xz.data();
+    full_data[5] = m_k_yz.empty() ? m_zeros.data() : m_k_yz.data();
+
     return full_data;
 }

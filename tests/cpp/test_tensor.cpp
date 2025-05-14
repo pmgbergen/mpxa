@@ -4,7 +4,7 @@
 
 #include "../../src/tensor.cpp"
 
-TEST(TensorTest, IsotropicSecondOrderTensor2d)
+TEST(TensorTest, IsotropicSecondOrderTensor)
 {
     const int num_data = 4;
     const std::vector<double> data = {1.0, 2.0, 3.0, 4.0};
@@ -17,52 +17,21 @@ TEST(TensorTest, IsotropicSecondOrderTensor2d)
     const std::vector<const double*> diagonal_data = tensor_2d.diagonal_data();
     const std::vector<const double*> full_data = tensor_2d.full_data();
 
-    // Verify that diagonal_data[1, 2] are nullptr
-    for (size_t i = 1; i < 3; ++i)
-    {
-        EXPECT_EQ(diagonal_data[i], nullptr);
-    }
-    // Verify that full_data[1:5] are nullptr
-    for (size_t i = 1; i < 6; i++)
-    {
-        EXPECT_EQ(full_data[i], nullptr);
-    }
-
     for (size_t i = 0; i < num_data; ++i)
     {
         EXPECT_EQ(isotropic_data[i], data[i]);
         EXPECT_EQ(diagonal_data[0][i], data[i]);
-    }
-}
-
-TEST(TensorTest, IsotropicSecondOrderTensor3d)
-{
-    const int num_data = 4;
-    const std::vector<double> data = {1.0, 2.0, 3.0, 4.0};
-
-    SecondOrderTensor tensor_3d(3, num_data, data);
-    EXPECT_TRUE(tensor_3d.is_isotropic());
-    EXPECT_TRUE(tensor_3d.is_diagonal());
-
-    const std::vector<double>& isotropic_data = tensor_3d.isotropic_data();
-    const std::vector<const double*> diagonal_data = tensor_3d.diagonal_data();
-    const std::vector<const double*> full_data = tensor_3d.full_data();
-
-    // Verify that diagonal_data[1, 2] are nullptr
-    for (size_t i = 1; i < 3; ++i)
-    {
-        EXPECT_EQ(diagonal_data[i], nullptr);
-    }
-    // Verify that full_data[1:5] are nullptr
-    for (size_t i = 1; i < 6; i++)
-    {
-        EXPECT_EQ(full_data[i], nullptr);
-    }
-
-    for (size_t i = 0; i < num_data; ++i)
-    {
-        EXPECT_EQ(isotropic_data[i], data[i]);
-        EXPECT_EQ(diagonal_data[0][i], data[i]);
+        for (size_t j = 1; j < 3; ++j)
+        {
+            // Diagonal and full data (along the diagonal) should be equal to isotropic data.
+            EXPECT_EQ(diagonal_data[j][i], data[i]);
+            EXPECT_EQ(full_data[j][i], data[i]);
+        }
+        // Full data off the diagonal should be zero.
+        for (size_t j = 3; j < 6; ++j)
+        {
+            EXPECT_EQ(full_data[j][i], 0);
+        }
     }
 }
 
@@ -83,17 +52,17 @@ TEST(TensorTest, NonIsotropicSecondOrderTensor2d)
     const std::vector<const double*> diagonal_data = tensor_2d.diagonal_data();
     const std::vector<const double*> full_data = tensor_2d.full_data();
 
-    EXPECT_EQ(diagonal_data[2], nullptr);
-    // Verify that full_data[1:5] are nullptr
-    for (size_t i = 2; i < 6; i++)
-    {
-        EXPECT_EQ(full_data[i], nullptr);
-    }
-
     for (size_t i = 0; i < num_data; ++i)
     {
+        for (size_t j = 3; j < 6; ++j)
+        {
+            EXPECT_EQ(full_data[j][i], 0);
+        }
+        EXPECT_EQ(isotropic_data[i], data_xx[i]);
         EXPECT_EQ(diagonal_data[0][i], data_xx[i]);
         EXPECT_EQ(diagonal_data[1][i], data_yy[i]);
+        // The zz component is not set, so it should be equal to the xx component.
+        EXPECT_EQ(diagonal_data[2][i], data_xx[i]);
     }
 }
 
@@ -116,15 +85,19 @@ TEST(TensorTest, NonIsotropicSecondOrderTensor3d)
     const std::vector<const double*> diagonal_data = tensor_3d.diagonal_data();
     const std::vector<const double*> full_data = tensor_3d.full_data();
 
-    EXPECT_EQ(full_data[2], nullptr);
-    EXPECT_EQ(full_data[4], nullptr);
-    EXPECT_EQ(full_data[5], nullptr);
-
     for (size_t i = 0; i < num_data; ++i)
     {
         EXPECT_EQ(diagonal_data[0][i], data_xx[i]);
+        EXPECT_EQ(full_data[0][i], data_xx[i]);
         EXPECT_EQ(diagonal_data[1][i], data_yy[i]);
+        EXPECT_EQ(full_data[1][i], data_yy[i]);
         EXPECT_EQ(diagonal_data[2][i], data_zz[i]);
+        EXPECT_EQ(full_data[2][i], data_zz[i]);
+        // Full data[3:5] should be zero.
+        for (size_t j = 4; j < 5; j++)
+        {
+            EXPECT_EQ(full_data[j][i], 0);
+        }
     }
 }
 
@@ -145,17 +118,18 @@ TEST(TensorTest, NonDiagonalSecondOrderTensor2d)
 
     const std::vector<const double*> full_data = tensor_2d.full_data();
 
-    // Verify that full_data[3:5] are nullptr
-    for (size_t i = 3; i < 6; i++)
-    {
-        EXPECT_EQ(full_data[i], nullptr);
-    }
-
     for (size_t i = 0; i < num_data; ++i)
     {
         EXPECT_EQ(full_data[0][i], data_xx[i]);
         EXPECT_EQ(full_data[1][i], data_yy[i]);
-        EXPECT_EQ(full_data[2][i], data_xy[i]);
+        EXPECT_EQ(full_data[3][i], data_xy[i]);
+        // The zz component is not set, so it should be equal to the xx component.
+        EXPECT_EQ(full_data[2][i], data_xx[i]);
+        // The off-diagonal data should be zero.
+        for (size_t j = 4; j < 6; ++j)
+        {
+            EXPECT_EQ(full_data[j][i], 0);
+        }
     }
 }
 
@@ -186,8 +160,8 @@ TEST(TensorTest, NonDiagonalSecondOrderTensor3d)
     {
         EXPECT_EQ(full_data[0][i], data_xx[i]);
         EXPECT_EQ(full_data[1][i], data_yy[i]);
-        EXPECT_EQ(full_data[2][i], data_xy[i]);
-        EXPECT_EQ(full_data[3][i], data_zz[i]);
+        EXPECT_EQ(full_data[2][i], data_zz[i]);
+        EXPECT_EQ(full_data[3][i], data_xy[i]);
         EXPECT_EQ(full_data[4][i], data_xz[i]);
         EXPECT_EQ(full_data[5][i], data_yz[i]);
     }
