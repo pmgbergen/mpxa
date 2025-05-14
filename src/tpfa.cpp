@@ -112,7 +112,7 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
         {
             face_cell_a_vec[i] = face_center[i] - grid.cell_center(cell_a)[i];
         }
-        const double trm_a = nKproj(normal, tensor, face_cell_a_vec, grid.dim(), cell_a);
+        const double trm_a = nKproj(normal, tensor, face_cell_a_vec, sign_a, cell_a);
 
         if (cells.size() == 2)  // Internal face.
         {
