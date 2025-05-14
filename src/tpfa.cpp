@@ -50,19 +50,19 @@ const double nKproj(const std::vector<double> face_normal, const SecondOrderTens
             {
                 double tensor_val;
                 if (i == 0 && j == 0)
-                    tensor_val = tensor.full_data()[cell_ind][0];
+                    tensor_val = tensor.full_data()[0][cell_ind];
                 else if (i == 1 && j == 1)
-                    tensor_val = tensor.full_data()[cell_ind][1];
-                else if (i == 0 && j == 1 || i == 1 && j == 0)
-                    tensor_val = tensor.full_data()[cell_ind][2];
+                    tensor_val = tensor.full_data()[1][cell_ind];
                 else if (i == 2 && j == 2)
-                    tensor_val = tensor.full_data()[cell_ind][3];
+                    tensor_val = tensor.full_data()[2][cell_ind];
+                else if (i == 0 && j == 1 || i == 1 && j == 0)
+                    tensor_val = tensor.full_data()[3][cell_ind];
                 else if (i == 0 && j == 2 || i == 2 && j == 0)
-                    tensor_val = tensor.full_data()[cell_ind][4];
+                    tensor_val = tensor.full_data()[4][cell_ind];
                 else if (i == 1 && j == 2 || i == 2 && j == 1)
-                    tensor_val = tensor.full_data()[cell_ind][5];
+                    tensor_val = tensor.full_data()[5][cell_ind];
 
-                prod += face_normal[i] * cell_face_vec[j] * tensor_val;
+                prod += sign * face_normal[i] * cell_face_vec[j] * tensor_val;
             }
         }
         return prod / dist;
