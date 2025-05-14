@@ -47,7 +47,6 @@ SecondOrderTensor& SecondOrderTensor::with_kyy(const std::vector<double>& k_yy)
         throw std::invalid_argument("Size of k_yy does not match num_cells.");
     }
     m_k_yy = k_yy;
-    std::cout << "k_yy: " << m_k_yy[0] << std::endl;
     m_is_isotropic = false;
     return *this;
 }
