@@ -76,6 +76,9 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     const int num_boundary_faces = bc_map.size();
     const int num_internal_faces = grid.num_faces() - num_boundary_faces;
 
+    // All coordinates are in 3D space, and the tensor is a 3x3 matrix no matter what.
+    constexpr int DIM = 3;
+
     std::vector<int> row_ptr_flux;
     row_ptr_flux.reserve(grid.num_faces() + 1);
     row_ptr_flux.push_back(0);
@@ -101,14 +104,15 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     for (int face_ind{0}; face_ind < grid.num_faces(); ++face_ind)
     {
+        // Get various properties of the face and its first neighboring cell.
         const std::vector<int> cells = grid.cells_of_face(face_ind);
         const int cell_a = cells[0];
         const int sign_a = grid.sign_of_face_cell(face_ind, cell_a);
         const auto& normal = grid.face_normal(face_ind);
         const auto& face_center = grid.face_center(face_ind);
-        std::vector<double> face_cell_a_vec(grid.dim());
+        std::vector<double> face_cell_a_vec(DIM);
 
-        for (int i{0}; i < grid.dim(); ++i)
+        for (int i{0}; i < DIM; ++i)
         {
             face_cell_a_vec[i] = face_center[i] - grid.cell_center(cell_a)[i];
         }
@@ -116,19 +120,18 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         if (cells.size() == 2)  // Internal face.
         {
+            // Get the second neighboring cell and its properties.
             const int cell_b = cells[1];
             const int sign_b = grid.sign_of_face_cell(face_ind, cell_b);
 
-            std::vector<double> face_cell_b_vec(grid.dim());
-            for (int i{0}; i < grid.dim(); ++i)
+            std::vector<double> face_cell_b_vec(DIM);
+            for (int i{0}; i < DIM; ++i)
             {
                 face_cell_b_vec[i] = face_center[i] - grid.cell_center(cell_b)[i];
             }
 
             const double trm_b = nKproj(normal, tensor, face_cell_b_vec, sign_b, cell_b);
-
             const double harmonic_mean = 1.0 / (1.0 / trm_a + 1.0 / trm_b);
-
             trm.push_back(harmonic_mean * sign_a);
             trm.push_back(harmonic_mean * sign_b);
             col_idx_flux.push_back(cell_a);
@@ -144,7 +147,7 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
             switch (bc)  // Corrected to use the scoped enum directly.
             {
                 case BoundaryCondition::Dirichlet:
-                    // The transmissibility for Dirichlet conditions are the same as the
+                    // The transmissibility for Dirichlet conditions is the same as the
                     // (half) transmissibility for the internal face.
                     trm.push_back(trm_a * sign_a);
                     col_idx_flux.push_back(cell_a);
@@ -175,6 +178,7 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
         row_ptr_bound_flux.push_back(col_idx_bound_flux.size());
     }
 
+    // Gather the data into the compressed data storage.
     CompressedDataStorage<double>* flux = new CompressedDataStorage<double>(
         grid.num_faces(), grid.num_cells(), row_ptr_flux, col_idx_flux, trm);
 
