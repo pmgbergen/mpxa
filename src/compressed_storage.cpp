@@ -16,6 +16,22 @@ CompressedDataStorage<T>::CompressedDataStorage(const int num_rows, const int nu
       m_col_idx(col_idx),
       m_values(values)
 {
+    // Check if the sizes of the vectors are consistent with the number of rows and columns.
+    if (m_row_ptr.size() != m_num_rows + 1)
+    {
+        throw std::invalid_argument("Row pointer size does not match number of rows.");
+    }
+    if (m_col_idx.size() != m_values.size())
+    {
+        throw std::invalid_argument("Column index and values size do not match.");
+    }
+    for (int i = 0; i < m_num_rows; i++)
+    {
+        if (m_row_ptr[i] > m_row_ptr[i + 1])
+        {
+            throw std::invalid_argument("Row pointer is not sorted.");
+        }
+    }
 }
 
 // Destructor
