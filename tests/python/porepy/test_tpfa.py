@@ -77,7 +77,7 @@ def test_tpfa(g_pp, tensor_func):
 
     discr_cpp = mpxa.tpfa(g, K, bc)
 
-    for attribute in ["flux"]:
+    for attribute in ["flux", "bound_flux"]:
         m_0 = getattr(discr_cpp, attribute)
         m_1 = data[pp.DISCRETIZATION_MATRICES][key][attribute]
         _compare_matrices(m_0, m_1)
