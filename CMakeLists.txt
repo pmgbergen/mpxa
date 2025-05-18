@@ -15,6 +15,9 @@ project(MPXA)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
 # Check if the PYTHON_EXECUTABLE environment variable is set. If so, use it as the
 # Python executable.
 if(DEFINED ENV{PYTHON_EXECUTABLE})
