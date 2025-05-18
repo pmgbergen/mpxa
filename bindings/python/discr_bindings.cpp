@@ -10,7 +10,9 @@ void init_discr(py::module_ &m)
     py::class_<ScalarDiscretization>(m, "ScalarDiscretization")
         .def(py::init<>())
         .def_readwrite("flux", &ScalarDiscretization::flux)
-        .def_readwrite("bound_flux", &ScalarDiscretization::bound_flux);
+        .def_readwrite("bound_flux", &ScalarDiscretization::bound_flux)
+        .def_readwrite("vector_source", &ScalarDiscretization::vector_source)
+        .def_readwrite("bound_vector_source", &ScalarDiscretization::bound_vector_source);
 
     // Bindings for BoundaryCondition enum.
     py::enum_<BoundaryCondition>(m, "BoundaryCondition")

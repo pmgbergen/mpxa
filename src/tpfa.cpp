@@ -102,6 +102,23 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<int> col_idx_bound_flux;
     col_idx_bound_flux.reserve(num_boundary_faces);
 
+    // Disrcetization for the vector source and its boundary condition.
+    std::vector<double> vector_source;
+    std::vector<int> row_ptr_vector_source;
+    std::vector<int> col_idx_vector_source;
+    vector_source.reserve(grid.num_faces() * 3);
+    row_ptr_vector_source.reserve(grid.num_faces() + 1);
+    col_idx_vector_source.reserve(grid.num_faces() * 3);
+    row_ptr_vector_source.push_back(0);
+
+    std::vector<double> vector_source_bound;
+    vector_source_bound.reserve(num_boundary_faces);
+    std::vector<int> col_idx_vector_source_bound;
+    col_idx_vector_source_bound.reserve(num_boundary_faces);
+    std::vector<int> row_ptr_vector_source_bound;
+    row_ptr_vector_source_bound.reserve(grid.num_faces() + 1);
+    row_ptr_vector_source_bound.push_back(0);
+
     for (int face_ind{0}; face_ind < grid.num_faces(); ++face_ind)
     {
         // Get various properties of the face and its first neighboring cell.
@@ -137,6 +154,20 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
             col_idx_flux.push_back(cell_a);
             col_idx_flux.push_back(cell_b);
 
+            // Also compute the vector source term for the face, for both cells.
+            for (int i{0}; i < DIM; ++i)
+            {
+                // Compute the vector source term for the face.
+                vector_source.push_back(harmonic_mean * sign_a * face_cell_a_vec[i]);
+                col_idx_vector_source.push_back(cell_a * DIM + i);
+            }
+            for (int i{0}; i < DIM; ++i)
+            {
+                // Compute the vector source term for the face.
+                vector_source.push_back(harmonic_mean * sign_b * face_cell_b_vec[i]);
+                col_idx_vector_source.push_back(cell_b * DIM + i);
+            }
+
             // Store the flux in the compressed data storage.
             // flux->set_value(face_ind, flux);
         }
@@ -155,6 +186,17 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     // the transmissibility for the internal face.
                     trm_bound.push_back(-trm_a * sign_a);
                     col_idx_bound_flux.push_back(face_ind);
+
+                    // The vector source term for the Dirichlet condition is half the
+                    // calculation for the internal face. There is no contribution to
+                    // the boundary discretization for the vector source term.
+                    for (int i{0}; i < DIM; ++i)
+                    {
+                        // Compute the vector source term for the face.
+                        vector_source.push_back(trm_a * sign_a * face_cell_a_vec[i]);
+                        col_idx_vector_source.push_back(cell_a * DIM + i);
+                    }
+
                     break;
 
                 case BoundaryCondition::Neumann:
@@ -163,6 +205,16 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     // Neumann condition to the cell.
                     trm_bound.push_back(1.0 * sign_a);
                     col_idx_bound_flux.push_back(face_ind);
+
+                    // There is no vector source term for the Neumann condition, no need
+                    // to add anything.
+                    for (int i{0}; i < DIM; ++i)
+                    {
+                        // Compute the vector source term for the face.
+                        vector_source_bound.push_back(face_cell_a_vec[i]);
+                        col_idx_vector_source_bound.push_back(face_ind * DIM + i);
+                    }
+
                     break;
 
                 case BoundaryCondition::Robin:
@@ -176,6 +228,8 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
         // Move the row pointers to the next face. Apply to both flux and bound_flux.
         row_ptr_flux.push_back(col_idx_flux.size());
         row_ptr_bound_flux.push_back(col_idx_bound_flux.size());
+        row_ptr_vector_source.push_back(vector_source.size());
+        row_ptr_vector_source_bound.push_back(vector_source_bound.size());
     }
 
     // Gather the data into the compressed data storage.
@@ -185,8 +239,19 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     CompressedDataStorage<double>* bound_flux = new CompressedDataStorage<double>(
         grid.num_faces(), grid.num_faces(), row_ptr_bound_flux, col_idx_bound_flux, trm_bound);
 
+    CompressedDataStorage<double>* vector_source_storage = new CompressedDataStorage<double>(
+        grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source, col_idx_vector_source,
+        vector_source);
+    CompressedDataStorage<double>* vector_source_bound_storage = new CompressedDataStorage<double>(
+        grid.num_faces(), grid.num_faces() * DIM, row_ptr_vector_source_bound,
+        col_idx_vector_source_bound, vector_source_bound);
+
+    // Create the ScalarDiscretization object and return it.
     ScalarDiscretization discr;
     discr.flux = std::unique_ptr<CompressedDataStorage<double>>(flux);
     discr.bound_flux = std::unique_ptr<CompressedDataStorage<double>>(bound_flux);
+    discr.vector_source = std::unique_ptr<CompressedDataStorage<double>>(vector_source_storage);
+    discr.bound_vector_source =
+        std::unique_ptr<CompressedDataStorage<double>>(vector_source_bound_storage);
     return discr;
 }

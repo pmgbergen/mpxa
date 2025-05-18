@@ -67,19 +67,24 @@ def test_tpfa(g_pp, tensor_func):
 
     discr_pp = pp.Tpfa(key)
 
+    # Set the parameters for the discretization. Note that the ambient dimension for the
+    # vector source discretization is always set to 3. This follows the C++ code, but
+    # breaks with the standard PorePy implementation in the case where the computational
+    # domain is 2D. Todo, I guess.
     data = {
-        pp.PARAMETERS: {key: {"second_order_tensor": K_pp, "bc": bc_pp}},
+        pp.PARAMETERS: {
+            key: {"second_order_tensor": K_pp, "bc": bc_pp, "ambient_dimension": 3}
+        },
         pp.DISCRETIZATION_MATRICES: {key: {}},
     }
     discr_pp.discretize(g_pp, data)
 
-    flux = data[pp.DISCRETIZATION_MATRICES][key]["flux"]
-
     discr_cpp = mpxa.tpfa(g, K, bc)
 
-    for attribute in ["flux", "bound_flux"]:
+    for attribute in ["flux", "bound_flux", "vector_source"]:
         m_0 = getattr(discr_cpp, attribute)
         m_1 = data[pp.DISCRETIZATION_MATRICES][key][attribute]
+
         _compare_matrices(m_0, m_1)
 
 
