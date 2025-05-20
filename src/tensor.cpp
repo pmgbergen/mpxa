@@ -149,33 +149,30 @@ const int SecondOrderTensor::dim() const
     return m_dim;
 }
 
-const std::vector<double>& SecondOrderTensor::isotropic_data() const
+double SecondOrderTensor::isotropic_data(int cell) const
 {
-    return m_k_xx;
+    return m_k_xx[cell];
 }
 
-const std::vector<const double*> SecondOrderTensor::diagonal_data() const
+std::vector<double> SecondOrderTensor::diagonal_data(int cell) const
 {
-    std::vector<const double*> diagonal_data(3, nullptr);
-    diagonal_data[0] = m_k_xx.data();
-    diagonal_data[1] = m_k_yy.empty() ? m_k_xx.data() : m_k_yy.data();
-    diagonal_data[2] = m_k_zz.empty() ? m_k_xx.data() : m_k_zz.data();
-    return diagonal_data;
+    // Always return a vector of size 3: [xx, yy, zz], zero-padded for 2D
+    std::vector<double> diag(3);
+    diag[0] = m_k_xx[cell];
+    diag[1] = m_k_yy.empty() ? m_k_xx[cell] : m_k_yy[cell];
+    diag[2] = m_k_zz.empty() ? m_k_xx[cell] : m_k_zz[cell];
+    return diag;
 }
 
-const std::vector<const double*> SecondOrderTensor::full_data() const
+std::vector<double> SecondOrderTensor::full_data(int cell) const
 {
-    std::vector<const double*> full_data(6);
-    // The diagonal data is set to its own data pointer if set, otherwise to the
-    // k_xx data pointer.
-    full_data[0] = m_k_xx.data();
-    full_data[1] = m_k_yy.empty() ? m_k_xx.data() : m_k_yy.data();
-    full_data[2] = m_k_zz.empty() ? m_k_xx.data() : m_k_zz.data();
-    // The off-diagonal data is set to its own data pointer if set, otherwise to a vector of
-    // zeros.
-    full_data[3] = m_k_xy.empty() ? m_zeros.data() : m_k_xy.data();
-    full_data[4] = m_k_xz.empty() ? m_zeros.data() : m_k_xz.data();
-    full_data[5] = m_k_yz.empty() ? m_zeros.data() : m_k_yz.data();
-
-    return full_data;
+    // Always return a vector of size 6: [xx, yy, zz, xy, xz, yz], zero-padded for 2D
+    std::vector<double> tensor(6);
+    tensor[0] = m_k_xx[cell];
+    tensor[1] = m_k_yy.empty() ? m_k_xx[cell] : m_k_yy[cell];
+    tensor[2] = m_k_zz.empty() ? m_k_xx[cell] : m_k_zz[cell];
+    tensor[3] = m_k_xy.empty() ? 0.0 : m_k_xy[cell];
+    tensor[4] = m_k_xz.empty() ? 0.0 : m_k_xz[cell];
+    tensor[5] = m_k_yz.empty() ? 0.0 : m_k_yz[cell];
+    return tensor;
 }

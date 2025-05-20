@@ -30,37 +30,39 @@ const double nKproj(const std::array<double, 3>& face_normal, const SecondOrderT
         {
             proj += sign * face_normal[i] * cell_face_vec[i];
         }
-        return tensor.isotropic_data()[cell_ind] * proj / dist;
+        return tensor.isotropic_data(cell_ind) * proj / dist;
     }
     else if (tensor.is_diagonal())
     {
         double prod = 0.0;
+        std::vector<double> diag = tensor.diagonal_data(cell_ind);
         for (int i{0}; i < dim; ++i)
         {
-            prod += sign * face_normal[i] * cell_face_vec[i] * tensor.diagonal_data()[i][cell_ind];
+            prod += sign * face_normal[i] * cell_face_vec[i] * diag[i];
         }
         return prod / dist;
     }
     else
     {
         double prod = 0.0;
+        std::vector<double> full_data = tensor.full_data(cell_ind);
         for (int i{0}; i < dim; ++i)
         {
             for (int j{0}; j < dim; ++j)
             {
                 double tensor_val;
                 if (i == 0 && j == 0)
-                    tensor_val = tensor.full_data()[0][cell_ind];
+                    tensor_val = full_data[0];
                 else if (i == 1 && j == 1)
-                    tensor_val = tensor.full_data()[1][cell_ind];
+                    tensor_val = full_data[1];
                 else if (i == 2 && j == 2)
-                    tensor_val = tensor.full_data()[2][cell_ind];
+                    tensor_val = full_data[2];
                 else if (i == 0 && j == 1 || i == 1 && j == 0)
-                    tensor_val = tensor.full_data()[3][cell_ind];
+                    tensor_val = full_data[3];
                 else if (i == 0 && j == 2 || i == 2 && j == 0)
-                    tensor_val = tensor.full_data()[4][cell_ind];
+                    tensor_val = full_data[4];
                 else if (i == 1 && j == 2 || i == 2 && j == 1)
-                    tensor_val = tensor.full_data()[5][cell_ind];
+                    tensor_val = full_data[5];
 
                 prod += sign * face_normal[i] * cell_face_vec[j] * tensor_val;
             }
