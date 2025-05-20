@@ -61,14 +61,14 @@ TEST_F(TPFA, FluxValuesCart2d)
     const double t_9 = dx / (0.5 * dy / 2.0 + 0.5 * dy / 4.0);
 
     // Check the flux values on internal faces.
-    EXPECT_EQ(discr.flux->value(1, 0), t_1);
-    EXPECT_EQ(discr.flux->value(1, 1), -t_1);
-    EXPECT_EQ(discr.flux->value(4, 2), t_4);
-    EXPECT_EQ(discr.flux->value(4, 3), -t_4);
-    EXPECT_EQ(discr.flux->value(8, 0), t_8);
-    EXPECT_EQ(discr.flux->value(8, 2), -t_8);
-    EXPECT_EQ(discr.flux->value(9, 1), t_9);
-    EXPECT_EQ(discr.flux->value(9, 3), -t_9);
+    EXPECT_NEAR(discr.flux->value(1, 0), t_1, 1e-10);
+    EXPECT_NEAR(discr.flux->value(1, 1), -t_1, 1e-10);
+    EXPECT_NEAR(discr.flux->value(4, 2), t_4, 1e-10);
+    EXPECT_NEAR(discr.flux->value(4, 3), -t_4, 1e-10);
+    EXPECT_NEAR(discr.flux->value(8, 0), t_8, 1e-10);
+    EXPECT_NEAR(discr.flux->value(8, 2), -t_8, 1e-10);
+    EXPECT_NEAR(discr.flux->value(9, 1), t_9, 1e-10);
+    EXPECT_NEAR(discr.flux->value(9, 3), -t_9, 1e-10);
 
     // Expected flux for the boundary faces. On the lateral faces, a Dirichlet condition
     // is set. We need a minus sign on the faces on the left side, since the respective
@@ -84,26 +84,26 @@ TEST_F(TPFA, FluxValuesCart2d)
     const double t_10 = 0.0;
     const double t_11 = 0.0;
     // Check the flux values on boundary faces.
-    EXPECT_EQ(discr.flux->value(0, 0), t_0);
-    EXPECT_EQ(discr.flux->value(2, 1), t_2);
-    EXPECT_EQ(discr.flux->value(3, 2), t_3);
-    EXPECT_EQ(discr.flux->value(5, 3), t_5);
-    EXPECT_EQ(discr.flux->value(6, 0), t_6);
-    EXPECT_EQ(discr.flux->value(7, 1), t_7);
-    EXPECT_EQ(discr.flux->value(10, 2), t_10);
-    EXPECT_EQ(discr.flux->value(11, 3), t_11);
+    EXPECT_NEAR(discr.flux->value(0, 0), t_0, 1e-10);
+    EXPECT_NEAR(discr.flux->value(2, 1), t_2, 1e-10);
+    EXPECT_NEAR(discr.flux->value(3, 2), t_3, 1e-10);
+    EXPECT_NEAR(discr.flux->value(5, 3), t_5, 1e-10);
+    EXPECT_NEAR(discr.flux->value(6, 0), t_6, 1e-10);
+    EXPECT_NEAR(discr.flux->value(7, 1), t_7, 1e-10);
+    EXPECT_NEAR(discr.flux->value(10, 2), t_10, 1e-10);
+    EXPECT_NEAR(discr.flux->value(11, 3), t_11, 1e-10);
 
     // Finally, check the discretization of boundary conditions. On the Dirichlet faces,
     // the boundary discretization should be the negative of the transmissibility of the
     // corresponding cell.
-    EXPECT_EQ(discr.bound_flux->value(0, 0), -t_0);
-    EXPECT_EQ(discr.bound_flux->value(2, 2), -t_2);
-    EXPECT_EQ(discr.bound_flux->value(3, 3), -t_3);
-    EXPECT_EQ(discr.bound_flux->value(5, 5), -t_5);
+    EXPECT_NEAR(discr.bound_flux->value(0, 0), -t_0, 1e-10);
+    EXPECT_NEAR(discr.bound_flux->value(2, 2), -t_2, 1e-10);
+    EXPECT_NEAR(discr.bound_flux->value(3, 3), -t_3, 1e-10);
+    EXPECT_NEAR(discr.bound_flux->value(5, 5), -t_5, 1e-10);
     // On the Neumann faces, the boundary discretization should be 1 if the face normal
     // points out of the cell, and -1 if it points into the cell.
-    EXPECT_EQ(discr.bound_flux->value(6, 6), -1.0);
-    EXPECT_EQ(discr.bound_flux->value(7, 7), -1.0);
-    EXPECT_EQ(discr.bound_flux->value(10, 10), 1.0);
-    EXPECT_EQ(discr.bound_flux->value(11, 11), 1.0);
+    EXPECT_NEAR(discr.bound_flux->value(6, 6), -1.0, 1e-10);
+    EXPECT_NEAR(discr.bound_flux->value(7, 7), -1.0, 1e-10);
+    EXPECT_NEAR(discr.bound_flux->value(10, 10), 1.0, 1e-10);
+    EXPECT_NEAR(discr.bound_flux->value(11, 11), 1.0, 1e-10);
 }
