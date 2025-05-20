@@ -8,8 +8,8 @@ namespace  // Anonymous namespace for helper functions.
 {
 // Helper function to compute the product between normal vector, tensor, and cell-face
 // vector.
-const double nKproj(const std::vector<double> face_normal, const SecondOrderTensor& tensor,
-                    const std::vector<double> cell_face_vec, const int sign, const int cell_ind)
+const double nKproj(const std::array<double, 3> face_normal, const SecondOrderTensor& tensor,
+                    const std::array<double, 3> cell_face_vec, const int sign, const int cell_ind)
 {
     // Compute the squared distance between the cell center and the face center. We get
     // one power of the distance to make the cell-face vector a unit vector, and a
@@ -119,15 +119,18 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     row_ptr_vector_source_bound.reserve(grid.num_faces() + 1);
     row_ptr_vector_source_bound.push_back(0);
 
+    // Preallocate holders of local geometric data.
+    std::array<double, DIM> face_cell_a_vec{};
+    std::array<double, DIM> face_cell_b_vec{};
+    std::array<double, DIM> normal{};
+    std::array<double, DIM> face_center{};
+
     for (int face_ind{0}; face_ind < grid.num_faces(); ++face_ind)
     {
         // Get various properties of the face and its first neighboring cell.
         const std::vector<int> cells = grid.cells_of_face(face_ind);
         const int cell_a = cells[0];
         const int sign_a = grid.sign_of_face_cell(face_ind, cell_a);
-        const auto& normal = grid.face_normal(face_ind);
-        const auto& face_center = grid.face_center(face_ind);
-        std::vector<double> face_cell_a_vec(DIM);
 
         for (int i{0}; i < DIM; ++i)
         {
@@ -141,7 +144,6 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
             const int cell_b = cells[1];
             const int sign_b = grid.sign_of_face_cell(face_ind, cell_b);
 
-            std::vector<double> face_cell_b_vec(DIM);
             for (int i{0}; i < DIM; ++i)
             {
                 face_cell_b_vec[i] = face_center[i] - grid.cell_center(cell_b)[i];
