@@ -8,7 +8,7 @@ namespace  // Anonymous namespace for helper functions.
 {
 // Helper function to compute the product between normal vector, tensor, and cell-face
 // vector.
-const double nKproj(const std::array<double, 3>& face_normal, const SecondOrderTensor& tensor,
+const double nKproj(const std::vector<double>& face_normal, const SecondOrderTensor& tensor,
                     const std::array<double, 3>& cell_face_vec, const int sign, const int cell_ind)
 {
     // Compute the squared distance between the cell center and the face center. We get
@@ -124,14 +124,15 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     // Preallocate holders of local geometric data.
     std::array<double, DIM> face_cell_a_vec{};
     std::array<double, DIM> face_cell_b_vec{};
-    std::array<double, DIM> normal{};
-    std::array<double, DIM> face_center{};
-    std::array<int, 2> cells{};
+    std::vector<double> face_center(DIM);
+    std::vector<double> normal(DIM);
 
     for (int face_ind{0}; face_ind < grid.num_faces(); ++face_ind)
     {
         // Get various properties of the face and its first neighboring cell.
-        cells = grid.cells_of_face(face_ind);
+        std::vector<int> cells = grid.cells_of_face(face_ind);
+        face_center = grid.face_center(face_ind);
+        normal = grid.face_normal(face_ind);
         const int cell_a = cells[0];
         const int sign_a = grid.sign_of_face_cell(face_ind, cell_a);
 
@@ -141,7 +142,7 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
         }
         const double trm_a = nKproj(normal, tensor, face_cell_a_vec, sign_a, cell_a);
 
-        if (cells[1] == -1)  // Internal face.
+        if (cells.size() == 2)  // Internal face.
         {
             // Get the second neighboring cell and its properties.
             const int cell_b = cells[1];
