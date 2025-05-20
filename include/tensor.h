@@ -24,9 +24,14 @@ class SecondOrderTensor
 
     const int dim() const;
 
-    const std::vector<double>& isotropic_data() const;
-    const std::vector<const double*> diagonal_data() const;
-    const std::vector<const double*> full_data() const;
+    // Return the isotropic value for a given cell
+    double isotropic_data(int cell) const;
+    // Return the diagonal values for a given cell (size = dim)
+    std::vector<double> diagonal_data(
+        int cell) const;  // returns size 3: [xx, yy, zz], zero-padded for 2D
+    // Return the full tensor values for a given cell (size = dim*dim)
+    std::vector<double> full_data(
+        int cell) const;  // returns size 6: [xx, yy, zz, xy, xz, yz], zero-padded for 2D
 
    private:
     const int m_dim;
