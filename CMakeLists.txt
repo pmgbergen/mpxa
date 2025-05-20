@@ -17,6 +17,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
 
 # Check if the PYTHON_EXECUTABLE environment variable is set. If so, use it as the
 # Python executable.
