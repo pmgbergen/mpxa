@@ -23,8 +23,8 @@ class BasisConstructor
 
     // Function to compute the basis functions and their gradients. The signature is
     // highly uncertain.
-    void compute_basis_functions(const std::vector<std::array<double, 3>>& coords,
-                                 std::vector<double>& basis_functions, );
+    std::vector<std::vector<double>> compute_basis_functions(
+        const std::vector<std::array<double, 3>>& coords);
 
    private:
     // Dimension of the problem
