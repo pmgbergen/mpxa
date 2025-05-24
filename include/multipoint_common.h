@@ -47,6 +47,24 @@ class InteractionRegion
     // Destructor
     ~InteractionRegion() = default;
 
+    // Getters for the interaction region data.
+    const std::vector<int>& faces() const
+    {
+        return m_faces;
+    }
+    const std::vector<int>& cells() const
+    {
+        return m_cells;
+    }
+    const std::map<int, std::vector<int>>& faces_of_cells() const
+    {
+        return m_faces_of_cells;
+    }
+    const std::vector<int>& main_cell_of_faces() const
+    {
+        return m_main_cell_of_faces;
+    }
+
    private:
     // Idea is to use an index counter of the vector to get the local index. This may be
     // insufficient, in which case we may need a map, double map of sorts or a pair.
