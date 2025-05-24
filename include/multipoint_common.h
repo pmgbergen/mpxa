@@ -3,6 +3,7 @@
 
 #include <Eigen/Dense>
 #include <array>
+#include <map>
 #include <vector>
 
 #include "grid.h"

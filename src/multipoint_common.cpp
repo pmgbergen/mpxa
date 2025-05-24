@@ -60,9 +60,11 @@ std::vector<std::vector<double>> BasisConstructor::compute_basis_functions(
 }
 
 // endregion BasisConstructor
+
 // region InteractionRegion
+
 InteractionRegion::InteractionRegion(const int node, const int dim, Grid& grid)
-    : m_node(node), m_dim(dim), m_faces(), m_cells(), m_faces_of_cells(dim), m_main_cell_of_faces()
+    : m_node(node), m_dim(dim), m_faces(), m_cells(), m_faces_of_cells(), m_main_cell_of_faces()
 {
     // Initialize the interaction region based on the node and the grid.
     m_faces = std::vector<int>(grid.faces_of_node(node));
