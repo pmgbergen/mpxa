@@ -53,16 +53,15 @@ class InteractionRegion
     std::vector<int> m_faces;
     std::vector<int> m_cells;
     // For each cell its associated faces. There will be nd of these.
-    std::vector<std::array<int, grid.dim>> m_faces_of_cells;
+    std::map<int, std::vector<int>> m_faces_of_cells;
     // For each face a single cell used to compute the flux.
     std::vector<int> m_main_cell_of_faces;
     // The node around which the interaction region is built.
     const int m_node;
     // The dimension of the problem to be discretize (do not confuse with the dimension
     // of the grid). How will this impact the topology of the interaction region?
+    // We may decide to delete this, decide when we get to the vector problem.
     const int m_dim;
-    // The grid object
-    Grid& m_grid;
 };
 
 #endif  // MULTIPOINT_COMMON_H
