@@ -28,6 +28,8 @@ std::vector<std::vector<double>> BasisConstructor::compute_basis_functions(
 
     for (int i = 0; i <= m_dim; ++i)
     {
+        m_basis_matrix(i, 0) = 1.0;  // Set the first column to ones for the constant term.
+        // Fill the coord_matrix with the coordinates provided in the input.
         for (int j = 1; j <= m_dim; ++j)
         {
             m_basis_matrix(i, j) = coords[i][j];
@@ -36,15 +38,9 @@ std::vector<std::vector<double>> BasisConstructor::compute_basis_functions(
 
     // Solve the linear system with m_coord_matrix as the left-hand side and
     // m_rhs_matrix as the right-hand side.
-    Eigen::PartialPivLU<MatrixXd> lu(m_coord_matrix);
-    if (lu.isInvertible())
-    {
-        m_basis_matrix = lu.solve(m_rhs_matrix);
-    }
-    else
-    {
-        throw std::runtime_error("Matrix is not invertible.");
-    }
+
+    m_basis_matrix = m_coord_matrix.lu().solve(m_rhs_matrix);
+
     // Store the computed basis functions in the output vector.
     std::vector<std::vector<double>> basis_functions(m_dim + 1, std::vector<double>(m_dim));
     for (int i = 0; i <= m_dim; ++i)
