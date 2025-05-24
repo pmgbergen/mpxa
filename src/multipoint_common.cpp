@@ -51,9 +51,9 @@ std::vector<std::vector<double>> BasisConstructor::compute_basis_functions(
     {
         for (int j = 0; j < m_dim; ++j)
         {
-            // Store the computed basis functions in the output vector. The first column
+            // Store the computed basis functions in the output vector. The first row
             // of the basis functions is the constant term, which we ignore.
-            basis_functions[i][j] = m_basis_matrix(i, j + 1);
+            basis_functions[i][j] = m_basis_matrix(i + 1, j);
         }
     }
     return basis_functions;
