@@ -1,5 +1,6 @@
 #include "../include/multipoint_common.h"
 
+#include <iostream>
 #include <unordered_set>
 
 // region BasisConstructor
@@ -8,15 +9,15 @@ BasisConstructor::BasisConstructor(const int dim)
     : m_dim(dim), m_coord_matrix(), m_basis_matrix(), m_rhs_matrix()
 {
     // Initialize the matrices with appropriate sizes
-    m_coord_matrix = MatrixXd::Zero(dim, dim);
+    m_coord_matrix = MatrixXd::Zero(dim + 1, dim + 1);
     // The first column of the coord matrix will be ones.
     for (int i = 0; i <= dim; ++i)
     {
         m_coord_matrix(i, 0) = 1.0;
     }
 
-    m_basis_matrix = MatrixXd::Zero(dim, dim);
-    m_rhs_matrix = MatrixXd::Identity(dim, dim);
+    m_basis_matrix = MatrixXd::Zero(dim + 1, dim + 1);
+    m_rhs_matrix = MatrixXd::Identity(dim + 1, dim + 1);
 }
 
 std::vector<std::vector<double>> BasisConstructor::compute_basis_functions(
@@ -28,11 +29,11 @@ std::vector<std::vector<double>> BasisConstructor::compute_basis_functions(
 
     for (int i = 0; i <= m_dim; ++i)
     {
-        m_basis_matrix(i, 0) = 1.0;  // Set the first column to ones for the constant term.
+        m_coord_matrix(i, 0) = 1.0;  // Set the first column to ones for the constant term.
         // Fill the coord_matrix with the coordinates provided in the input.
         for (int j = 1; j <= m_dim; ++j)
         {
-            m_basis_matrix(i, j) = coords[i][j];
+            m_coord_matrix(i, j) = coords[i][j - 1];
         }
     }
 
@@ -43,13 +44,22 @@ std::vector<std::vector<double>> BasisConstructor::compute_basis_functions(
 
     // Store the computed basis functions in the output vector.
     std::vector<std::vector<double>> basis_functions(m_dim + 1, std::vector<double>(m_dim));
-    for (int i = 0; i <= m_dim; ++i)
+
+    // Some index gymnastics here: The basis functions are stored column-wise in the
+    // m_basis_matrix, but we want to return them row-wise, stored in the vector of
+    // vectors. Use j as the column index, i as the row index in the matrix (for the
+    // basis function they become respectively the basis function counter and the
+    // coordinate index). Also, having a tight loop over the outer index for one of the
+    // variables seem unavoidable, unless we switch to a less intuitive data structure
+    // for the basis functions, which would be worse for readability.
+    for (int j = 0; j <= m_dim; ++j)
     {
-        for (int j = 0; j < m_dim; ++j)
+        // Start indexing from 1, since the first row of the basis functions is the
+        // constant term, which we ignore.
+        for (int i = 1; i <= m_dim; ++i)
         {
-            // Store the computed basis functions in the output vector. The first row
-            // of the basis functions is the constant term, which we ignore.
-            basis_functions[i][j] = m_basis_matrix(i + 1, j);
+            // Store the computed basis functions in the output vector.
+            basis_functions[j][i - 1] = m_basis_matrix(i, j);
         }
     }
     return basis_functions;
