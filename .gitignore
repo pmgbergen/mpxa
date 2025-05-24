@@ -47,3 +47,6 @@ mpxa.egg-info/*
 src/mpxa.egg-info/*
 .vscode/*
 Testing/Temporary
+
+# External libraries
+external/eigen/*

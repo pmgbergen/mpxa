@@ -57,6 +57,8 @@ set(LIBRARY_NAME libmpxa)
 # Define the test executable name variable
 set(TEST_EXECUTABLE test_mpxa)
 
+include_directories(${CMAKE_SOURCE_DIR}/external/eigen)
+
 # Set (empty) list of library dependencies
 set(LIBRARY_DEPENDENCIES)
 
