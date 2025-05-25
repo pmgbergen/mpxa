@@ -9,20 +9,28 @@
 class GridTest : public ::testing::Test
 {
    protected:
+    // For 2D Cartesian grids.
     std::unique_ptr<Grid> grid_2d;
     std::unique_ptr<Grid> unit_square;
+
     const std::vector<int> num_cells_2d = {2, 3};
     const std::vector<double> lengths_2d = {2.0, 3.0};
     const std::vector<double> unit_lengths_2d = {1.0, 1.0};
+
+    // For 3D Cartesian grids.
+    std::unique_ptr<Grid> grid_3d;
+    const std::vector<int> num_cells_3d = {2, 2, 2};
 
     void SetUp() override
     {
         // Create grids, compute geometry.
         grid_2d = Grid::create_cartesian_grid(2, num_cells_2d, lengths_2d);
         unit_square = Grid::create_cartesian_grid(2, num_cells_2d, unit_lengths_2d);
+        grid_3d = Grid::create_cartesian_grid(3, num_cells_3d, {2.0, 2.0, 2.0});
 
         grid_2d->compute_geometry();
         unit_square->compute_geometry();
+        // grid_3d->compute_geometry();
     }
 };
 
@@ -222,5 +230,116 @@ TEST_F(GridTest, GeometryComputation2d)
     for (int i = 0; i < unit_square->num_cells(); ++i)
     {
         EXPECT_DOUBLE_EQ(unit_square->cell_volume(i), dx * dy);
+    }
+}
+
+// region Cartesian grid 3D tests
+
+TEST_F(GridTest, NodeCoordinates3d)
+{
+    EXPECT_EQ(grid_3d->num_nodes(), 27);
+
+    const auto& nodes = grid_3d->nodes();
+    for (int i = 0; i < 3; ++i)
+    {
+        for (int j = 0; j < 3; ++j)
+        {
+            for (int k = 0; k < 3; ++k)
+            {
+                int index = i + j * 3 + k * 9;
+                EXPECT_EQ(nodes[index][0], i * 2.0 / 2);
+                EXPECT_EQ(nodes[index][1], j * 2.0 / 2);
+                EXPECT_EQ(nodes[index][2], k * 2.0 / 2);
+            }
+        }
+    }
+}
+TEST_F(GridTest, FacesOfNodeCartGrid3d)
+{
+    EXPECT_EQ(grid_3d->num_nodes(), 27);
+    EXPECT_EQ(grid_3d->num_faces(), 36);
+
+    // Expected faces of selected nodes.
+    std::map<int, std::vector<int>> expected_faces_of_node = {
+        {0, {0, 12, 24}},
+        {1, {1, 12, 13, 24, 25}},
+        {2, {2, 13, 25}},
+        {4, {1, 4, 14, 15, 24, 25, 26, 27}},
+        {8, {5, 17, 27}},
+        {10, {1, 7, 12, 13, 18, 19, 28, 29}},
+        {13, {1, 4, 7, 10, 14, 15, 20, 21, 28, 29, 30, 31}},
+        {14, {2, 5, 8, 11, 15, 21, 29, 31}},
+        {16, {4, 10, 16, 17, 22, 23, 30, 31}},
+        {17, {5, 11, 17, 23, 31}},
+        {18, {6, 18, 32}},
+        {19, {7, 18, 19, 32, 33}},
+        {23, {8, 11, 21, 33, 35}},
+        {24, {9, 22, 34}},
+        {25, {10, 22, 23, 34, 35}},
+        {26, {11, 23, 35}},
+
+    };
+
+    // Loop over the keys of the map and compare with the expected values.
+    for (auto const& [node, expected_faces] : expected_faces_of_node)
+    {
+        std::vector<int> face_nodes = grid_3d->faces_of_node(node);
+        std::sort(face_nodes.begin(), face_nodes.end());
+        EXPECT_EQ(face_nodes.size(), expected_faces.size());
+        for (size_t i = 0; i < expected_faces.size(); ++i)
+        {
+            EXPECT_EQ(face_nodes[i], expected_faces[i]);
+        }
+    }
+}
+
+TEST_F(GridTest, CellsOfFaceCartGrid3d)
+{
+    // Check the number of cells in the grid.
+    EXPECT_EQ(grid_3d->num_cells(), 8);
+    // Check the number of faces in the grid.
+    EXPECT_EQ(grid_3d->num_faces(), 36);
+
+    // Expected cells of selected faces.
+    std::map<int, std::vector<int>> expected_cells_of_face = {
+        {0, {0}},     {1, {0, 1}},  {2, {1}},     {3, {2}},     {4, {2, 3}},  {5, {3}},
+        {6, {4}},     {7, {4, 5}},  {8, {5}},     {9, {6}},     {10, {6, 7}}, {11, {7}},
+        {12, {0}},    {13, {1}},    {14, {0, 2}}, {15, {1, 3}}, {16, {2}},    {17, {3}},
+        {18, {4}},    {19, {5}},    {20, {4, 6}}, {21, {5, 7}}, {22, {6}},    {23, {7}},
+        {24, {0}},    {25, {1}},    {26, {2}},    {27, {3}},    {28, {0, 4}}, {29, {1, 5}},
+        {30, {2, 6}}, {31, {3, 7}}, {32, {4}},    {33, {5}},    {34, {6}},    {35, {7}}};
+    // Add more expected cells for other faces as needed
+
+    // Loop over the keys of the map and compare with the expected values.
+    for (auto const& [face, expected_cells] : expected_cells_of_face)
+    {
+        std::vector<int> cells = grid_3d->cells_of_face(face);
+        std::sort(cells.begin(), cells.end());
+        EXPECT_EQ(cells.size(), expected_cells.size());
+        for (size_t i = 0; i < expected_cells.size(); ++i)
+        {
+            EXPECT_EQ(cells[i], expected_cells[i]);
+        }
+    }
+
+    // Check the sign of the face with respect to the cell.
+    std::map<std::pair<int, int>, int> expected_sign_of_face_cell = {
+        {{0, 0}, -1},  {{1, 0}, 1},   {{1, 1}, -1},  {{2, 1}, 1},   {{3, 2}, -1},  {{4, 2}, 1},
+        {{4, 3}, -1},  {{5, 3}, 1},   {{6, 4}, -1},  {{7, 4}, 1},   {{7, 5}, -1},  {{8, 5}, 1},
+        {{9, 6}, -1},  {{10, 6}, 1},  {{10, 7}, -1}, {{11, 7}, 1},  {{12, 0}, -1}, {{13, 1}, -1},
+        {{14, 0}, 1},  {{14, 2}, -1}, {{15, 1}, 1},  {{15, 3}, -1}, {{16, 2}, 1},  {{17, 3}, 1},
+        {{18, 4}, -1}, {{19, 5}, -1}, {{20, 4}, 1},  {{20, 6}, -1}, {{21, 5}, 1},  {{21, 7}, -1},
+        {{22, 6}, 1},  {{23, 7}, 1},  {{24, 0}, -1}, {{25, 1}, -1}, {{26, 2}, -1}, {{27, 3}, -1},
+        {{28, 0}, 1},  {{28, 4}, -1}, {{29, 1}, 1},  {{29, 5}, -1}, {{30, 2}, 1},  {{30, 6}, -1},
+        {{31, 3}, 1},  {{31, 7}, -1}, {{32, 4}, 1},  {{33, 5}, 1},  {{34, 6}, 1},  {{35, 7}, 1},
+
+        // Add more expected signs for other faces as needed
+    };
+    for (auto const& [face_cell, expected_sign] : expected_sign_of_face_cell)
+    {
+        int face = face_cell.first;
+        int cell = face_cell.second;
+        int sign = grid_3d->sign_of_face_cell(face, cell);
+        EXPECT_EQ(sign, expected_sign);
     }
 }
