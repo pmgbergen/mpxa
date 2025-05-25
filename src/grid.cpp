@@ -213,6 +213,7 @@ void Grid::compute_geometry()
 
             else  // num_nodes == 4
             {
+                // NOTE: This is only valid for grids aligned with the axes.
                 // This is a quadrilateral. We cannot trust that them_nodes are ordered
                 // in a circular fashion. Therefore, compute the maximum and minimum
                 // coordinates along each axis. For one of the dimension, the max and
@@ -249,7 +250,7 @@ void Grid::compute_geometry()
                         // Set the face normal to an area weighted normal in the
                         // dimension of the face (where min and max are equal). We may
                         // change the direction later.
-                        m_face_normals[i][j] /= m_face_areas[i];
+                        m_face_normals[i][j] = m_face_areas[i];
                         break;
                     }
             }
