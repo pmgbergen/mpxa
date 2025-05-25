@@ -586,8 +586,6 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
     int face_index = 0;
     int data_counter = 0;
 
-    std::cout << "Face processing in " << dim << "D" << std::endl;
-
     const int num_faces_z = (dim == 3) ? num_cells[2] : 1;
     // Create faces along the x and y directions. This loop is common for 2d and 3d, but
     // will do a single iteration in 2d.
@@ -730,7 +728,7 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
                 face_cell_sign_vector.push_back(1);
                 // The neighboring cell is the one above.
                 col_idx_vector.push_back(i + j * num_cells[0] +
-                                         num_cells[0] * num_cells[1] * num_cells[2]);
+                                         num_cells[0] * num_cells[1] * (num_cells[2] - 1));
                 ++face_index;
             }
         }
@@ -742,8 +740,6 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
         tot_num_faces, tot_num_cells, row_ptr, col_idx_vector, face_cell_sign_vector);
 
     Grid* g = new Grid(dim, std::move(nodes), face_cells, face_nodes);
-
-    std::cout << "Done" << std::endl;
 
     return std::unique_ptr<Grid>(g);
 }
