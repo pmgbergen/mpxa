@@ -30,7 +30,7 @@ class GridTest : public ::testing::Test
 
         grid_2d->compute_geometry();
         unit_square->compute_geometry();
-        // grid_3d->compute_geometry();
+        grid_3d->compute_geometry();
     }
 };
 
@@ -254,6 +254,7 @@ TEST_F(GridTest, NodeCoordinates3d)
         }
     }
 }
+// Test face-node topology for a 3D Cartesian grid.
 TEST_F(GridTest, FacesOfNodeCartGrid3d)
 {
     EXPECT_EQ(grid_3d->num_nodes(), 27);
@@ -293,6 +294,7 @@ TEST_F(GridTest, FacesOfNodeCartGrid3d)
     }
 }
 
+// Test face-cell topology for a 3D Cartesian grid.
 TEST_F(GridTest, CellsOfFaceCartGrid3d)
 {
     // Check the number of cells in the grid.
@@ -343,3 +345,92 @@ TEST_F(GridTest, CellsOfFaceCartGrid3d)
         EXPECT_EQ(sign, expected_sign);
     }
 }
+
+// Test that the cell volumes and face areas have the expected values for a 3D Cartesian grid.
+TEST_F(GridTest, GeometryComputation3d)
+{
+    // Compute the face areas and normals.
+    grid_3d->compute_geometry();
+    const auto& face_areas = grid_3d->face_areas();
+    const auto& face_normals = grid_3d->face_normals();
+    const auto& face_centers = grid_3d->face_centers();
+
+    const double dx = 2.0 / 2;
+    const double dy = 2.0 / 2;
+    const double dz = 2.0 / 2;
+
+    const double area_xy = dx * dy;
+    const double area_xz = dx * dz;
+    const double area_yz = dy * dz;
+
+    // Check the face areas and normals.
+    for (int i = 0; i < 12; ++i)  // xy faces
+    {
+        EXPECT_DOUBLE_EQ(face_areas[i], area_xy);
+        EXPECT_DOUBLE_EQ(face_normals[i][0], 1.0);
+        EXPECT_DOUBLE_EQ(face_normals[i][1], 0.0);
+        EXPECT_DOUBLE_EQ(face_normals[i][2], 0.0);
+    }
+
+    for (int i = 12; i < 24; ++i)  // xz faces
+    {
+        EXPECT_DOUBLE_EQ(face_areas[i], area_xz);
+        EXPECT_DOUBLE_EQ(face_normals[i][0], 0.0);
+        EXPECT_DOUBLE_EQ(face_normals[i][1], 1.0);
+        EXPECT_DOUBLE_EQ(face_normals[i][2], 0.0);
+    }
+    for (int i = 24; i < 36; ++i)  // yz faces
+    {
+        EXPECT_DOUBLE_EQ(face_areas[i], area_yz);
+        EXPECT_DOUBLE_EQ(face_normals[i][0], 0.0);
+        EXPECT_DOUBLE_EQ(face_normals[i][1], 0.0);
+        EXPECT_DOUBLE_EQ(face_normals[i][2], 1.0);
+    }
+
+    // Known face centers
+    std::vector<std::array<double, 3>> known_face_centers = {
+        {0, dy / 2, dz / 2},          {dx, dy / 2, dz / 2},
+        {2 * dx, dy / 2, dz / 2},     {0, 3 * dy / 2, dz / 2},
+        {dx, 3 * dy / 2, dz / 2},     {2 * dx, 3 * dy / 2, dz / 2},
+        {0, dy / 2, 3 * dz / 2},      {dx, dy / 2, 3 * dz / 2},
+        {2 * dx, dy / 2, 3 * dz / 2}, {0, 3 * dy / 2, 3 * dz / 2},
+        {dx, 3 * dy / 2, 3 * dz / 2}, {2 * dx, 3 * dy / 2, 3 * dz / 2},
+        {dx / 2, 0, dz / 2},          {3 * dx / 2, 0, dz / 2},
+        {dx / 2, dy, dz / 2},         {3 * dx / 2, dy, dz / 2},
+        {dx / 2, 2 * dy, dz / 2},     {3 * dx / 2, 2 * dy, dz / 2},
+        {dx / 2, 0, 3 * dz / 2},      {3 * dx / 2, 0, 3 * dz / 2},
+        {dx / 2, dy, 3 * dz / 2},     {3 * dx / 2, dy, 3 * dz / 2},
+        {dx / 2, 2 * dy, 3 * dz / 2}, {3 * dx / 2, 2 * dy, 3 * dz / 2},
+        {dx / 2, dy / 2, 0},          {3 * dx / 2, dy / 2, 0},
+        {dx / 2, 3 * dy / 2, 0},      {3 * dx / 2, 3 * dy / 2, 0},
+        {dx / 2, dy / 2, dz},         {3 * dx / 2, dy / 2, dz},
+        {dx / 2, 3 * dy / 2, dz},     {3 * dx / 2, 3 * dy / 2, dz},
+        {dx / 2, dy / 2, 2 * dz},     {3 * dx / 2, dy / 2, 2 * dz},
+        {dx / 2, 3 * dy / 2, 2 * dz}, {3 * dx / 2, 3 * dy / 2, 2 * dz}};
+
+    for (int i = 0; i < grid_3d->num_faces(); ++i)
+    {
+        const auto& face_center = grid_3d->face_center(i);
+        EXPECT_DOUBLE_EQ(face_center[0], known_face_centers[i][0]);
+        EXPECT_DOUBLE_EQ(face_center[1], known_face_centers[i][1]);
+        EXPECT_DOUBLE_EQ(face_center[2], known_face_centers[i][2]);
+    }
+    std::vector<std::array<double, 3>> known_cell_centers = {
+        {dx / 2, dy / 2, dz / 2},         {3 * dx / 2, dy / 2, dz / 2},
+        {dx / 2, 3 * dy / 2, dz / 2},     {3 * dx / 2, 3 * dy / 2, dz / 2},
+        {dx / 2, dy / 2, 3 * dz / 2},     {3 * dx / 2, dy / 2, 3 * dz / 2},
+        {dx / 2, 3 * dy / 2, 3 * dz / 2}, {3 * dx / 2, 3 * dy / 2, 3 * dz / 2},
+    };
+    for (int i = 0; i < grid_3d->num_cells(); ++i)
+    {
+        const auto& cell_center = grid_3d->cell_center(i);
+        EXPECT_DOUBLE_EQ(cell_center[0], known_cell_centers[i][0]);
+        EXPECT_DOUBLE_EQ(cell_center[1], known_cell_centers[i][1]);
+        EXPECT_DOUBLE_EQ(cell_center[2], known_cell_centers[i][2]);
+    }
+    // All cell volumes should be equal to dx * dy * dz
+    for (int i = 0; i < grid_3d->num_cells(); ++i)
+    {
+        EXPECT_DOUBLE_EQ(grid_3d->cell_volume(i), dx * dy * dz);
+    }
+};
