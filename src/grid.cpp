@@ -395,14 +395,18 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
     const int num_faces_y_per_xy_layer = num_faces_y;
 
     // Total number of faces in 2d; 3d adjustment is done below.
-    int tot_num_faces = num_faces_x + num_faces_y;
+    int tot_num_faces;
+    if (dim == 2)
+    {
+        tot_num_faces = num_faces_x + num_faces_y;
+    }
 
     if (dim == 3)
     {
         num_faces_x *= num_cells[2];
         num_faces_y *= num_cells[2];
         const int num_faces_z = num_cells[0] * num_cells[1] * (num_cells[2] + 1);
-        tot_num_faces += num_faces_z;
+        tot_num_faces = num_faces_x + num_faces_y + num_faces_z;
     }
 
     // Data structures for node coordinates and face nodes.
@@ -416,99 +420,155 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
 
     // Let the node indices increase along the x-direction first, then the y-direction.
     // In 3d, the z-direction will be last.
-    for (int k = 0; k < num_nodes_per_dim[2]; ++k)
+
+    if (dim == 2)
     {
         for (int j = 0; j < num_nodes_per_dim[1]; ++j)
         {
             for (int i = 0; i < num_nodes_per_dim[0]; ++i)
             {
-                const int node_index =
-                    i + j * num_nodes_per_dim[0] + k * num_nodes_per_dim[0] * num_nodes_per_dim[1];
+                const int node_index = i + j * num_nodes_per_dim[0];
                 nodes[node_index][0] = x[i];
                 nodes[node_index][1] = y[j];
-                if (dim == 3)
-                {
-                    nodes[node_index][2] = z[k];
-                }
 
                 // Create face nodes
                 row_ptr_face_nodes[node_index] = face_nodes_vector.size();
                 // Local vector of face indices, to be appended to the global vector.
                 std::vector<int> face_nodes_loc;
 
+                if (i > 0)  // There is space for faces to the left.
+                {
+                    // Add the face to the left in the xy-plane.
+                    face_nodes_loc.push_back(i - 1 + j * num_cells[0] + num_faces_x);
+                }
                 if (i < num_nodes_per_dim[0] - 1)
                 {
                     // Add the face to the right in the xy-plane.
-                    face_nodes_loc.push_back(i + j * num_cells[0] +
-                                             k * num_cells[0] * num_cells[1] + num_faces_x);
-                    if (dim == 3 && k > 0)
-                    {
-                        // Add the face to the right in the xz-plane
-                        face_nodes_loc.push_back(i + j * num_cells[0] +
-                                                 k * num_cells[0] * num_cells[1] + num_faces_x -
-                                                 num_faces_y_per_xy_layer);
-                    }
-                }
-                if (i > 0)
-                {
-                    // Add the face to the left in the xy-plane
-                    face_nodes_loc.push_back(i - 1 + j * num_cells[0] +
-                                             k * num_cells[0] * num_cells[1] + num_faces_x);
-                    if (dim == 3 && k > 0)
-                    {
-                        // Add the face to the left in the xz-plane
-                        face_nodes_loc.push_back(i - 1 + j * num_cells[0] +
-                                                 k * num_cells[0] * num_cells[1] + num_faces_x -
-                                                 num_faces_y_per_xy_layer);
-                    }
+
+                    face_nodes_loc.push_back(i + j * num_cells[0] + num_faces_x);
                 }
                 if (j > 0)
                 {
-                    // Add the face below in the xy-plane
-                    face_nodes_loc.push_back(node_index - num_nodes_per_dim[0]);
-                    if (dim == 3 && k > 0)
-                    {
-                        // Add the face below in the xz-plane
-                        face_nodes_loc.push_back(node_index - num_nodes_per_dim[0] -
-                                                 num_faces_x_per_xy_layer);
-                    }
+                    // Add the face below in the xy-plane.
+                    face_nodes_loc.push_back(i + (j - 1) * num_nodes_per_dim[0]);
                 }
                 if (j < num_nodes_per_dim[1] - 1)
                 {
                     // Add face above in the xy-plane
-                    face_nodes_loc.push_back(node_index);
-                    if (dim == 3 && k > 0)
-                    {
-                        // Add the face above in the xz-plane
-                        face_nodes_loc.push_back(node_index - num_faces_x_per_xy_layer);
-                    }
-                }
-                if (dim == 3)
-                {
-                    if (i < num_cells[0] + 1 && j < num_cells[1] + 1)
-                    {
-                        // Add the face below in the xz-plane
-                        face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
-                                                 num_faces_y_per_xy_layer);
-                    }
-                    if (i < num_cells[0] + 1 && j > 0)
-                    {
-                        face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
-                                                 num_faces_y_per_xy_layer - num_faces_x);
-                    }
-                    if (i > 0 && j < num_cells[1] + 1)
-                    {
-                        face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
-                                                 num_faces_y_per_xy_layer - 1);
-                    }
-                    if (i > 0 && j > 0)
-                    {
-                        face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
-                                                 num_faces_y_per_xy_layer - num_faces_x - 1);
-                    }
+                    face_nodes_loc.push_back(i + j * num_nodes_per_dim[0]);
                 }
                 face_nodes_vector.insert(face_nodes_vector.end(), face_nodes_loc.begin(),
                                          face_nodes_loc.end());
+            }
+        }
+    }
+    else  // dim == 3
+    {
+        for (int k = 0; k < num_nodes_per_dim[2]; ++k)
+        {
+            for (int j = 0; j < num_nodes_per_dim[1]; ++j)
+            {
+                for (int i = 0; i < num_nodes_per_dim[0]; ++i)
+                {
+                    const int node_index = i + j * num_nodes_per_dim[0] +
+                                           k * num_nodes_per_dim[0] * num_nodes_per_dim[1];
+                    nodes[node_index][0] = x[i];
+                    nodes[node_index][1] = y[j];
+                    if (dim == 3)
+                    {
+                        nodes[node_index][2] = z[k];
+                    }
+
+                    // Create face nodes
+                    row_ptr_face_nodes[node_index] = face_nodes_vector.size();
+                    // Local vector of face indices, to be appended to the global vector.
+                    std::vector<int> face_nodes_loc;
+
+                    if (i > 0)  // There is space for faces to the left.
+                    {
+                        // Add the face to the left in the xy-plane. In 2d this will be the
+                        // face pointing to the left. In 3d it is the face that has this
+                        // node as its lower right corner.
+                        int tmp_index = i - 1 + j * num_cells[0] + k * num_cells[0] * num_cells[1];
+                        // The offset is different in 2d and 3d, since the number of faces created
+                        // previously is different.
+                        face_nodes_loc.push_back(tmp_index + num_faces_x + num_faces_y);
+
+                        if (dim == 3 && k > 0)
+                        {
+                            // Add the face to the left in the xz-plane
+                            face_nodes_loc.push_back(i - 1 + j * num_cells[0] +
+                                                     k * num_cells[0] * num_cells[1] + num_faces_x -
+                                                     num_faces_y_per_xy_layer);
+                        }
+                    }
+                    if (i < num_nodes_per_dim[0] - 1)
+                    {
+                        // Add the face to the right in the xy-plane.
+                        int tmp_index = i + j * num_cells[0] + k * num_cells[0] * num_cells[1];
+
+                        face_nodes_loc.push_back(tmp_index + num_faces_x + num_faces_y);
+
+                        if (dim == 3 && k > 0)
+                        {
+                            // Add the face to the right in the xz-plane
+                            face_nodes_loc.push_back(i + j * num_cells[0] +
+                                                     k * num_cells[0] * num_cells[1] + num_faces_x -
+                                                     num_faces_y_per_xy_layer);
+                        }
+                    }
+                    if (j > 0)
+                    {
+                        // Add the face below in the xy-plane. EK cannot find a unified way of
+                        // thinking of the 2d and 3d case.
+                        face_nodes_loc.push_back(i + (j - 1) * num_cells[0] +
+                                                 k * num_cells[0] * num_cells[1]);
+                        if (dim == 3 && k > 0)
+                        {
+                            // Add the face below in the xz-plane
+                            face_nodes_loc.push_back(node_index - num_nodes_per_dim[0] -
+                                                     num_faces_x_per_xy_layer);
+                        }
+                    }
+                    if (j < num_nodes_per_dim[1] - 1)
+                    {
+                        // Add face above in the xy-plane
+                        face_nodes_loc.push_back(i + (j + 1) * num_cells[0] +
+                                                 k * num_cells[0] * num_cells[1]);
+
+                        if (dim == 3 && k > 0)
+                        {
+                            // Add the face above in the xz-plane
+                            face_nodes_loc.push_back(node_index - num_faces_x_per_xy_layer);
+                        }
+                    }
+                    if (dim == 3)
+                    {
+                        if (i < num_cells[0] + 1 && j < num_cells[1] + 1)
+                        {
+                            // Add the face below in the xz-plane
+                            face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
+                                                     num_faces_y_per_xy_layer);
+                        }
+                        if (i < num_cells[0] + 1 && j > 0)
+                        {
+                            face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
+                                                     num_faces_y_per_xy_layer - num_faces_x);
+                        }
+                        if (i > 0 && j < num_cells[1] + 1)
+                        {
+                            face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
+                                                     num_faces_y_per_xy_layer - 1);
+                        }
+                        if (i > 0 && j > 0)
+                        {
+                            face_nodes_loc.push_back(node_index + num_faces_x_per_xy_layer +
+                                                     num_faces_y_per_xy_layer - num_faces_x - 1);
+                        }
+                    }
+                    face_nodes_vector.insert(face_nodes_vector.end(), face_nodes_loc.begin(),
+                                             face_nodes_loc.end());
+                }
             }
         }
     }
@@ -534,6 +594,8 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
 
     int face_index = 0;
     int data_counter = 0;
+
+    std::cout << "Face processing in " << dim << "D" << std::endl;
 
     const int num_faces_z = (dim == 3) ? num_cells[2] : 1;
     // Create faces along the x and y directions. This loop is common for 2d and 3d, but
@@ -689,5 +751,8 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
         tot_num_faces, tot_num_cells, row_ptr, col_idx_vector, face_cell_sign_vector);
 
     Grid* g = new Grid(dim, std::move(nodes), face_cells, face_nodes);
+
+    std::cout << "Done" << std::endl;
+
     return std::unique_ptr<Grid>(g);
 }
