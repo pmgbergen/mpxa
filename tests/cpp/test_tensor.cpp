@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "../../src/tensor.cpp"
+#include "../../include/tensor.h"
 
 TEST(TensorTest, IsotropicSecondOrderTensor)
 {
@@ -147,7 +147,7 @@ TEST(TensorTest, NonDiagonalSecondOrderTensor3d)
     EXPECT_FALSE(tensor_3d.is_isotropic());
     EXPECT_FALSE(tensor_3d.is_diagonal());
 
-        for (size_t i = 0; i < num_data; ++i)
+    for (size_t i = 0; i < num_data; ++i)
     {
         auto full_data = tensor_3d.full_data(i);
         EXPECT_EQ(full_data[0], data_xx[i]);

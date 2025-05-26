@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "../../src/compressed_storage.cpp"
+#include "../../include/compressed_storage.h"
 
 // Test fixture for CompressedDataStorage
 class CompressedDataStorageTest : public ::testing::Test

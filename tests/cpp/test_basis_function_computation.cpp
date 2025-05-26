@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "../../src/multipoint_common.cpp"
+#include "../../include/multipoint_common.h"
 
 class BasisFunctionComputationTest : public ::testing::Test
 {
