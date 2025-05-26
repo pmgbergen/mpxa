@@ -1,3 +1,4 @@
+
 #include "../include/multipoint_common.h"
 
 #include <iostream>
@@ -111,7 +112,7 @@ InteractionRegion::InteractionRegion(const int node, const int dim, Grid& grid)
                 // We know (rather assume) that each cell has exactly dim faces meeting
                 // at the node (this will break for pyramid cells, but if we encounter
                 // those, we will have all sorts of problems).
-                m_faces_of_cells[cell] = std::vector<int>(grid.dim(), -1);
+                m_faces_of_cells[cell] = std::vector<int>();
             }
             m_faces_of_cells[cell].push_back(face);
         }
