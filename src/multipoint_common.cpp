@@ -1,4 +1,3 @@
-
 #include "../include/multipoint_common.h"
 
 #include <iostream>
@@ -75,6 +74,8 @@ InteractionRegion::InteractionRegion(const int node, const int dim, const Grid& 
 {
     // Initialize the interaction region based on the node and the grid.
     auto face_indices = grid.faces_of_node(node);
+    // Sort the face indices to ensure consistent ordering.
+    std::sort(face_indices.begin(), face_indices.end());
 
     // Fill m_faces as a map from face index to running index
     for (size_t i = 0; i < face_indices.size(); ++i)
@@ -123,5 +124,8 @@ InteractionRegion::InteractionRegion(const int node, const int dim, const Grid& 
             m_faces_of_cells[cell].push_back(face);
         }
     }
+
+    // Sort the cells and faces for consistency in the output.
+    std::sort(m_cells.begin(), m_cells.end());
 }
 // endregion InteractionRegion
