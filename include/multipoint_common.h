@@ -49,7 +49,8 @@ class InteractionRegion
     ~InteractionRegion() = default;
 
     // Getters for the interaction region data.
-    const std::vector<int>& faces() const
+    // Now returns a map from face index to running index
+    const std::map<int, int>& faces() const
     {
         return m_faces;
     }
@@ -67,9 +68,8 @@ class InteractionRegion
     }
 
    private:
-    // Idea is to use an index counter of the vector to get the local index. This may be
-    // insufficient, in which case we may need a map, double map of sorts or a pair.
-    std::vector<int> m_faces;
+    // Map from face index to running index (starting from 0)
+    std::map<int, int> m_faces;
     std::vector<int> m_cells;
     // For each cell its associated faces. There will be nd of these.
     std::map<int, std::vector<int>> m_faces_of_cells;

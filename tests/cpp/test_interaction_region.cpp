@@ -51,7 +51,10 @@ void validate_region(const InteractionRegion& interaction_region,
                      const std::map<int, std::vector<int>>& expected_faces_of_cells,
                      const std::vector<std::vector<int>>& expected_main_cells_of_faces)
 {
-    std::vector<int> actual_faces = interaction_region.faces();
+    // Extract face indices from the map
+    std::vector<int> actual_faces;
+    for (const auto& kv : interaction_region.faces()) actual_faces.push_back(kv.first);
+
     std::vector<int> actual_cells = interaction_region.cells();
     std::map<int, std::vector<int>> actual_faces_of_cells = interaction_region.faces_of_cells();
     std::vector<int> actual_main_cells_of_faces = interaction_region.main_cell_of_faces();

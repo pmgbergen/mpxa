@@ -70,20 +70,26 @@ std::vector<std::vector<double>> BasisConstructor::compute_basis_functions(
 
 // region InteractionRegion
 
-InteractionRegion::InteractionRegion(const int node, const int dim, Grid& grid)
+InteractionRegion::InteractionRegion(const int node, const int dim, const Grid& grid)
     : m_node(node), m_dim(dim), m_faces(), m_cells(), m_faces_of_cells(), m_main_cell_of_faces()
 {
     // Initialize the interaction region based on the node and the grid.
-    m_faces = std::vector<int>(grid.faces_of_node(node));
+    auto face_indices = grid.faces_of_node(node);
+
+    // Fill m_faces as a map from face index to running index
+    for (size_t i = 0; i < face_indices.size(); ++i)
+    {
+        m_faces[face_indices[i]] = static_cast<int>(i);
+    }
 
     m_cells = std::vector<int>();
-    m_main_cell_of_faces = std::vector<int>(m_faces.size(), -1);
+    m_main_cell_of_faces = std::vector<int>(face_indices.size(), -1);
 
     m_faces_of_cells = std::map<int, std::vector<int>>();
 
-    for (size_t i = 0; i < m_faces.size(); ++i)
+    for (size_t i = 0; i < face_indices.size(); ++i)
     {
-        const int face = m_faces[i];
+        const int face = face_indices[i];
         // Get the cells associated with the face.
         auto cells_of_face = grid.cells_of_face(face);
         // Associate the first cell with the face for the flux computation. There will
