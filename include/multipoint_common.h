@@ -25,7 +25,7 @@ class BasisConstructor
     // Function to compute the basis functions and their gradients. The signature is
     // highly uncertain.
     std::vector<std::vector<double>> compute_basis_functions(
-        const std::vector<std::array<double, 3>>& coords);
+        const std::vector<std::vector<double>>& coords);
 
    private:
     // Dimension of the problem
@@ -43,7 +43,7 @@ class InteractionRegion
 {
    public:
     // Constructor
-    InteractionRegion(const int node, const int dim, Grid& grid);
+    InteractionRegion(const int node, const int dim, const Grid& grid);
 
     // Destructor
     ~InteractionRegion() = default;

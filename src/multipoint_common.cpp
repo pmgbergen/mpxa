@@ -21,7 +21,7 @@ BasisConstructor::BasisConstructor(const int dim)
 }
 
 std::vector<std::vector<double>> BasisConstructor::compute_basis_functions(
-    const std::vector<std::array<double, 3>>& coords)
+    const std::vector<std::vector<double>>& coords)
 {
     // Compute the basis functions and their gradients. The implementation is highly
     // uncertain and will depend on the specific problem.
