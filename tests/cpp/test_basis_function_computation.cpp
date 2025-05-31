@@ -19,7 +19,7 @@ TEST_F(BasisFunctionComputationTest, ComputeBasisFunctions_2D)
     basis_constructor = new BasisConstructor(dim);
 
     // For the 2D test, we ust need the first three coordinates
-    std::vector<std::array<double, 3>> coords_2d = {
+    std::vector<std::vector<double>> coords_2d = {
         {0.0, 0.0, 0.0}, {2.0, 0.0, 0.0}, {1.0, 3.0, 0.0}};
 
     std::vector<std::vector<double>> basis_functions =
@@ -53,7 +53,7 @@ TEST_F(BasisFunctionComputationTest, ComputeBasisFunctions_3D)
     basis_constructor = new BasisConstructor(dim);
 
     // For the 2D test, we ust need the first three coordinates
-    std::vector<std::array<double, 3>> coords_3d = {
+    std::vector<std::vector<double>> coords_3d = {
         {0.0, 0.0, 0.0}, {2.0, 0.0, 1.0}, {1.0, 3.0, 0.0}, {1.0, 1.0, 2.0}};
 
     std::vector<std::vector<double>> basis_functions =
