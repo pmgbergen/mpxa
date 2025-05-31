@@ -120,11 +120,15 @@ std::vector<double> nKgrad(const std::vector<double>& nK,
 ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                           const std::map<int, BoundaryCondition>& bc_map)
 {
+    // Data structures for the discretization process.
     std::vector<std::vector<double>> continuty_points;
-
     std::vector<std::vector<double>> basis_functions;
-
     BasisConstructor basis_constructor(grid.dim());
+
+    // Data structures for the computed stencils.
+    std::vector<std::vector<double>> flux_matrix_values;
+    std::vector<std::vector<int>> flux_matrix_row_idx;
+    std::vector<std::vector<int>> flux_matrix_col_idx;
 
     const int DIM = grid.dim();
 
@@ -202,7 +206,18 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     }
                 }
             }
-        }  // Cells of the interaction region. Next step is to invert the face balance matrix and
-           // get the fluxes.
+        }  // End iteration of cells of the interaction region.
+
+        // Compute the inverse of balance_faces matrix.
+        MatrixXd balance_faces_inv = balance_faces.inverse();
+        MatrixXd flux = flux_faces * balance_faces_inv * balance_cells + flux_cells;
+        // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
+        for (int i = 0; i < num_faces; ++i)
+        {
+            std::vector<double> row(flux.row(i).data(), flux.row(i).data() + flux.cols());
+            flux_matrix_values.push_back(row);
+            flux_matrix_row_idx.push_back({i});
+            flux_matrix_col_idx.push_back(interaction_region.cells());
+        }
     }
 }
