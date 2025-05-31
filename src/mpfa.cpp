@@ -81,9 +81,9 @@ std::vector<std::vector<double>> face_centers_of_interaction_region(
     const InteractionRegion& interaction_region, const Grid& grid)
 {
     std::vector<std::vector<double>> centers;
-    for (const int face_ind : interaction_region.faces())
+    for (const auto& pair : interaction_region.faces())
     {
-        centers.push_back(grid.face_center(face_ind));
+        centers.push_back(grid.face_center(pair.first));
     }
     return centers;
 }
@@ -93,9 +93,9 @@ std::vector<std::vector<double>> face_normals_of_interaction_region(
     const InteractionRegion& interaction_region, const Grid& grid)
 {
     std::vector<std::vector<double>> normals;
-    for (const int face_ind : interaction_region.faces())
+    for (const auto& pair : interaction_region.faces())
     {
-        normals.push_back(grid.face_normal(face_ind));
+        normals.push_back(grid.face_normal(pair.first));
     }
     return normals;
 }
@@ -127,24 +127,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     BasisConstructor basis_constructor(grid.dim());
 
     const int DIM = grid.dim();
-    // Preallocate the continuity points based on the grid dimension.
-    if (DIM == 2)
-    {
-        continuty_points = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
-    }
-    else if (DIM == 3)
-    {
-        continuty_points = {{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}};
-    }
-    else
-    {
-        throw std::runtime_error("Unsupported grid dimension");
-    }
 
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
         // Get the interaction region for the node.
-        InteractionRegion interaction_region(node_ind, 1, &grid);
+        InteractionRegion interaction_region(node_ind, 1, grid);
 
         const int num_faces = interaction_region.faces().size();
         const int num_cells = interaction_region.cells().size();
@@ -181,7 +168,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             }
             basis_functions = basis_constructor.compute_basis_functions(continuty_points);
 
-            int face_counter = 0;
             for (const int face_ind : interaction_region.faces_of_cells().at(cell_ind))
             {
                 const int local_face_index = interaction_region.faces().at(face_ind);
