@@ -2,6 +2,7 @@
 #include <array>
 #include <iostream>
 #include <map>
+#include <numeric>
 #include <vector>
 
 #include "../include/discr.h"
@@ -127,10 +128,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     // Data structures for the computed stencils.
     std::vector<std::vector<double>> flux_matrix_values;
-    std::vector<std::vector<int>> flux_matrix_row_idx;
+    std::vector<int> flux_matrix_row_idx;
     std::vector<std::vector<int>> flux_matrix_col_idx;
 
     const int DIM = grid.dim();
+    int tot_num_transmissibilities = 0;
 
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
@@ -216,8 +218,50 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         {
             std::vector<double> row(flux.row(i).data(), flux.row(i).data() + flux.cols());
             flux_matrix_values.push_back(row);
-            flux_matrix_row_idx.push_back({i});
+            flux_matrix_row_idx.push_back(interaction_region.faces().at(i));
             flux_matrix_col_idx.push_back(interaction_region.cells());
         }
+        tot_num_transmissibilities += num_faces * num_cells;
+    }  // End iteration of nodes in the grid.
+    // Create the global flux storage. First find the indices that can be used to sort
+    // flux_matrix_row_idx
+    std::vector<int> sorted_indices(flux_matrix_row_idx.size());
+    std::iota(sorted_indices.begin(), sorted_indices.end(), 0);  // Fill with 0, 1, 2, ...
+    std::sort(sorted_indices.begin(), sorted_indices.end(), [&flux_matrix_row_idx](int i1, int i2)
+              { return flux_matrix_row_idx[i1] < flux_matrix_row_idx[i2]; });
+
+    std::vector<int> row_ptr(grid.num_faces() + 1, 0);
+    std::vector<int> col_idx;
+    std::vector<double> flux_values;
+    col_idx.reserve(tot_num_transmissibilities);
+    flux_values.reserve(tot_num_transmissibilities);
+
+    int previous_row = -1;
+
+    for (const int index : sorted_indices)
+    {
+        // If the row index has changed, we need to update the row_ptr.
+        if (flux_matrix_row_idx[index] != previous_row)
+        {
+            // If we have a new row, we need to update the row_ptr.
+            row_ptr.push_back(col_idx.size());
+            previous_row = flux_matrix_row_idx[index];
+        }
+        // Fill the col_idx and flux_values vectors based on the sorted indices.
+        col_idx.insert(col_idx.end(), flux_matrix_col_idx[index].begin(),
+                       flux_matrix_col_idx[index].end());
+        flux_values.insert(flux_values.end(), flux_matrix_values[index].begin(),
+                           flux_matrix_values[index].end());
     }
+
+    // Add the last row pointer.
+    row_ptr.push_back(col_idx.size());
+    // Create the compressed data storage for the flux.
+    auto flux_storage = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_cells(), row_ptr, col_idx, flux_values);
+    // Create the scalar discretization object and return it.
+    ScalarDiscretization discretization;
+    discretization.flux = flux_storage;
+
+    return discretization;
 }
