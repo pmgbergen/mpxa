@@ -26,4 +26,7 @@ struct ScalarDiscretization
 ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
                           const std::map<int, BoundaryCondition>& bc_map);
 
+ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
+                          const std::map<int, BoundaryCondition>& bc_map);
+
 #endif  // FV_DISCR_H
