@@ -121,11 +121,18 @@ std::vector<double> nKgrad(const std::vector<double>& nK,
 ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                           const std::map<int, BoundaryCondition>& bc_map)
 {
-    // Data structures for the discretization process.
-    std::vector<std::vector<double>> continuty_points;
-    std::vector<std::vector<double>> basis_functions;
-    BasisConstructor basis_constructor(grid.dim());
+    constexpr int SPATIAL_DIM = 3;  // Assuming 3D for now, can be generalized later.
 
+    BasisConstructor basis_constructor(grid.dim());
+    // Data structures for the discretization process. There will be grid.dim() continuity points
+    // (outer vector).
+    std::vector<std::vector<double>> continuty_points(grid.dim() + 1,
+                                                      std::vector<double>(SPATIAL_DIM, 0.0));
+
+    std::vector<std::vector<double>> basis_functions(grid.dim() + 1,
+                                                     std::vector<double>(SPATIAL_DIM, 0.0));
+
+    std::cerr << "Grid dimension: " << grid.dim() << "\n";
     // Data structures for the computed stencils.
     std::vector<std::vector<double>> flux_matrix_values;
     std::vector<int> flux_matrix_row_idx;
@@ -136,6 +143,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
+        std::cerr << "Processing node " << node_ind << " of " << grid.num_nodes() << "\n";
         // Get the interaction region for the node.
         InteractionRegion interaction_region(node_ind, 1, grid);
 
@@ -161,64 +169,109 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
         {
             continuty_points[0] = loc_cell_centers[loc_cell_ind];
-            const int cell_ind = interaction_region.cells().at(loc_cell_ind);
+            std::cerr << "Gathering face data for cell " << loc_cell_ind << "\n";
+            const int cell_ind = interaction_region.cells()[loc_cell_ind];
 
             int face_counter = 1;
             for (const int face_ind : interaction_region.faces_of_cells().at(cell_ind))
             {
+                // std::cerr << "Processing face " << face_ind << " of cell " << cell_ind << "\n";
                 // Get the face normal and center.
                 const int local_face_index = interaction_region.faces().at(face_ind);
+                // std::cerr << "Local face index: " << local_face_index << "\n";
+
+                // std::cerr << "Local face center: " << loc_face_centers[local_face_index][0] << ",
+                // "
+                //           << loc_face_centers[local_face_index][1] << ", "
+                //           << loc_face_centers[local_face_index][2] << "\n";
+
+                // std::cerr << "Size of continuty points: " << continuty_points.size() << "\n";
+
+                // std::cerr << "Continuity point for face " << face_counter << ": "
+                //           << continuty_points[face_counter][0] << ", "
+                //           << continuty_points[face_counter][1] << ", "
+                //           << continuty_points[face_counter][2] << "\n";
 
                 continuty_points[face_counter] = loc_face_centers[local_face_index];
                 ++face_counter;
             }
+            // std::cerr << "Face data gathered for cell " << cell_ind << "\n";
             basis_functions = basis_constructor.compute_basis_functions(continuty_points);
+            std::cerr << "Basis functions computed\n";
 
             for (const int face_ind : interaction_region.faces_of_cells().at(cell_ind))
             {
                 const int local_face_index = interaction_region.faces().at(face_ind);
+                std::cout << "Remember to divide by the number of nodes of the face.\n";
                 std::vector<double> flux_expr =
                     nK(loc_face_normals[local_face_index], tensor, cell_ind);
 
                 // Here we need a map to the local flux index to get the right storage in the
                 // matrices.
                 const int sign = grid.sign_of_face_cell(face_ind, cell_ind);
+                std::cerr << "nK computed for face " << local_face_index << " with sign " << sign
+                          << "\n";
 
                 std::vector<double> vals = nKgrad(flux_expr, basis_functions);
 
-                balance_cells(local_face_index, cell_ind) = sign * vals[0];
+                std::cerr << "nKgrad computed, setting matrix values\n";
+
+                balance_cells(local_face_index, loc_cell_ind) = sign * vals[0];
+
+                std::cerr << "Value for balance_cells at (" << local_face_index << ", "
+                          << loc_cell_ind << ") set to " << sign * vals[0] << "\n";
 
                 for (int i = 1; i < DIM + 1; ++i)
                 {
-                    balance_cells(local_face_index,
-                                  interaction_region.faces_of_cells().at(loc_cell_ind)[i - 1]) =
-                        sign * vals[i];
+                    const int face_index_secondary =
+                        interaction_region.faces_of_cells().at(cell_ind)[i - 1];
+                    const int face_index_secondary_local =
+                        interaction_region.faces().at(face_index_secondary);
+
+                    balance_faces(local_face_index, face_index_secondary_local) = sign * vals[i];
                 }
 
                 if (cell_ind == interaction_region.main_cell_of_faces().at(local_face_index))
                 {
                     // If this is the main cell for the face, we store the flux in the
                     // balance_faces matrix.
-                    balance_faces(local_face_index, local_face_index) = sign * vals[0];
+                    flux_cells(local_face_index, loc_cell_ind) = sign * vals[0];
                     for (int i = 1; i < DIM + 1; ++i)
                     {
-                        balance_cells(local_face_index,
-                                      interaction_region.faces_of_cells().at(loc_cell_ind)[i - 1]) =
-                            sign * vals[i];
+                        const int face_index_secondary =
+                            interaction_region.faces_of_cells().at(cell_ind)[i - 1];
+                        const int face_index_secondary_local =
+                            interaction_region.faces().at(face_index_secondary);
+
+                        flux_faces(local_face_index, face_index_secondary_local) = sign * vals[i];
                     }
                 }
             }
         }  // End iteration of cells of the interaction region.
 
+        std::cerr << "Balance matrices computed for interaction region\n";
+        std::cerr << "Balance cells matrix:\n" << balance_cells << "\n";
+        std::cerr << "Balance faces matrix:\n" << balance_faces << "\n";
+
+        std::cerr << "Flux matrix for cells:\n" << flux_cells << "\n";
+        std::cerr << "Flux matrix for faces:\n" << flux_faces << "\n";
+
         // Compute the inverse of balance_faces matrix.
         MatrixXd balance_faces_inv = balance_faces.inverse();
+        std::cerr << "Balance faces matrix inverted\n";
+        std::cerr << "Balance faces inverse matrix:\n" << balance_faces_inv << "\n";
         MatrixXd flux = flux_faces * balance_faces_inv * balance_cells + flux_cells;
+
+        std::cerr << "Flux matrix computed for interaction region\n";
+        std::cerr << "Flux matrix:\n" << flux << "\n";
+
         // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
-        for (int i = 0; i < num_faces; ++i)
+        for (const auto i : interaction_region.faces())
         {
-            std::vector<double> row(flux.row(i).data(), flux.row(i).data() + flux.cols());
+            std::vector<double> row(flux.row(i.second).data(),
+                                    flux.row(i.second).data() + flux.cols());
             flux_matrix_values.push_back(row);
-            flux_matrix_row_idx.push_back(interaction_region.faces().at(i));
+            flux_matrix_row_idx.push_back(i.first);
             flux_matrix_col_idx.push_back(interaction_region.cells());
         }
         tot_num_transmissibilities += num_faces * num_cells;
@@ -226,11 +279,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     // Create the global flux storage. First find the indices that can be used to sort
     // flux_matrix_row_idx
     std::vector<int> sorted_indices(flux_matrix_row_idx.size());
-    std::iota(sorted_indices.begin(), sorted_indices.end(), 0);  // Fill with 0, 1, 2, ...
+    std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
     std::sort(sorted_indices.begin(), sorted_indices.end(), [&flux_matrix_row_idx](int i1, int i2)
               { return flux_matrix_row_idx[i1] < flux_matrix_row_idx[i2]; });
 
-    std::vector<int> row_ptr(grid.num_faces() + 1, 0);
+    std::vector<int> row_ptr;
     std::vector<int> col_idx;
     std::vector<double> flux_values;
     col_idx.reserve(tot_num_transmissibilities);
@@ -238,24 +291,31 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     int previous_row = -1;
 
+    std::map<int, double> flux_matrix_values_map;
+
     for (const int index : sorted_indices)
     {
         // If the row index has changed, we need to update the row_ptr.
         if (flux_matrix_row_idx[index] != previous_row)
         {
             // If we have a new row, we need to update the row_ptr.
-            row_ptr.push_back(col_idx.size());
+            row_ptr.push_back(flux_matrix_values_map.size());
             previous_row = flux_matrix_row_idx[index];
         }
-        // Fill the col_idx and flux_values vectors based on the sorted indices.
-        col_idx.insert(col_idx.end(), flux_matrix_col_idx[index].begin(),
-                       flux_matrix_col_idx[index].end());
-        flux_values.insert(flux_values.end(), flux_matrix_values[index].begin(),
-                           flux_matrix_values[index].end());
+        for (const double col_index : flux_matrix_col_idx[index])
+        {
+            // Store the flux values in a map to avoid duplicates.
+            flux_matrix_values_map[col_index] += flux_matrix_values[index][col_index];
+        }
     }
-
+    for (const auto& pair : flux_matrix_values_map)
+    {
+        col_idx.push_back(pair.first);
+        flux_values.push_back(pair.second);
+    }
     // Add the last row pointer.
     row_ptr.push_back(col_idx.size());
+
     // Create the compressed data storage for the flux.
     auto flux_storage = std::make_shared<CompressedDataStorage<double>>(
         grid.num_faces(), grid.num_cells(), row_ptr, col_idx, flux_values);
