@@ -13,11 +13,8 @@ class TPFA : public ::testing::Test
     ScalarDiscretization discr;
     std::map<int, BoundaryCondition> bc_map;
 
-    // EK note to self: We can use the default constructor for the grid and discr.
-    // However, the tensor contains unique_ptrs, and cannot be copied without a move
-    // constructor, which is not implemented. Hence it is easier to define the tensor in
-    // full in the constructor of the test fixture.
-    TPFA() : grid(nullptr), tensor(2, 4, {1.0, 2.0, 3.0, 4.0}), discr(), bc_map() {}
+    // Constructor. Create a dummy tensor and empty discretization.
+    TPFA() : grid(nullptr), tensor(2, 1, {1.0}), discr(), bc_map() {}
 
     void SetUp() override
     {
@@ -26,6 +23,8 @@ class TPFA : public ::testing::Test
         std::vector<double> lengths = {1.0, 2.0};
         grid = Grid::create_cartesian_grid(2, num_cells, lengths);
         grid->compute_geometry();
+
+        tensor = SecondOrderTensor(2, 4, {1.0, 2.0, 3.0, 4.0});
 
         // Set Dirichlet conditions on the left and right boundaries, face indices {0,
         // 2, 3, 5}.

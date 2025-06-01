@@ -34,8 +34,8 @@ class SecondOrderTensor
         int cell) const;  // returns size 6: [xx, yy, zz, xy, xz, yz], zero-padded for 2D
 
    private:
-    const int m_dim;
-    const int m_num_cells;
+    int m_dim;
+    int m_num_cells;
 
     bool m_is_isotropic;
     bool m_is_diagonal;
@@ -47,9 +47,6 @@ class SecondOrderTensor
     std::vector<double> m_k_xz;
     std::vector<double> m_k_yz;
     std::vector<double> m_zeros;
-
-    mutable std::vector<const double*> m_diagonal_data;
-    mutable std::vector<const double*> m_full_data;
 };
 
 #endif  // TENSOR_H
