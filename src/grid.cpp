@@ -80,6 +80,11 @@ const int Grid::sign_of_face_cell(const int face, const int cell) const
     return m_cell_faces->value(face, cell);
 }
 
+const int Grid::num_nodes_of_face(const int face) const
+{
+    return m_face_nodes->rows_in_col(face).size();
+}
+
 // Getters for geometric data
 const std::vector<std::vector<double>>& Grid::nodes() const
 {

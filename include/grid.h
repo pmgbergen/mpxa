@@ -38,6 +38,7 @@ class Grid
     const std::vector<int> cells_of_face(const int face) const;
     const std::vector<int> faces_of_cell(const int cell) const;
     const int sign_of_face_cell(const int face, const int cell) const;
+    const int num_nodes_of_face(const int face) const;
 
     // Getters for geometric data
     const std::vector<std::vector<double>>& nodes() const;
