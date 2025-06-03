@@ -14,19 +14,22 @@ namespace
 {
 
 const std::vector<double> nK(const std::vector<double>& face_normal,
-                             const SecondOrderTensor& tensor, const int cell_ind)
+                             const SecondOrderTensor& tensor, const int cell_ind,
+                             const int num_nodes_of_face)
 {
     // Compute the product between the normal vector, the tensor, and the cell-face
     // vector.
 
     const int dim = face_normal.size();
     std::vector<double> result(dim, 0.0);
+    // Compute inverse ratio to limit the number of divisions.
+    const double num_nodes_of_face_inv = 1.0 / num_nodes_of_face;
 
     if (tensor.is_isotropic())
     {
         for (int i{0}; i < dim; ++i)
         {
-            result[i] = -face_normal[i] * tensor.isotropic_data(cell_ind);
+            result[i] = -face_normal[i] * tensor.isotropic_data(cell_ind) * num_nodes_of_face_inv;
         }
     }
     else if (tensor.is_diagonal())
@@ -34,7 +37,7 @@ const std::vector<double> nK(const std::vector<double>& face_normal,
         std::vector<double> diag = tensor.diagonal_data(cell_ind);
         for (int i{0}; i < dim; ++i)
         {
-            result[i] = -face_normal[i] * diag[i];
+            result[i] = -face_normal[i] * diag[i] * num_nodes_of_face_inv;
         }
     }
     else
@@ -58,7 +61,7 @@ const std::vector<double> nK(const std::vector<double>& face_normal,
                 else if (i == 1 && j == 2 || i == 2 && j == 1)
                     tensor_val = full_data[5];
                 // TODO: Check i and j indices for correctness.
-                result[i] -= face_normal[j] * tensor_val;
+                result[i] -= face_normal[j] * tensor_val * num_nodes_of_face_inv;
             }
         }
     }
@@ -116,6 +119,18 @@ std::vector<double> nKgrad(const std::vector<double>& nK,
     return grad;
 }
 
+std::map<int, int> count_nodes_of_faces(const InteractionRegion& interaction_region,
+                                        const Grid& grid)
+{
+    // Count the number of nodes for each face in the interaction region.
+    std::map<int, int> num_nodes_of_face;
+    for (const auto& face : interaction_region.faces())
+    {
+        num_nodes_of_face[face.first] = grid.num_nodes_of_face(face.first);
+    }
+    return num_nodes_of_face;
+}
+
 }  // namespace
 
 ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
@@ -165,6 +180,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         std::vector<std::vector<double>> loc_face_normals =
             face_normals_of_interaction_region(interaction_region, grid);
 
+        std::map<int, int> num_nodes_of_face = count_nodes_of_faces(interaction_region, grid);
+
         // Iterate over the faces in the interaction region.
         for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
         {
@@ -202,9 +219,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             for (const int face_ind : interaction_region.faces_of_cells().at(cell_ind))
             {
                 const int local_face_index = interaction_region.faces().at(face_ind);
-                std::cout << "Remember to divide by the number of nodes of the face.\n";
-                std::vector<double> flux_expr =
-                    nK(loc_face_normals[local_face_index], tensor, cell_ind);
+                std::vector<double> flux_expr = nK(loc_face_normals[local_face_index], tensor,
+                                                   cell_ind, num_nodes_of_face.at(face_ind));
 
                 // Here we need a map to the local flux index to get the right storage in the
                 // matrices.
