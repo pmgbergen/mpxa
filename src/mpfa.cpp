@@ -228,7 +228,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     const int face_index_secondary_local =
                         interaction_region.faces().at(face_index_secondary);
 
-                    balance_faces(local_face_index, face_index_secondary_local) = sign * vals[i];
+                    balance_faces(local_face_index, face_index_secondary_local) -= sign * vals[i];
                 }
 
                 if (cell_ind == interaction_region.main_cell_of_faces().at(local_face_index))
