@@ -151,11 +151,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         const int num_cells = interaction_region.cells().size();
 
         // Initialize matrices for the discretization.
-        MatrixXd balance_cells(num_faces, num_cells);
-        MatrixXd balance_faces(num_faces, num_faces);
+        MatrixXd balance_cells = MatrixXd::Zero(num_faces, num_cells);
+        MatrixXd balance_faces = MatrixXd::Zero(num_faces, num_faces);
 
-        MatrixXd flux_cells(num_faces, num_cells);
-        MatrixXd flux_faces(num_faces, num_faces);
+        MatrixXd flux_cells = MatrixXd::Zero(num_faces, num_cells);
+        MatrixXd flux_faces = MatrixXd::Zero(num_faces, num_faces);
 
         // TODO: Should we use vectors for the inner quantities?
         std::vector<std::vector<double>> loc_cell_centers =
