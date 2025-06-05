@@ -111,7 +111,7 @@ std::vector<double> nKgrad(const std::vector<double>& nK,
     std::vector<double> grad(basis_functions.size(), 0.0);
     for (size_t i = 0; i < basis_functions.size(); ++i)
     {
-        for (size_t j = 0; j < basis_functions.size(); ++j)
+        for (size_t j = 0; j < basis_functions[i].size(); ++j)
         {
             grad[i] += nK[j] * basis_functions[i][j];
         }
