@@ -274,9 +274,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         // Compute the inverse of balance_faces matrix.
         MatrixXd balance_faces_inv = balance_faces.inverse();
-        std::cerr << "Balance faces matrix inverted\n";
-        std::cerr << "Balance faces inverse matrix:\n" << balance_faces_inv << "\n";
-        MatrixXd flux = flux_faces * balance_faces_inv * balance_cells + flux_cells;
+        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> flux;
+        flux = flux_faces * balance_faces_inv * balance_cells + flux_cells;
 
         std::cerr << "Flux matrix computed for interaction region\n";
         std::cerr << "Flux matrix:\n" << flux << "\n";
