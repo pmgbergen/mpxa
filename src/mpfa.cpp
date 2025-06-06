@@ -325,30 +325,29 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             // If we have a new row, we need to update the row_ptr.
             row_ptr.push_back(flux_values.size());
             previous_row = flux_matrix_row_idx[index];
-
-            int counter = 0;
-            for (const double col_index : flux_matrix_col_idx[index])
-            {
-                // Store the flux values in a map to avoid duplicates.
-                flux_matrix_values_map[col_index] += flux_matrix_values[index][counter];
-                ++counter;
-            }
         }
-        for (const auto& pair : flux_matrix_values_map)
+
+        int counter = 0;
+        for (const double col_index : flux_matrix_col_idx[index])
         {
-            col_idx.push_back(pair.first);
-            flux_values.push_back(pair.second);
+            // Store the flux values in a map to avoid duplicates.
+            flux_matrix_values_map[col_index] += flux_matrix_values[index][counter];
+            ++counter;
         }
-        // Add the last row pointer.
-        row_ptr.push_back(col_idx.size());
-
-        // Create the compressed data storage for the flux.
-        auto flux_storage = std::make_shared<CompressedDataStorage<double>>(
-            grid.num_faces(), grid.num_cells(), row_ptr, col_idx, flux_values);
-        // Create the scalar discretization object and return it.
-        ScalarDiscretization discretization;
-        discretization.flux = flux_storage;
-
-        return discretization;
     }
+    for (const auto& pair : flux_matrix_values_map)
+    {
+        col_idx.push_back(pair.first);
+        flux_values.push_back(pair.second);
+    }
+    // Add the last row pointer.
+    row_ptr.push_back(col_idx.size());
+
+    // Create the compressed data storage for the flux.
+    auto flux_storage = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_cells(), row_ptr, col_idx, flux_values);
+    // Create the scalar discretization object and return it.
+    ScalarDiscretization discretization;
+    discretization.flux = flux_storage;
+    return discretization;
 }
