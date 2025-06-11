@@ -11,25 +11,20 @@ class MPFA : public ::testing::Test
 {
    protected:
     std::unique_ptr<Grid> grid_2d;
-    SecondOrderTensor tensor_2d;
     ScalarDiscretization discr_2d;
     std::map<int, BoundaryCondition> bc_map_2d;
 
     // Constructor. Create a dummy tensor and empty discretization.
-    MPFA() : grid_2d(nullptr), tensor_2d(2, 1, {1.0}), discr_2d(), bc_map_2d() {}
+    MPFA() : grid_2d(nullptr), discr_2d(), bc_map_2d() {}
 
     void SetUp() override
     {
         // Create a simple grid. Let it be 3x3
         std::vector<int> num_cells = {3, 3};
-        std::vector<double> lengths = {3.0, 3.0};
+        std::vector<double> lengths = {3.0, 6.0};
         grid_2d = Grid::create_cartesian_grid(2, num_cells, lengths);
         grid_2d->compute_geometry();
 
-        std::vector<double> k_xx(grid_2d->num_cells());
-        std::iota(k_xx.begin(), k_xx.end(), 1.0);  // Fill with 1.0, 2.0, ..., num_cells
-
-        tensor_2d = SecondOrderTensor(2, 9, k_xx);
         // Set the tensor to be isotropic.
 
         // Set Dirichlet conditions on the left and right boundaries, face indices {0,
@@ -48,29 +43,122 @@ class MPFA : public ::testing::Test
         bc_map_2d[21] = BoundaryCondition::Neumann;
         bc_map_2d[22] = BoundaryCondition::Neumann;
         bc_map_2d[23] = BoundaryCondition::Neumann;
-
-        // Compute the discretization
-        discr_2d = mpfa(*grid_2d, tensor_2d, bc_map_2d);
     }
 };
 
+void test_flux_values(const ScalarDiscretization& discr, int face_ind,
+                      const std::vector<int>& cell_indices, const std::vector<double>& values)
+{
+    for (size_t i = 0; i < cell_indices.size(); ++i)
+    {
+        // Check the flux values for the internal faces.
+        EXPECT_NEAR(discr.flux->value(face_ind, cell_indices[i]), values[i], 1e-6);
+    }
+}
+
 TEST_F(MPFA, FluxValuesInternalFace2dIsotropic)
 {
+    // Set tensor, construct discretization.
+    std::vector<double> k_xx(grid_2d->num_cells());
+    std::iota(k_xx.begin(), k_xx.end(), 1.0);  // Fill with 1.0, 2.0, ..., num_cells
+
+    SecondOrderTensor K = SecondOrderTensor(2, 9, k_xx);
+    // Compute the discretization
+    discr_2d = mpfa(*grid_2d, K, bc_map_2d);
+
     // Distance between the cell centers in the two directions.
     const double dx = 1.0;
-    const double dy = 1.0;
+    const double dy = 2.0;
 
     const double t_5 = dy / (0.5 * dx / 4.0 + 0.5 * dx / 5.0);
+    const std::vector<int> cell_indices_face_5 = {0, 1, 3, 4, 6, 7};
+    const std::vector<double> values_face_5 = {0.0, 0.0, t_5, -t_5, 0.0, 0.0};
+    test_flux_values(discr_2d, 5, cell_indices_face_5, values_face_5);
 
-    const int face_ind = 5;  // Internal face index for the test.
-    const std::vector<int> cell_indices = {0, 1, 3, 4, 6, 7};
-    const std::vector<double> values = {0.0, 0.0, t_5, -t_5, 0.0, 0.0};
+    const double t_16 = dx / (0.5 * dy / 2.0 + 0.5 * dy / 5.0);
+    const std::vector<int> cell_indices_face_16 = {0, 1, 2, 3, 4, 5};
+    const std::vector<double> values_face_16 = {0.0, t_16, 0.0, 0.0, -t_16, 0.0};
+    test_flux_values(discr_2d, 16, cell_indices_face_16, values_face_16);
+}
 
-    std::cout << "Checking flux values for internal face " << face_ind << "\n";
+TEST_F(MPFA, FluxValuesInternalFace2dAnisotropic)
+{
+    std::vector<double> k_xx(grid_2d->num_cells());
+    std::iota(k_xx.begin(), k_xx.end(), 1.0);             // Fill with 1.0, 2.0, ..., num_cells
+    std::vector<double> k_yy(grid_2d->num_cells(), 0.0);  // Anisotropic tensor
+    for (size_t i = 0; i < k_yy.size(); ++i)
+    {
+        k_yy[i] = 2.0 * (i + 1);
+    }
+    SecondOrderTensor K = SecondOrderTensor(2, 9, k_xx);
+    K = K.with_kyy(k_yy);  // Set the y-component of the tensor
 
-    // for (size_t i = 0; i < cell_indices.size(); ++i)
-    // {
-    //     // Check the flux values for the internal faces.
-    //     EXPECT_NEAR(discr_2d.flux->value(face_ind, cell_indices[i]), values[i], 1e-6);
-    // }
+    // Compute the discretization
+    discr_2d = mpfa(*grid_2d, K, bc_map_2d);
+    // Distance between the cell centers in the two directions.
+    const double dx = 1.0;
+    const double dy = 2.0;
+
+    const double t_5 = dy / (0.5 * dx / 4.0 + 0.5 * dx / 5.0);
+    const std::vector<int> cell_indices_face_5 = {0, 1, 3, 4, 6, 7};
+    const std::vector<double> values_face_5 = {0.0, 0.0, t_5, -t_5, 0.0, 0.0};
+    test_flux_values(discr_2d, 5, cell_indices_face_5, values_face_5);
+
+    const double t_16 = dx / (0.5 * dy / 4.0 + 0.5 * dy / 10.0);
+    const std::vector<int> cell_indices_face_16 = {0, 1, 2, 3, 4, 5};
+    const std::vector<double> values_face_16 = {0.0, t_16, 0.0, 0.0, -t_16, 0.0};
+    test_flux_values(discr_2d, 16, cell_indices_face_16, values_face_16);
+}
+
+TEST_F(MPFA, FluxValuesInternalFace2dFullTensor)
+{
+    const double k_xx_value = 2.0;
+    const double k_yy_value = 3.0;
+    const double k_xy_value = 0.5;
+
+    std::vector<double> k_xx(grid_2d->num_cells());
+    std::fill(k_xx.begin(), k_xx.end(), k_xx_value);
+    std::vector<double> k_yy(grid_2d->num_cells(), 0.0);
+    std::fill(k_yy.begin(), k_yy.end(), k_yy_value);
+    std::vector<double> k_xy(grid_2d->num_cells(), 0.0);
+    std::fill(k_xy.begin(), k_xy.end(), k_xy_value);
+
+    SecondOrderTensor K = SecondOrderTensor(2, 9, k_xx);
+    K = K.with_kyy(k_yy);  // Set the y-component of the tensor
+    K = K.with_kxy(k_xy);  // Set the xy-component of the tensor
+
+    // Compute the discretization
+    discr_2d = mpfa(*grid_2d, K, bc_map_2d);
+    // Distance between the cell centers in the two directions.
+    const double dx = 1.0;
+    const double dy = 2.0;
+
+    // Analytical expressions for the flux values on the internal faces.
+    // Picked from Aavatsmark 2002, An introduction to multipoint flux approximation methods
+    // on quadrilateral grids.
+    // For the umtenth time, thanks your consistent the thoroughness, Ivar!
+    const double a = k_xx_value * dy * dy / (dx * dy);
+    const double b = k_yy_value * dx * dx / (dx * dy);
+    const double c = k_xy_value * dx * dy / (dx * dy);
+
+    const double t_5_0 = c / 4 * (1 + c / b);
+    const double t_5_7 = -t_5_0;
+    const double t_5_3 = a - c * c / (2 * b);
+    const double t_5_4 = -t_5_3;
+    const double t_5_6 = -c / 4 * (1 - c / b);
+    const double t_5_1 = -t_5_6;
+
+    const std::vector<int> cell_indices_face_5 = {0, 1, 3, 4, 6, 7};
+    const std::vector<double> values_face_5 = {t_5_0, t_5_1, t_5_3, t_5_4, t_5_6, t_5_7};
+    test_flux_values(discr_2d, 5, cell_indices_face_5, values_face_5);
+
+    const double t_16_0 = c / 4 * (1 + c / a);
+    const double t_16_5 = -t_16_0;
+    const double t_16_1 = b - c * c / (2 * a);
+    const double t_16_4 = -t_16_1;
+    const double t_16_2 = -c / 4 * (1 - c / a);
+    const double t_16_3 = -t_16_2;
+    const std::vector<int> cell_indices_face_16 = {0, 1, 2, 3, 4, 5};
+    const std::vector<double> values_face_16 = {t_16_0, t_16_1, t_16_2, t_16_3, t_16_4, t_16_5};
+    test_flux_values(discr_2d, 16, cell_indices_face_16, values_face_16);
 }
