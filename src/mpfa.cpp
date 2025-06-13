@@ -131,6 +131,70 @@ std::map<int, int> count_nodes_of_faces(const InteractionRegion& interaction_reg
     return num_nodes_of_face;
 }
 
+// Helper function to create a compressed sparse row (CSR) matrix from vectors.
+std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
+    const std::vector<int>& flux_matrix_row_idx,
+    const std::vector<std::vector<int>>& flux_matrix_col_idx,
+    const std::vector<std::vector<double>>& flux_matrix_values, const Grid& grid,
+    const int tot_num_transmissibilities)
+{
+    std::vector<int> sorted_indices(flux_matrix_row_idx.size());
+    std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
+    std::sort(sorted_indices.begin(), sorted_indices.end(), [&flux_matrix_row_idx](int i1, int i2)
+              { return flux_matrix_row_idx[i1] < flux_matrix_row_idx[i2]; });
+
+    std::vector<int> row_ptr;
+    std::vector<int> col_idx;
+    std::vector<double> flux_values;
+    col_idx.reserve(tot_num_transmissibilities);
+    flux_values.reserve(tot_num_transmissibilities);
+
+    int previous_row = -1;
+
+    std::map<int, double> flux_matrix_values_map;
+
+    // Loop over the sorted indices, which correspond to the subfaces.
+    for (const int index : sorted_indices)
+    {
+        // If the row index has changed, that is, we have reached a new face, we need to
+        // update the row_ptr.
+        if (flux_matrix_row_idx[index] != previous_row)
+        {
+            // We need to store the flux values for the row, and empty the map for the next
+            // row.
+            for (const auto& pair : flux_matrix_values_map)
+            {
+                col_idx.push_back(pair.first);
+                flux_values.push_back(pair.second);
+            }
+            flux_matrix_values_map.clear();
+            // If we have a new row, we need to update the row_ptr.
+            row_ptr.push_back(flux_values.size());
+            previous_row = flux_matrix_row_idx[index];
+        }
+
+        int counter = 0;
+        for (const double col_index : flux_matrix_col_idx[index])
+        {
+            // Store the flux values in a map to avoid duplicates.
+            flux_matrix_values_map[col_index] += flux_matrix_values[index][counter];
+            ++counter;
+        }
+    }
+    for (const auto& pair : flux_matrix_values_map)
+    {
+        col_idx.push_back(pair.first);
+        flux_values.push_back(pair.second);
+    }
+    // Add the last row pointer.
+    row_ptr.push_back(col_idx.size());
+
+    // Create the compressed data storage for the flux.
+    auto flux_storage = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_cells(), row_ptr, col_idx, flux_values);
+    return flux_storage;
+}
+
 }  // namespace
 
 ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
@@ -291,61 +355,14 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         }
         tot_num_transmissibilities += num_faces * num_cells;
     }  // End iteration of nodes in the grid.
-    // Create the global flux storage. First find the indices that can be used to sort
-    // flux_matrix_row_idx
-    std::vector<int> sorted_indices(flux_matrix_row_idx.size());
-    std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
-    std::sort(sorted_indices.begin(), sorted_indices.end(), [&flux_matrix_row_idx](int i1, int i2)
-              { return flux_matrix_row_idx[i1] < flux_matrix_row_idx[i2]; });
 
-    std::vector<int> row_ptr;
-    std::vector<int> col_idx;
-    std::vector<double> flux_values;
-    col_idx.reserve(tot_num_transmissibilities);
-    flux_values.reserve(tot_num_transmissibilities);
-
-    int previous_row = -1;
-
-    std::map<int, double> flux_matrix_values_map;
-
-    for (const int index : sorted_indices)
-    {
-        // If the row index has changed, that is, we have reached a new face, we need to
-        // update the row_ptr.
-        if (flux_matrix_row_idx[index] != previous_row)
-        {
-            // We need to store the flux values for the row, and empty the map for the next
-            // row.
-            for (const auto& pair : flux_matrix_values_map)
-            {
-                col_idx.push_back(pair.first);
-                flux_values.push_back(pair.second);
-            }
-            flux_matrix_values_map.clear();
-            // If we have a new row, we need to update the row_ptr.
-            row_ptr.push_back(flux_values.size());
-            previous_row = flux_matrix_row_idx[index];
-        }
-
-        int counter = 0;
-        for (const double col_index : flux_matrix_col_idx[index])
-        {
-            // Store the flux values in a map to avoid duplicates.
-            flux_matrix_values_map[col_index] += flux_matrix_values[index][counter];
-            ++counter;
-        }
-    }
-    for (const auto& pair : flux_matrix_values_map)
-    {
-        col_idx.push_back(pair.first);
-        flux_values.push_back(pair.second);
-    }
-    // Add the last row pointer.
-    row_ptr.push_back(col_idx.size());
-
-    // Create the compressed data storage for the flux.
-    auto flux_storage = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_cells(), row_ptr, col_idx, flux_values);
+    auto flux_storage = create_csr_matrix(flux_matrix_row_idx, flux_matrix_col_idx,
+                                          flux_matrix_values, grid, tot_num_transmissibilities);
+    // Create the compressed data storage for the boundary flux.
+    // auto bound_flux_storage = create_csr_matrix(bound_flux_matrix_row_idx,
+    //                                              bound_flux_matrix_col_idx,
+    //                                              bound_flux_matrix_values, grid,
+    //                                              loc_boundary_faces.size());
     // Create the scalar discretization object and return it.
     ScalarDiscretization discretization;
     discretization.flux = flux_storage;
