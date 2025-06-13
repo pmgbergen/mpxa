@@ -119,6 +119,27 @@ std::vector<double> nKgrad(const std::vector<double>& nK,
     return grad;
 }
 
+std::vector<double> p_diff(const std::vector<double>& face_center,
+                           const std::vector<double>& cell_center,
+                           const std::vector<std::vector<double>>& basis_functions)
+{
+    std::array<double, 3> dist = {0.0, 0.0, 0.0};
+    for (size_t i = 0; i < face_center.size(); ++i)
+    {
+        dist[i] = face_center[i] - cell_center[i];
+    }
+    std::vector<double> diff(basis_functions.size(), 0.0);
+    for (size_t i = 0; i < basis_functions.size(); ++i)
+    {
+        for (size_t j = 0; j < basis_functions[i].size(); ++j)
+        {
+            diff[i] += dist[j] * basis_functions[i][j];
+        }
+    }
+
+    return diff;
+}
+
 std::map<int, int> count_nodes_of_faces(const InteractionRegion& interaction_region,
                                         const Grid& grid)
 {
@@ -217,12 +238,16 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<int> flux_matrix_row_idx;
     std::vector<std::vector<int>> flux_matrix_col_idx;
 
+    // Data structures for the discretization of boundary conditions.
+    std::vector<std::vector<double>> bound_flux_matrix_values;
+    std::vector<int> bound_flux_matrix_row_idx;
+    std::vector<std::vector<int>> bound_flux_matrix_col_idx;
+
     const int DIM = grid.dim();
     int tot_num_transmissibilities = 0;
 
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
-        std::cerr << "Processing node " << node_ind << " of " << grid.num_nodes() << "\n";
         // Get the interaction region for the node.
         InteractionRegion interaction_region(node_ind, 1, grid);
 
@@ -246,12 +271,16 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         std::map<int, int> num_nodes_of_face = count_nodes_of_faces(interaction_region, grid);
 
+        std::vector<int> loc_boundary_faces;
+
         // Iterate over the faces in the interaction region.
         for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
         {
             continuty_points[0] = loc_cell_centers[loc_cell_ind];
-            std::cerr << "Gathering face data for cell " << loc_cell_ind << "\n";
             const int cell_ind = interaction_region.cells()[loc_cell_ind];
+
+            std::vector<int> loc_faces_of_cell;
+            std::vector<int> glob_faces_of_cell;
 
             int face_counter = 1;
             for (const int face_ind : interaction_region.faces_of_cells().at(cell_ind))
@@ -259,6 +288,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // std::cerr << "Processing face " << face_ind << " of cell " << cell_ind << "\n";
                 // Get the face normal and center.
                 const int local_face_index = interaction_region.faces().at(face_ind);
+                glob_faces_of_cell.push_back(face_ind);
+                loc_faces_of_cell.push_back(local_face_index);
                 // std::cerr << "Local face index: " << local_face_index << "\n";
 
                 // std::cerr << "Local face center: " << loc_face_centers[local_face_index][0] << ",
@@ -276,46 +307,85 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 continuty_points[face_counter] = loc_face_centers[local_face_index];
                 ++face_counter;
             }
-            // std::cerr << "Face data gathered for cell " << cell_ind << "\n";
             basis_functions = basis_constructor.compute_basis_functions(continuty_points);
-            std::cerr << "Basis functions computed\n";
 
-            for (const int face_ind : interaction_region.faces_of_cells().at(cell_ind))
+            for (int outer_face_counter{0}; outer_face_counter < loc_faces_of_cell.size();
+                 ++outer_face_counter)
             {
-                const int local_face_index = interaction_region.faces().at(face_ind);
+                // Global and local face indices.
+                const int face_ind = glob_faces_of_cell[outer_face_counter];
+                const int local_face_index = loc_faces_of_cell[outer_face_counter];
+
+                // Find the boundary condition for the face, if any.
+                bool is_boundary_face = false;
+                BoundaryCondition bc;
+                auto it = bc_map.find(face_ind);
+                if (it != bc_map.end())
+                {
+                    is_boundary_face = true;
+                    bc = it->second;
+                    if (bc == BoundaryCondition::Robin)
+                    {
+                        throw std::logic_error("Robin boundary condition not implemented");
+                    }
+
+                    loc_boundary_faces.push_back(local_face_index);
+                }
+
                 std::vector<double> flux_expr = nK(loc_face_normals[local_face_index], tensor,
                                                    cell_ind, num_nodes_of_face.at(face_ind));
 
                 // Here we need a map to the local flux index to get the right storage in the
                 // matrices.
                 const int sign = grid.sign_of_face_cell(face_ind, cell_ind);
-                std::cerr << "nK computed for face " << local_face_index << " with sign " << sign
-                          << "\n";
 
-                std::vector<double> vals = nKgrad(flux_expr, basis_functions);
+                // We need the nK gradient for the flux expression, independent of
+                // whether this is an internal or boundary face, and the type of
+                // boundary condition.
+                std::vector<double> flux_vals = nKgrad(flux_expr, basis_functions);
 
-                std::cerr << "nKgrad computed, setting matrix values\n";
-
-                balance_cells(local_face_index, loc_cell_ind) = sign * vals[0];
-
-                std::cerr << "Value for balance_cells at (" << local_face_index << ", "
-                          << loc_cell_ind << ") set to " << sign * vals[0] << "\n";
+                std::vector<double> dirichlet_vals;
+                if (is_boundary_face && (bc == BoundaryCondition::Dirichlet))
+                {
+                    // For Dirichlet boundary conditions, the condition imposed for the
+                    // local balance problem is one of pressure continuity.
+                    dirichlet_vals = p_diff(loc_face_centers[local_face_index],
+                                            loc_cell_centers[loc_cell_ind], basis_functions);
+                    balance_cells(local_face_index, loc_cell_ind) = sign * dirichlet_vals[0];
+                }
+                else
+                {
+                    balance_cells(local_face_index, loc_cell_ind) = sign * flux_vals[0];
+                }
 
                 for (int i = 1; i < DIM + 1; ++i)
                 {
-                    const int face_index_secondary =
-                        interaction_region.faces_of_cells().at(cell_ind)[i - 1];
-                    const int face_index_secondary_local =
-                        interaction_region.faces().at(face_index_secondary);
+                    const int face_index_secondary = glob_faces_of_cell[i - 1];
+                    const int face_index_secondary_local = loc_faces_of_cell[i - 1];
 
-                    balance_faces(local_face_index, face_index_secondary_local) -= sign * vals[i];
+                    // For the local balance problem, the condition imposed differs
+                    // between on the one hand Dirichlet faces and on the other hand
+                    // Neumann and internal faces.
+                    if (is_boundary_face && (bc == BoundaryCondition::Dirichlet))
+                    {
+                        balance_faces(local_face_index, face_index_secondary_local) +=
+                            sign * dirichlet_vals[i];
+                    }
+                    else
+                    {
+                        balance_faces(local_face_index, face_index_secondary_local) -=
+                            sign * flux_vals[i];
+                    }
                 }
 
+                // The discretization of the flux is the same for internal and
+                // boundary faces; it is the nK product times the basis function for
+                // face and cell.
                 if (cell_ind == interaction_region.main_cell_of_faces().at(local_face_index))
                 {
                     // If this is the main cell for the face, we store the flux in the
                     // balance_faces matrix.
-                    flux_cells(local_face_index, loc_cell_ind) = sign * vals[0];
+                    flux_cells(local_face_index, loc_cell_ind) = sign * flux_vals[0];
                     for (int i = 1; i < DIM + 1; ++i)
                     {
                         const int face_index_secondary =
@@ -323,26 +393,19 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                         const int face_index_secondary_local =
                             interaction_region.faces().at(face_index_secondary);
 
-                        flux_faces(local_face_index, face_index_secondary_local) = sign * vals[i];
+                        flux_faces(local_face_index, face_index_secondary_local) =
+                            sign * flux_vals[i];
                     }
                 }
             }
         }  // End iteration of cells of the interaction region.
 
-        std::cerr << "Balance matrices computed for interaction region\n";
-        std::cerr << "Balance cells matrix:\n" << balance_cells << "\n";
-        std::cerr << "Balance faces matrix:\n" << balance_faces << "\n";
-
-        std::cerr << "Flux matrix for cells:\n" << flux_cells << "\n";
-        std::cerr << "Flux matrix for faces:\n" << flux_faces << "\n";
-
         // Compute the inverse of balance_faces matrix.
         MatrixXd balance_faces_inv = balance_faces.inverse();
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> flux;
-        flux = flux_faces * balance_faces_inv * balance_cells + flux_cells;
-
-        std::cerr << "Flux matrix computed for interaction region\n";
-        std::cerr << "Flux matrix:\n" << flux << "\n";
+        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> bound_flux;
+        bound_flux = flux_faces * balance_faces_inv;
+        flux = bound_flux * balance_cells + flux_cells;
 
         // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
         for (const auto i : interaction_region.faces())
@@ -354,17 +417,28 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             flux_matrix_col_idx.push_back(interaction_region.cells());
         }
         tot_num_transmissibilities += num_faces * num_cells;
+
+        for (const auto& face : loc_boundary_faces)
+        {
+            // For the boundary faces, we need to compute the boundary flux matrix.
+            std::vector<double> row(bound_flux.row(face).data(),
+                                    bound_flux.row(face).data() + bound_flux.cols());
+            bound_flux_matrix_values.push_back(row);
+            bound_flux_matrix_row_idx.push_back(face);
+            bound_flux_matrix_col_idx.push_back(interaction_region.cells());
+        }
+
     }  // End iteration of nodes in the grid.
 
     auto flux_storage = create_csr_matrix(flux_matrix_row_idx, flux_matrix_col_idx,
                                           flux_matrix_values, grid, tot_num_transmissibilities);
     // Create the compressed data storage for the boundary flux.
-    // auto bound_flux_storage = create_csr_matrix(bound_flux_matrix_row_idx,
-    //                                              bound_flux_matrix_col_idx,
-    //                                              bound_flux_matrix_values, grid,
-    //                                              loc_boundary_faces.size());
+    auto bound_flux_storage =
+        create_csr_matrix(bound_flux_matrix_row_idx, bound_flux_matrix_col_idx,
+                          bound_flux_matrix_values, grid, bound_flux_matrix_row_idx.size());
     // Create the scalar discretization object and return it.
     ScalarDiscretization discretization;
     discretization.flux = flux_storage;
+    discretization.bound_flux = bound_flux_storage;
     return discretization;
 }
