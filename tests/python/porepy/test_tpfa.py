@@ -53,6 +53,7 @@ def _compare_matrices(m_0: mpxa.CompressedDataStorageDouble, m_1: sps.spmatrix):
         full_tensor,
     ],
 )
+@pytest.mark.parametrize("discr_type", ["tpfa", "mpfa"])
 def test_tpfa(g_pp, tensor_func):
     K_pp = tensor_func(g_pp)
     bc_pp = pp.BoundaryCondition(g_pp)
@@ -65,7 +66,10 @@ def test_tpfa(g_pp, tensor_func):
 
     key = "flow"
 
-    discr_pp = pp.Tpfa(key)
+    if discr_type == "tpfa":
+        discr_pp = pp.Tpfa(key)
+    elif discr_type == "mpfa":
+        discr_pp = pp.Mpfa(key)
 
     # Set the parameters for the discretization. Note that the ambient dimension for the
     # vector source discretization is always set to 3. This follows the C++ code, but
@@ -79,7 +83,10 @@ def test_tpfa(g_pp, tensor_func):
     }
     discr_pp.discretize(g_pp, data)
 
-    discr_cpp = mpxa.tpfa(g, K, bc)
+    if discr_type == "tpfa":
+        discr_cpp = mpxa.tpfa(g, K, bc)
+    elif discr_type == "mpfa":
+        discr_cpp = mpxa.mpfa(g, K, bc)
 
     for attribute in ["flux", "bound_flux", "vector_source"]:
         m_0 = getattr(discr_cpp, attribute)
