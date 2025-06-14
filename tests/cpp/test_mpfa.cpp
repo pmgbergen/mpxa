@@ -56,6 +56,16 @@ void test_flux_values(const ScalarDiscretization& discr, int face_ind,
     }
 }
 
+void test_bound_flux_values(const ScalarDiscretization& discr, int face_ind,
+                            const std::vector<int>& face_indices, const std::vector<double>& values)
+{
+    for (size_t i = 0; i < face_indices.size(); ++i)
+    {
+        // Check the flux values for the internal faces.
+        EXPECT_NEAR(discr.bound_flux->value(face_ind, face_indices[i]), values[i], 1e-6);
+    }
+}
+
 TEST_F(MPFA, FluxValuesInternalFace2dIsotropic)
 {
     // Set tensor, construct discretization.
@@ -70,6 +80,7 @@ TEST_F(MPFA, FluxValuesInternalFace2dIsotropic)
     const double dx = 1.0;
     const double dy = 2.0;
 
+    // Test the flux values on the internal faces 5 and 16.
     const double t_5 = dy / (0.5 * dx / 4.0 + 0.5 * dx / 5.0);
     const std::vector<int> cell_indices_face_5 = {0, 1, 3, 4, 6, 7};
     const std::vector<double> values_face_5 = {0.0, 0.0, t_5, -t_5, 0.0, 0.0};
@@ -79,6 +90,43 @@ TEST_F(MPFA, FluxValuesInternalFace2dIsotropic)
     const std::vector<int> cell_indices_face_16 = {0, 1, 2, 3, 4, 5};
     const std::vector<double> values_face_16 = {0.0, t_16, 0.0, 0.0, -t_16, 0.0};
     test_flux_values(discr_2d, 16, cell_indices_face_16, values_face_16);
+
+    // Check the boundary flux values:
+
+    // Face 0 is a Dirichlet boundary face in a corner of a grid.
+    const double t_0 = dy / (0.5 * dx / 1.0);
+    const std::vector<int> cell_indices_face_0 = {0, 4};
+    const std::vector<double> values_cell_0 = {-t_0, 0.0};
+    test_flux_values(discr_2d, 0, cell_indices_face_0, values_cell_0);
+    const std::vector<int> face_indices_face_0 = {0, 4, 12, 15};
+    const std::vector<double> values_face_0 = {t_0, 0.0, 0.0, 0.0};
+    test_bound_flux_values(discr_2d, 0, face_indices_face_0, values_face_0);
+
+    // // Face 4 is a Dirichlet boundary face in the middle of a grid. The permeability in
+    // // the nearby cell is 4, so the flux is 4 times the value in cell 0.
+    const double t_4 = dy / (0.5 * dx / 4.0);
+    const std::vector<int> cell_indices_face_4 = {0, 3, 6};
+    const std::vector<double> values_cell_4 = {0.0, -t_4, 0.0};
+    test_flux_values(discr_2d, 4, cell_indices_face_4, values_cell_4);
+    const std::vector<int> face_indices_face_4 = {0, 4, 8, 15, 18};
+    const std::vector<double> values_face_4 = {-0.0, t_4, 0.0, 0.0, 0.0};
+    test_bound_flux_values(discr_2d, 4, face_indices_face_4, values_face_4);
+
+    // Face 12 is a Neumann boundary face in a corner of a grid.
+    const std::vector<int> cell_indices_face_12 = {0, 1};
+    const std::vector<double> values_cell_12 = {0.0, 0.0};
+    test_flux_values(discr_2d, 12, cell_indices_face_12, values_cell_12);
+    const std::vector<int> face_indices_face_12 = {0, 1, 12, 13};
+    const std::vector<double> values_face_12 = {0.0, 0.0, -1.0, 0.0};
+    test_bound_flux_values(discr_2d, 12, face_indices_face_12, values_face_12);
+
+    // Face 13 is a Neumann boundary face in the middle of a grid.
+    const std::vector<int> cell_indices_face_13 = {0, 1, 2};
+    const std::vector<double> values_cell_13 = {0.0, 0.0, 0.0};
+    test_flux_values(discr_2d, 13, cell_indices_face_13, values_cell_13);
+    const std::vector<int> face_indices_face_13 = {1, 2, 12, 13, 14};
+    const std::vector<double> values_face_13 = {0.0, 0.0, 0.0, -1.0, 0.0};
+    test_bound_flux_values(discr_2d, 13, face_indices_face_13, values_face_13);
 }
 
 TEST_F(MPFA, FluxValuesInternalFace2dAnisotropic)
