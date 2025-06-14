@@ -189,26 +189,40 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
                 flux_values.push_back(pair.second);
             }
             flux_matrix_values_map.clear();
-            // If we have a new row, we need to update the row_ptr.
-            row_ptr.push_back(flux_values.size());
-            previous_row = flux_matrix_row_idx[index];
+
+            // If we have a new row, we need to update the row_ptr. If there are zero
+            // rows in the matrix, multiple values of row_ptr will be added.
+            while (previous_row < flux_matrix_row_idx[index])
+            {
+                // We push the current size of col_idx to row_ptr.
+                row_ptr.push_back(flux_values.size());
+                ++previous_row;
+            }
         }
 
         int counter = 0;
         for (const double col_index : flux_matrix_col_idx[index])
         {
-            // Store the flux values in a map to avoid duplicates.
+            // Store the flux values in a map to gather duplicate column indices (would
+            // correspond to the same face-cell combination being present in different
+            // interaction regions).
             flux_matrix_values_map[col_index] += flux_matrix_values[index][counter];
             ++counter;
         }
     }
+    // After the loop, we need to empty the map for the last non-zero row.
     for (const auto& pair : flux_matrix_values_map)
     {
         col_idx.push_back(pair.first);
         flux_values.push_back(pair.second);
     }
-    // Add the last row pointer.
-    row_ptr.push_back(col_idx.size());
+    // We also need to fill the row pointer for the last row. This may need to be
+    // repeated, if the last non-zero row is not the last row in the matrix, hence the
+    // while loop.
+    while (row_ptr.size() <= grid.num_faces())
+    {
+        row_ptr.push_back(flux_values.size());
+    }
 
     // Create the compressed data storage for the flux.
     auto flux_storage = std::make_shared<CompressedDataStorage<double>>(
