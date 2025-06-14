@@ -23,4 +23,5 @@ void init_discr(py::module_ &m)
 
     // Bindings for tpfa function.
     m.def("tpfa", &tpfa, py::arg("grid"), py::arg("tensor"), py::arg("bc_map"));
+    m.def("mpfa", &mpfa, py::arg("grid"), py::arg("tensor"), py::arg("bc_map"));
 }
