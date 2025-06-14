@@ -289,6 +289,37 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         std::vector<std::pair<int, int>> loc_boundary_faces;
         std::unordered_set<int> loc_neumann_faces;
         std::unordered_set<int> loc_dirichlet_faces;
+        for (const auto& pair : interaction_region.faces())
+        {
+            // Initialize the local boundary faces with the local face index and the
+            // global face index.
+            BoundaryCondition bc;
+            auto it = bc_map.find(pair.first);
+            if (it != bc_map.end())
+            {
+                bc = it->second;
+                if (bc == BoundaryCondition::Neumann)
+                {
+                    // Store the local face index for Neumann faces. We need to do
+                    // some scaling of this in the boundary condition
+                    // discretization.
+                    loc_neumann_faces.insert(pair.second);
+                }
+                if (bc == BoundaryCondition::Dirichlet)
+                {
+                    // Store the local face index for Dirichlet faces. We need to do
+                    // some scaling of this in the boundary condition
+                    // discretization.
+                    loc_dirichlet_faces.insert(pair.second);
+                }
+                if (bc == BoundaryCondition::Robin)
+                {
+                    throw std::logic_error("Robin boundary condition not implemented");
+                }
+
+                loc_boundary_faces.push_back({pair.second, pair.first});
+            }
+        }
 
         // Iterate over the faces in the interaction region.
         for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
@@ -321,33 +352,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
                 // Find the boundary condition for the face, if any.
                 bool is_boundary_face = false;
-                BoundaryCondition bc;
-                auto it = bc_map.find(face_ind);
-                if (it != bc_map.end())
-                {
-                    is_boundary_face = true;
-                    bc = it->second;
-                    if (bc == BoundaryCondition::Robin)
-                    {
-                        throw std::logic_error("Robin boundary condition not implemented");
-                    }
-                    if (bc == BoundaryCondition::Neumann)
-                    {
-                        // Store the local face index for Neumann faces. We need to do
-                        // some scaling of this in the boundary condition
-                        // discretization.
-                        loc_neumann_faces.insert(local_face_index);
-                    }
-                    if (bc == BoundaryCondition::Dirichlet)
-                    {
-                        // Store the local face index for Dirichlet faces. We need to do
-                        // some scaling of this in the boundary condition
-                        // discretization.
-                        loc_dirichlet_faces.insert(local_face_index);
-                    }
-
-                    loc_boundary_faces.push_back({local_face_index, face_ind});
-                }
 
                 std::vector<double> flux_expr = nK(loc_face_normals[local_face_index], tensor,
                                                    cell_ind, num_nodes_of_face.at(face_ind));
@@ -363,6 +367,14 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // Decleare the vector for the Dirichlet values. This may or may not be
                 // used in calculations below.
                 std::vector<double> dirichlet_vals;
+
+                is_boundary_face = false;
+                BoundaryCondition bc;
+                if (bc_map.find(face_ind) != bc_map.end())
+                {
+                    is_boundary_face = true;
+                    bc = bc_map.at(face_ind);
+                }
 
                 // Note on the sign of the elements in the balance matrices: For
                 // internal faces, where the balance equation describes the continuity
