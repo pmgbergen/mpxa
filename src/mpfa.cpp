@@ -153,6 +153,17 @@ std::map<int, int> count_nodes_of_faces(const InteractionRegion& interaction_reg
     return num_nodes_of_face;
 }
 
+std::vector<int> count_faces_of_cells(const InteractionRegion& interaction_region, const Grid& grid)
+{
+    // Count the number of faces for each cell in the interaction region.
+    std::vector<int> num_faces_of_cell(interaction_region.cells().size(), 0);
+    for (const int cell : interaction_region.cells())
+    {
+        num_faces_of_cell.push_back(grid.faces_of_cell(cell).size());
+    }
+    return num_faces_of_cell;
+}
+
 // Helper function to create a compressed sparse row (CSR) matrix from vectors.
 std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
     const std::vector<int>& flux_matrix_row_idx,
@@ -265,6 +276,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         // Get the interaction region for the node.
         InteractionRegion interaction_region(node_ind, 1, grid);
 
+        const std::vector<double> node_coord = grid.nodes()[node_ind];
+
         const int num_faces = interaction_region.faces().size();
         const int num_cells = interaction_region.cells().size();
 
@@ -284,6 +297,19 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             face_normals_of_interaction_region(interaction_region, grid);
 
         std::map<int, int> num_nodes_of_face = count_nodes_of_faces(interaction_region, grid);
+        std::vector<int> num_faces_of_cell = count_faces_of_cells(interaction_region, grid);
+
+        // If all cells have grid.dim() + 1 faces, this is a simplex. Use a boolean to
+        // indicate whether this is a simplex or not.
+        bool is_simplex = true;
+        for (const int cell_ind : interaction_region.cells())
+        {
+            if (num_faces_of_cell[cell_ind] != DIM + 1)
+            {
+                is_simplex = false;
+                break;
+            }
+        }
 
         // Data structures to store the local boundary faces and their types.
         std::vector<std::pair<int, int>> loc_boundary_faces;
@@ -338,7 +364,24 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 glob_faces_of_cell.push_back(face_ind);
                 loc_faces_of_cell.push_back(local_face_index);
 
-                continuty_points[face_counter] = loc_face_centers[local_face_index];
+                auto in_dir = loc_dirichlet_faces.find(local_face_index);
+                auto in_neu = loc_neumann_faces.find(local_face_index);
+
+                if (is_simplex && (in_dir == loc_dirichlet_faces.end()) &&
+                    (in_neu == loc_neumann_faces.end()))
+                {
+                    for (int i = 0; i < DIM; ++i)
+                    {
+                        // For simplices, the continuity point is the face center.
+                        continuty_points[face_counter][i] =
+                            2.0 / 3 * loc_face_centers[local_face_index][i] +
+                            (1.0 / 3) * node_coord[i];
+                    }
+                }
+                else
+                {
+                    continuty_points[face_counter] = loc_face_centers[local_face_index];
+                }
                 ++face_counter;
             }
             basis_functions = basis_constructor.compute_basis_functions(continuty_points);
