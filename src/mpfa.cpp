@@ -528,9 +528,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             flux = bound_flux * diag_matrix * balance_cells + flux_cells;
         }
 
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> tmp;
-        tmp = bound_flux * balance_cells;
-
         // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
         for (const auto i : interaction_region.faces())
         {
