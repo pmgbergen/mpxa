@@ -543,33 +543,41 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         }
         tot_num_transmissibilities += num_faces * num_cells;
 
-        for (const auto& face : loc_boundary_faces)
+        if (loc_boundary_faces.size() > 0)
         {
-            // For the boundary faces, we need to compute the boundary flux matrix.
-            std::vector<double> row(bound_flux.row(face.first).data(),
-                                    bound_flux.row(face.first).data() + bound_flux.cols());
-
-            std::vector<int> bf_indices;
-            std::vector<double> bf_val;
-
-            for (const auto& f : loc_boundary_faces)
+            // Loop over all faces in the interaction region (internal and boundary).
+            // Pick out the flux discretization associated with boundary faces (this can
+            // be thought of as discretization of the flux induced by the boundary
+            // condition).
+            for (const auto& face : interaction_region.faces())
             {
-                if (loc_neumann_faces.find(f.first) != loc_neumann_faces.end())
+                // For the boundary faces, we need to compute the boundary flux matrix.
+                std::vector<double> row(bound_flux.row(face.second).data(),
+                                        bound_flux.row(face.second).data() + bound_flux.cols());
+
+                std::vector<int> bf_indices;
+                std::vector<double> bf_val;
+
+                for (const auto& f : loc_boundary_faces)
                 {
-                    // For Neumann boundary faces, scale the flux by the number of
-                    // nodes, since the boundary condition will be taken in terms of the
-                    // total flux over the face (not the subface).
-                    bf_val.push_back(row[f.first] / num_nodes_of_face.at(f.second));
+                    if (loc_neumann_faces.find(f.first) != loc_neumann_faces.end())
+                    {
+                        // For Neumann boundary faces, scale the flux by the number of
+                        // nodes, since the boundary condition will be taken in terms of the
+                        // total flux over the face (not the subface).
+                        bf_val.push_back(row[f.first] / num_nodes_of_face.at(f.second));
+                    }
+                    else
+                    {
+                        bf_val.push_back(row[f.first]);
+                    }
+                    bf_indices.push_back(f.second);
                 }
-                else
-                {
-                    bf_val.push_back(row[f.first]);
-                }
-                bf_indices.push_back(f.second);
+
+                bound_flux_matrix_values.push_back(bf_val);
+                bound_flux_matrix_col_idx.push_back(bf_indices);
+                bound_flux_matrix_row_idx.push_back(face.first);
             }
-            bound_flux_matrix_values.push_back(bf_val);
-            bound_flux_matrix_col_idx.push_back(bf_indices);
-            bound_flux_matrix_row_idx.push_back(face.second);
         }
 
     }  // End iteration of nodes in the grid.
