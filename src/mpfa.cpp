@@ -168,8 +168,8 @@ std::vector<int> count_faces_of_cells(const InteractionRegion& interaction_regio
 std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
     const std::vector<int>& flux_matrix_row_idx,
     const std::vector<std::vector<int>>& flux_matrix_col_idx,
-    const std::vector<std::vector<double>>& flux_matrix_values, const Grid& grid,
-    const int tot_num_transmissibilities)
+    const std::vector<std::vector<double>>& flux_matrix_values, const int num_rows,
+    const int num_cols, const int tot_num_transmissibilities)
 {
     std::vector<int> sorted_indices(flux_matrix_row_idx.size());
     std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
@@ -231,14 +231,14 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
     // We also need to fill the row pointer for the last row. This may need to be
     // repeated, if the last non-zero row is not the last row in the matrix, hence the
     // while loop.
-    while (row_ptr.size() <= grid.num_faces())
+    while (row_ptr.size() <= num_rows)
     {
         row_ptr.push_back(flux_values.size());
     }
 
     // Create the compressed data storage for the flux.
-    auto flux_storage = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_cells(), row_ptr, col_idx, flux_values);
+    auto flux_storage = std::make_shared<CompressedDataStorage<double>>(num_rows, num_cols, row_ptr,
+                                                                        col_idx, flux_values);
     return flux_storage;
 }
 
@@ -577,13 +577,14 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     ScalarDiscretization discretization;
 
     // CSR storage for the flux matrix.
-    auto flux_storage = create_csr_matrix(flux_matrix_row_idx, flux_matrix_col_idx,
-                                          flux_matrix_values, grid, tot_num_transmissibilities);
+    auto flux_storage =
+        create_csr_matrix(flux_matrix_row_idx, flux_matrix_col_idx, flux_matrix_values,
+                          grid.num_faces(), grid.num_cells(), tot_num_transmissibilities);
     discretization.flux = flux_storage;
     // Create the compressed data storage for the boundary flux.
-    auto bound_flux_storage =
-        create_csr_matrix(bound_flux_matrix_row_idx, bound_flux_matrix_col_idx,
-                          bound_flux_matrix_values, grid, bound_flux_matrix_row_idx.size());
+    auto bound_flux_storage = create_csr_matrix(
+        bound_flux_matrix_row_idx, bound_flux_matrix_col_idx, bound_flux_matrix_values,
+        grid.num_faces(), grid.num_faces(), bound_flux_matrix_row_idx.size());
     discretization.bound_flux = bound_flux_storage;
     return discretization;
 }
