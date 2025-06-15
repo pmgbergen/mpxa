@@ -156,7 +156,7 @@ std::map<int, int> count_nodes_of_faces(const InteractionRegion& interaction_reg
 std::vector<int> count_faces_of_cells(const InteractionRegion& interaction_region, const Grid& grid)
 {
     // Count the number of faces for each cell in the interaction region.
-    std::vector<int> num_faces_of_cell(interaction_region.cells().size(), 0);
+    std::vector<int> num_faces_of_cell;
     for (const int cell : interaction_region.cells())
     {
         num_faces_of_cell.push_back(grid.faces_of_cell(cell).size());
@@ -302,9 +302,9 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         // If all cells have grid.dim() + 1 faces, this is a simplex. Use a boolean to
         // indicate whether this is a simplex or not.
         bool is_simplex = true;
-        for (const int cell_ind : interaction_region.cells())
+        for (const int num : num_faces_of_cell)
         {
-            if (num_faces_of_cell[cell_ind] != DIM + 1)
+            if (num != (DIM + 1))
             {
                 is_simplex = false;
                 break;
@@ -370,9 +370,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 if (is_simplex && (in_dir == loc_dirichlet_faces.end()) &&
                     (in_neu == loc_neumann_faces.end()))
                 {
-                    for (int i = 0; i < DIM; ++i)
+                    for (int i = 0; i < SPATIAL_DIM; ++i)
                     {
-                        // For simplices, the continuity point is the face center.
                         continuty_points[face_counter][i] =
                             2.0 / 3 * loc_face_centers[local_face_index][i] +
                             (1.0 / 3) * node_coord[i];
