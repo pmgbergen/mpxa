@@ -628,21 +628,25 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
                 // Find the cell next to the boundary face. This pressure at the
                 // boundary face will be a perturbation from the value at this cell
-                // center.
-                const int cell_ind = interaction_region.main_cell_of_faces().at(face.first);
+                // center. A boundary face will per definition have a single cell
+                // neighbor, which will be returned as the main cell for the face.
+                const int glob_cell_ind = interaction_region.main_cell_of_faces().at(face.first);
+                const int loc_cell_ind =
+                    std::find(interaction_region.cells().begin(), interaction_region.cells().end(),
+                              glob_cell_ind) -
+                    interaction_region.cells().begin();
 
                 // Compute the pressure difference between the face center and the cell
                 // center, using the set of basis functions for this cell.
-                const std::vector<double> pressure_diff = p_diff(
-                    loc_face_centers[face.first], loc_cell_centers[cell_ind], basis_map[cell_ind]);
+                const std::vector<double> pressure_diff =
+                    p_diff(loc_face_centers[face.first], loc_cell_centers[loc_cell_ind],
+                           basis_map[glob_cell_ind]);
 
                 std::vector<double> cell_contribution(interaction_region.cells().size(), 0.0);
 
                 // The cell itself contributes a unit pressure to the cell + contribution from the
                 // gradient.
-
-                // This will fail because the cell_ind is a global index.
-                cell_contribution[cell_ind] = 1.0;
+                cell_contribution[loc_cell_ind] = 1.0;
 
                 std::vector<double> face_contribution(interaction_region.faces().size(), 0.0);
 
@@ -650,7 +654,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // region. The pressure on each of these faces contributes to the
                 // pressure variation within the cell.
                 int face_counter = 0;
-                for (const int face_ind : interaction_region.faces_of_cells().at(cell_ind))
+                for (const int face_ind : interaction_region.faces_of_cells().at(glob_cell_ind))
                 {
                     const int face_local_index = interaction_region.faces().at(face_ind);
 
