@@ -625,12 +625,17 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     // No contribution from other cells or faces.
                     continue;
                 }
+                // We need to divide by the number of nodes on the face, since the
+                // pressure at the face is defined as the average of the pressure at the
+                // nodes on the face.
+                const double inv_num_nodes_of_face = 1.0 / num_nodes_of_face.at(face.second);
 
                 // Find the cell next to the boundary face. This pressure at the
                 // boundary face will be a perturbation from the value at this cell
                 // center. A boundary face will per definition have a single cell
                 // neighbor, which will be returned as the main cell for the face.
                 const int glob_cell_ind = interaction_region.main_cell_of_faces().at(face.first);
+                // Identify the local index of the cell in the interaction region.
                 const int loc_cell_ind =
                     std::find(interaction_region.cells().begin(), interaction_region.cells().end(),
                               glob_cell_ind) -
@@ -644,16 +649,19 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
                 std::vector<double> cell_contribution(interaction_region.cells().size(), 0.0);
 
-                // The cell itself contributes a unit pressure to the cell + contribution from the
-                // gradient.
-                cell_contribution[loc_cell_ind] = 1.0;
+                // The cell itself contributes a unit value (which gives the offset) to
+                // the cell + contribution from the gradient.
+                cell_contribution[loc_cell_ind] = (1.0 + pressure_diff[0]) * inv_num_nodes_of_face;
 
                 std::vector<double> face_contribution(interaction_region.faces().size(), 0.0);
 
                 // Loop over the faces of the cell that also belong to the interaction
                 // region. The pressure on each of these faces contributes to the
                 // pressure variation within the cell.
-                int face_counter = 0;
+
+                // Start at 1, since the first basis function is the cell center
+                // pressure.
+                int basis_vector_face_counter = 1;
                 for (const int face_ind : interaction_region.faces_of_cells().at(glob_cell_ind))
                 {
                     const int face_local_index = interaction_region.faces().at(face_ind);
@@ -664,20 +672,15 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                         face_pressure_from_cells.row(face_local_index).data(),
                         face_pressure_from_cells.row(face_local_index).data() +
                             face_pressure_from_cells.row(face_local_index).size());
-                    // This is the pressure reconstruction value for the face, which is}
 
-                    // For the boundary faces, we need to compute the pressure reconstruction
-                    // matrix.
-
-                    int loc_cell_ind = 0;
-                    for (int loc_cell_ind{0}; loc_cell_ind < interaction_region.cells().size();
-                         ++loc_cell_ind)
+                    for (int ci{0}; ci < interaction_region.cells().size(); ++ci)
                     {
                         // If the cell is not the main cell for the face, we need to
                         // multiply the pressure difference with the basis function for
                         // this cell.
-                        cell_contribution[loc_cell_ind] +=
-                            row_from_cells[loc_cell_ind] * pressure_diff[face_counter];
+                        cell_contribution[ci] += row_from_cells[ci] *
+                                                 pressure_diff[basis_vector_face_counter] *
+                                                 inv_num_nodes_of_face;
                     }
 
                     std::vector<double> row_from_faces(
@@ -692,10 +695,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                         {
                             // This is a boundary face.
                             face_contribution[face.first] +=
-                                row_from_faces[fi] * pressure_diff[face_counter];
+                                row_from_faces[fi] * pressure_diff[basis_vector_face_counter] *
+                                inv_num_nodes_of_face;
                         }
                     }
-                    ++face_counter;
+                    ++basis_vector_face_counter;
                 }
                 pressure_reconstruction_cell_values.push_back(cell_contribution);
                 pressure_reconstruction_cell_row_idx.push_back(face.second);
