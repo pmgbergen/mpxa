@@ -612,12 +612,17 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
             for (const auto& face : loc_boundary_face_map)
             {
+                // We need to divide by the number of nodes on the face, since the
+                // pressure at the face is defined as the average of the pressure at the
+                // nodes on the face.
+                const double inv_num_nodes_of_face = 1.0 / num_nodes_of_face.at(face.second);
+
                 if (loc_dirichlet_faces.find(face.first) != loc_dirichlet_faces.end())
                 {
                     // For a Dirichlet boundary face, we only need to assign a unit
                     // value (thereby, the pressure at the face will be equal to the
                     // prescribed boundary condition).
-                    std::vector<double> one{1.0};
+                    std::vector<double> one{1.0 * inv_num_nodes_of_face};
                     pressure_reconstruction_face_values.push_back(one);
                     pressure_reconstruction_face_row_idx.push_back(face.second);
                     std::vector<int> col_idx{face.second};
@@ -625,10 +630,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     // No contribution from other cells or faces.
                     continue;
                 }
-                // We need to divide by the number of nodes on the face, since the
-                // pressure at the face is defined as the average of the pressure at the
-                // nodes on the face.
-                const double inv_num_nodes_of_face = 1.0 / num_nodes_of_face.at(face.second);
 
                 // Find the cell next to the boundary face. This pressure at the
                 // boundary face will be a perturbation from the value at this cell
