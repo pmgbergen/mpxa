@@ -604,10 +604,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 face_pressure_from_cells;
             face_pressure_from_cells = balance_faces_inv * balance_cells;
 
-            std::vector<int> loc_index_of_faces;
+            // Vector of the global indices of the interaction region faces.
+            std::vector<int> glob_indices_iareg_faces;
             for (const auto& face : interaction_region.faces())
             {
-                loc_index_of_faces.push_back(face.second);
+                glob_indices_iareg_faces.push_back(face.first);
             }
 
             for (const auto& face : loc_boundary_face_map)
@@ -707,7 +708,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 pressure_reconstruction_cell_col_idx.push_back(interaction_region.cells());
                 pressure_reconstruction_face_values.push_back(face_contribution);
                 pressure_reconstruction_face_row_idx.push_back(face.second);
-                pressure_reconstruction_face_col_idx.push_back(loc_index_of_faces);
+                pressure_reconstruction_face_col_idx.push_back(glob_indices_iareg_faces);
             }
         }
 
