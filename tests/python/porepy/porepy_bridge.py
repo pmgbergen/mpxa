@@ -1,10 +1,25 @@
 import porepy as pp
 import mpxa
 import numpy as np
+import scipy.sparse as sps
 
 
-def _sparse_matrix_conversion(sparse_matrix):
+def convert_matrix(sparse_matrix):
     """Convert a sparse matrix to the mpxa format."""
+
+    if isinstance(sparse_matrix, (sps.spmatrix, sps.sparray)):
+        return _convert_matrix_to_mpxa(sparse_matrix)
+    elif isinstance(
+        sparse_matrix, (mpxa.CompressedDataStorageInt, mpxa.CompressedDataStorageDouble)
+    ):
+        return _convert_matrix_to_scipy(sparse_matrix)
+    else:
+        raise ValueError(
+            f"Unsupported sparse matrix type {type(sparse_matrix)} for conversion."
+        )
+
+
+def _convert_matrix_to_mpxa(sparse_matrix):
     if sparse_matrix.data.dtype == int:
         matrix_class = mpxa.CompressedDataStorageInt
     elif sparse_matrix.data.dtype == float:
@@ -23,11 +38,29 @@ def _sparse_matrix_conversion(sparse_matrix):
     )
 
 
+def _convert_matrix_to_scipy(mpxa_matrix):
+    """Convert an mpxa.CompressedDataStorage to a scipy sparse matrix."""
+    if isinstance(mpxa_matrix, mpxa.CompressedDataStorageInt):
+        dtype = int
+    elif isinstance(mpxa_matrix, mpxa.CompressedDataStorageDouble):
+        dtype = float
+    else:
+        raise ValueError(
+            f"Unsupported mpxa matrix type {type(mpxa_matrix)} for conversion."
+        )
+
+    return sps.csr_matrix(
+        (mpxa_matrix.data(), mpxa_matrix.col_idx(), mpxa_matrix.row_ptr()),
+        shape=(mpxa_matrix.num_rows(), mpxa_matrix.num_cols()),
+        dtype=dtype,
+    )
+
+
 def convert_grid(source_grid):
     dim = source_grid.dim
     nodes = source_grid.nodes.T
-    cell_faces = _sparse_matrix_conversion(source_grid.cell_faces.tocsr())
-    face_nodes = _sparse_matrix_conversion(source_grid.face_nodes.tocsr())
+    cell_faces = convert_matrix(source_grid.cell_faces.tocsr())
+    face_nodes = convert_matrix(source_grid.face_nodes.tocsr())
     target_grid = mpxa.Grid(dim, nodes, cell_faces, face_nodes)
     target_grid.set_cell_volumes(source_grid.cell_volumes)
     target_grid.set_face_areas(source_grid.face_areas)
