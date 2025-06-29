@@ -21,6 +21,8 @@ struct ScalarDiscretization
     std::shared_ptr<CompressedDataStorage<double>> bound_flux;
     std::shared_ptr<CompressedDataStorage<double>> vector_source;
     std::shared_ptr<CompressedDataStorage<double>> bound_vector_source;
+    std::shared_ptr<CompressedDataStorage<double>> bound_pressure_cell;
+    std::shared_ptr<CompressedDataStorage<double>> bound_pressure_face;
 };
 
 ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
