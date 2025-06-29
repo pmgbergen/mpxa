@@ -37,11 +37,13 @@ def full_tensor(g):
 
 def _compare_matrices(m_0: mpxa.CompressedDataStorageDouble, m_1: sps.spmatrix):
     """Compare two matrices for equality."""
-    assert m_0.num_rows() == m_1.shape[0]
-    assert m_0.num_cols() == m_1.shape[1]
-    for i in range(m_0.num_rows()):
-        for j in range(m_0.num_cols()):
-            assert np.allclose(m_0.value(i, j), m_1[i, j], rtol=1e-10, atol=1e-13)
+
+    m_0_c = porepy_bridge.convert_matrix(m_0)
+
+    assert m_0_c.shape == m_1.shape, f"Shape mismatch: {m_0_c.shape} vs {m_1.shape}"
+
+    diff = m_0_c - m_1
+    assert np.allclose(diff.data, 0, rtol=1e-10, atol=1e-13)
 
 
 @pytest.mark.parametrize("g_pp", grid_list)
