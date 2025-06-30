@@ -695,10 +695,36 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                         const int fi = faces.second;
                         if (loc_boundary_faces.find(fi) != loc_boundary_faces.end())
                         {
-                            // This is a boundary face.
-                            face_contribution[face.first] +=
+                            // Get the contribution from faces.first via the basis
+                            // function centered at the face face_ind. Rough explanation
+                            // of the double factor inv_num_nodes_of_face: One comes
+                            // from dividing the boundary condition (with which the
+                            // boundary contribution will be scaled) by the number of
+                            // nodes of the face (think, divide the total flux by the
+                            // number of nodes, to get the average flux per subface).
+                            // The second reflects the averaging of the reconstructed
+                            // face pressure at the boundary face. NOTE: The first factor
+                            // inv_num_nodes_of_face should really be on faces.first,
+                            // not face.second (we want to scale the boundary condition
+                            // on the right face), but we assume all faces have the same
+                            // number of nodes.
+
+                            // Divide by the number of nodes of the face, to get an
+                            // averaged face pressure (over the contribution from the
+                            // subfaces).
+                            double contribution_from_face =
                                 row_from_faces[fi] * pressure_diff[basis_vector_face_counter] *
                                 inv_num_nodes_of_face;
+                            if (loc_neumann_faces.find(fi) != loc_neumann_faces.end())
+                            {
+                                // For Neumann faces, we also need to divide the imposed
+                                // flux by the number of nodes. This is equivalent to
+                                // the scaling in bound_flux_matrix_values for Neumann
+                                // boundaries.
+                                contribution_from_face *= inv_num_nodes_of_face;
+                            }
+
+                            face_contribution[fi] += contribution_from_face;
                         }
                     }
                     ++basis_vector_face_counter;
