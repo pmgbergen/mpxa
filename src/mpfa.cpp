@@ -457,9 +457,12 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                                             loc_cell_centers[loc_cell_ind], basis_functions);
 
                     // Note to self: There is no multiplication with sign here, since
-                    // the Dirichlet condition does not see the direction of the normal
-                    // vector.
-                    balance_cells(local_face_index, loc_cell_ind) = -dirichlet_vals[0];
+                    // Dirichlet condition does not see the direction of the normal
+                    // vector. The contribution to balance_cells is the pressure
+                    // difference due to the cell center basis function
+                    // (dirichlet_vals[0]) + 1, where the last term represents the
+                    // offset from the cell center pressure.
+                    balance_cells(local_face_index, loc_cell_ind) = -dirichlet_vals[0] - 1.0;
                 }
                 else
                 {
@@ -475,7 +478,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     // between on the one hand Dirichlet faces and on the other hand
                     // Neumann and internal faces.
                     //
-                    // In both cases, the for the assignment to the balance_faces
+                    // In both cases, the sign for the assignment to the balance_faces
                     // matrix, must be the opposite of the sign used in balance_cells,
                     // since we gather all contributions from faces and cells on
                     // different sides of an equation.
