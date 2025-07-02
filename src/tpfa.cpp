@@ -257,7 +257,7 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     discr.flux = std::unique_ptr<CompressedDataStorage<double>>(flux);
     discr.bound_flux = std::unique_ptr<CompressedDataStorage<double>>(bound_flux);
     discr.vector_source = std::unique_ptr<CompressedDataStorage<double>>(vector_source_storage);
-    discr.bound_vector_source =
+    discr.bound_pressure_vector_source =
         std::unique_ptr<CompressedDataStorage<double>>(vector_source_bound_storage);
     return discr;
 }
