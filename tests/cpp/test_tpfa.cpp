@@ -105,4 +105,10 @@ TEST_F(TPFA, FluxValuesCart2d)
     EXPECT_NEAR(discr.bound_flux->value(7, 7), -1.0, 1e-10);
     EXPECT_NEAR(discr.bound_flux->value(10, 10), 1.0, 1e-10);
     EXPECT_NEAR(discr.bound_flux->value(11, 11), 1.0, 1e-10);
+
+    // Check the size of the vector source and bound vector source.
+    EXPECT_EQ(discr.vector_source->num_rows(), 12);
+    EXPECT_EQ(discr.vector_source->num_cols(), 4 * 3);  // 3 components per cell.
+    EXPECT_EQ(discr.bound_pressure_vector_source->num_rows(), 12);
+    EXPECT_EQ(discr.bound_pressure_vector_source->num_cols(), 12 * 3);  // 3 components per cell.
 }
