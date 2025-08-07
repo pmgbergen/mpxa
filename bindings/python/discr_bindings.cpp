@@ -13,9 +13,9 @@ void init_discr(py::module_ &m)
         .def_readwrite("bound_flux", &ScalarDiscretization::bound_flux)
         .def_readwrite("vector_source", &ScalarDiscretization::vector_source)
         .def_readwrite("bound_pressure_vector_source",
-                       &ScalarDiscretization::bound_pressure_vector_source);
-    // .def_readwrite("bound_pressure_cell", &ScalarDiscretization::bound_pressure_cell)
-    // .def_readwrite("bound_pressure_face", &ScalarDiscretization::bound_pressure_face);
+                       &ScalarDiscretization::bound_pressure_vector_source)
+        .def_readwrite("bound_pressure_cell", &ScalarDiscretization::bound_pressure_cell)
+        .def_readwrite("bound_pressure_face", &ScalarDiscretization::bound_pressure_face);
 
     // Bindings for BoundaryCondition enum.
     py::enum_<BoundaryCondition>(m, "BoundaryCondition")
