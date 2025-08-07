@@ -92,8 +92,8 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     trm.reserve(2 * num_internal_faces + num_boundary_faces);
     col_idx_flux.reserve(2 * num_internal_faces + num_boundary_faces);
 
-    // Boundary flux matrix. There will be an estimated num_boundary_faces entries in the
-    // matrix.
+    // Boundary flux matrix. There will be an estimated num_boundary_faces entries in
+    // the matrix.
     std::vector<double> trm_bound;
     trm_bound.reserve(num_boundary_faces);
 
@@ -104,7 +104,26 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<int> col_idx_bound_flux;
     col_idx_bound_flux.reserve(num_boundary_faces);
 
-    // Disrcetization for the vector source and its boundary condition.
+    // Discretization for the boundary face pressure reconstruction from cell pressures.
+    std::vector<double> bound_pressure_cell;
+    std::vector<int> row_ptr_bound_pressure_cell;
+    std::vector<int> col_idx_bound_pressure_cell;
+    bound_pressure_cell.reserve(num_boundary_faces);
+    row_ptr_bound_pressure_cell.reserve(grid.num_cells() + 1);
+    row_ptr_bound_pressure_cell.push_back(0);
+    col_idx_bound_pressure_cell.reserve(num_boundary_faces);
+
+    // Discretization for the boundary face pressure reconstruction from boundary
+    // conditions.
+    std::vector<double> bound_pressure_face;
+    std::vector<int> row_ptr_bound_pressure_face;
+    std::vector<int> col_idx_bound_pressure_face;
+    bound_pressure_face.reserve(num_boundary_faces);
+    row_ptr_bound_pressure_face.reserve(grid.num_faces() + 1);
+    row_ptr_bound_pressure_face.push_back(0);
+    col_idx_bound_pressure_face.reserve(num_boundary_faces);
+
+    // Discretization for the vector source.
     std::vector<double> vector_source;
     std::vector<int> row_ptr_vector_source;
     std::vector<int> col_idx_vector_source;
@@ -113,6 +132,8 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     col_idx_vector_source.reserve(grid.num_faces() * 3);
     row_ptr_vector_source.push_back(0);
 
+    // Discretization for the vector source contribution to the boundary face pressure
+    // reconstruction.
     std::vector<double> vector_source_bound;
     vector_source_bound.reserve(num_boundary_faces);
     std::vector<int> col_idx_vector_source_bound;
@@ -193,6 +214,11 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     trm_bound.push_back(-trm_a * sign_a);
                     col_idx_bound_flux.push_back(face_ind);
 
+                    // Boundary face pressure reconstruction. There is no contribution
+                    // from the cell, while the face contributes a unit value.
+                    bound_pressure_face.push_back(1.0);
+                    col_idx_bound_pressure_face.push_back(face_ind);
+
                     // The vector source term for the Dirichlet condition is half the
                     // calculation for the internal face. There is no contribution to
                     // the boundary discretization for the vector source term.
@@ -211,6 +237,16 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     // Neumann condition to the cell.
                     trm_bound.push_back(1.0 * sign_a);
                     col_idx_bound_flux.push_back(face_ind);
+
+                    // Boundary face pressure reconstruction. The cell contributes a
+                    // unit value.
+                    bound_pressure_cell.push_back(1.0);
+                    col_idx_bound_pressure_cell.push_back(cell_a);
+                    // The face contribution equals to the offset from the cell value
+                    // due to the imposed Neumann condition. This is the negative
+                    // inverse of the transmissibility.
+                    bound_pressure_face.push_back(-1.0 / trm_a);
+                    col_idx_bound_pressure_face.push_back(face_ind);
 
                     // There is no vector source term for the Neumann condition, no need
                     // to add anything.
@@ -236,6 +272,8 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
         row_ptr_bound_flux.push_back(col_idx_bound_flux.size());
         row_ptr_vector_source.push_back(vector_source.size());
         row_ptr_vector_source_bound.push_back(vector_source_bound.size());
+        row_ptr_bound_pressure_cell.push_back(col_idx_bound_pressure_cell.size());
+        row_ptr_bound_pressure_face.push_back(col_idx_bound_pressure_face.size());
     }
 
     // Gather the data into the compressed data storage.
@@ -244,6 +282,14 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     CompressedDataStorage<double>* bound_flux = new CompressedDataStorage<double>(
         grid.num_faces(), grid.num_faces(), row_ptr_bound_flux, col_idx_bound_flux, trm_bound);
+
+    CompressedDataStorage<double>* bound_pressure_cell_storage = new CompressedDataStorage<double>(
+        grid.num_faces(), grid.num_cells(), row_ptr_bound_pressure_cell,
+        col_idx_bound_pressure_cell, bound_pressure_cell);
+
+    CompressedDataStorage<double>* bound_pressure_face_storage = new CompressedDataStorage<double>(
+        grid.num_faces(), grid.num_faces(), row_ptr_bound_pressure_face,
+        col_idx_bound_pressure_face, bound_pressure_face);
 
     CompressedDataStorage<double>* vector_source_storage = new CompressedDataStorage<double>(
         grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source, col_idx_vector_source,
@@ -259,5 +305,9 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     discr.vector_source = std::unique_ptr<CompressedDataStorage<double>>(vector_source_storage);
     discr.bound_pressure_vector_source =
         std::unique_ptr<CompressedDataStorage<double>>(vector_source_bound_storage);
+    discr.bound_pressure_cell =
+        std::unique_ptr<CompressedDataStorage<double>>(bound_pressure_cell_storage);
+    discr.bound_pressure_face =
+        std::unique_ptr<CompressedDataStorage<double>>(bound_pressure_face_storage);
     return discr;
 }
