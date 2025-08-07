@@ -218,7 +218,7 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     {
                         // Compute the vector source term for the face.
                         vector_source_bound.push_back(face_cell_a_vec[i]);
-                        col_idx_vector_source_bound.push_back(face_ind * DIM + i);
+                        col_idx_vector_source_bound.push_back(cell_a * DIM + i);
                     }
 
                     break;
@@ -249,7 +249,7 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
         grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source, col_idx_vector_source,
         vector_source);
     CompressedDataStorage<double>* vector_source_bound_storage = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_faces() * DIM, row_ptr_vector_source_bound,
+        grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source_bound,
         col_idx_vector_source_bound, vector_source_bound);
 
     // Create the ScalarDiscretization object and return it.

@@ -110,5 +110,5 @@ TEST_F(TPFA, FluxValuesCart2d)
     EXPECT_EQ(discr.vector_source->num_rows(), 12);
     EXPECT_EQ(discr.vector_source->num_cols(), 4 * 3);  // 3 components per cell.
     EXPECT_EQ(discr.bound_pressure_vector_source->num_rows(), 12);
-    EXPECT_EQ(discr.bound_pressure_vector_source->num_cols(), 12 * 3);  // 3 components per cell.
+    EXPECT_EQ(discr.bound_pressure_vector_source->num_cols(), 4 * 3);  // 3 components per cell.
 }
