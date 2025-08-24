@@ -19,17 +19,17 @@ TEST_F(BasisFunctionComputationTest, ComputeBasisFunctions_2D)
     basis_constructor = new BasisConstructor(dim);
 
     // For the 2D test, we ust need the first three coordinates
-    std::vector<std::vector<double>> coords_2d = {
+    std::vector<std::array<double, 3>> coords_2d = {
         {0.0, 0.0, 0.0}, {2.0, 0.0, 0.0}, {1.0, 3.0, 0.0}};
 
-    std::vector<std::vector<double>> basis_functions =
+    std::vector<std::array<double, 3>> basis_functions =
         basis_constructor->compute_basis_functions(coords_2d);
 
     // Check the size of the output
     EXPECT_EQ(basis_functions.size(), dim + 1);  // Should match the number of input coordinates
     for (size_t i = 0; i < basis_functions.size(); ++i)
     {
-        EXPECT_EQ(basis_functions[i].size(), dim);  // Should match the dimension
+        EXPECT_EQ(basis_functions[i].size(), 3);  // Should match the dimension
     }
 
     // Check specific values. First the function for the first coordinate.
@@ -53,10 +53,10 @@ TEST_F(BasisFunctionComputationTest, ComputeBasisFunctions_3D)
     basis_constructor = new BasisConstructor(dim);
 
     // For the 2D test, we ust need the first three coordinates
-    std::vector<std::vector<double>> coords_3d = {
+    std::vector<std::array<double, 3>> coords_3d = {
         {0.0, 0.0, 0.0}, {2.0, 0.0, 1.0}, {1.0, 3.0, 0.0}, {1.0, 1.0, 2.0}};
 
-    std::vector<std::vector<double>> basis_functions =
+    std::vector<std::array<double, 3>> basis_functions =
         basis_constructor->compute_basis_functions(coords_3d);
 
     // Check the size of the output

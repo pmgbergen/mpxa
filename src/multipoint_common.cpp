@@ -20,8 +20,8 @@ BasisConstructor::BasisConstructor(const int dim)
     m_rhs_matrix = MatrixXd::Identity(dim + 1, dim + 1);
 }
 
-std::vector<std::vector<double>> BasisConstructor::compute_basis_functions(
-    const std::vector<std::vector<double>>& coords)
+std::vector<std::array<double, 3>> BasisConstructor::compute_basis_functions(
+    const std::vector<std::array<double, 3>>& coords)
 {
     // Compute the basis functions and their gradients. The implementation is highly
     // uncertain and will depend on the specific problem.
@@ -43,7 +43,8 @@ std::vector<std::vector<double>> BasisConstructor::compute_basis_functions(
     m_basis_matrix = m_coord_matrix.lu().solve(m_rhs_matrix);
 
     // Store the computed basis functions in the output vector.
-    std::vector<std::vector<double>> basis_functions(m_dim + 1, std::vector<double>(m_dim));
+    std::vector<std::array<double, 3>> basis_functions(m_dim + 1,
+                                                       std::array<double, 3>{0.0, 0.0, 0.0});
 
     // Some index gymnastics here: The basis functions are stored column-wise in the
     // m_basis_matrix, but we want to return them row-wise, stored in the vector of

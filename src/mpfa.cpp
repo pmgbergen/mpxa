@@ -14,7 +14,7 @@ using Eigen::MatrixXd;
 namespace
 {
 
-const std::array<double, 3> nK(const std::vector<double>& face_normal,
+const std::array<double, 3> nK(const std::array<double, 3>& face_normal,
                                const SecondOrderTensor& tensor, const int cell_ind,
                                const int num_nodes_of_face)
 {
@@ -71,39 +71,60 @@ const std::array<double, 3> nK(const std::vector<double>& face_normal,
 
 // Helper function to get cell center coordinates for all cells in an interaction region
 void cell_centers_of_interaction_region(const InteractionRegion& interaction_region,
-                                        const Grid& grid, std::vector<std::vector<double>>& centers)
+                                        const Grid& grid,
+                                        std::vector<std::array<double, 3>>& centers)
 {
     centers.clear();
     for (const int cell_ind : interaction_region.cells())
     {
-        centers.push_back(grid.cell_center(cell_ind));
+        const std::vector<double>& center_vec = grid.cell_center(cell_ind);
+        std::array<double, 3> center_arr = {0.0, 0.0, 0.0};
+        for (size_t i = 0; i < std::min(center_vec.size(), center_arr.size()); ++i)
+        {
+            center_arr[i] = center_vec[i];
+        }
+        centers.push_back(center_arr);
     }
 }
 
 // Helper function to get face center coordinates for all faces in an interaction region
 void face_centers_of_interaction_region(const InteractionRegion& interaction_region,
-                                        const Grid& grid, std::vector<std::vector<double>>& centers)
+                                        const Grid& grid,
+                                        std::vector<std::array<double, 3>>& centers)
 {
     centers.clear();
     for (const auto& pair : interaction_region.faces())
     {
-        centers.push_back(grid.face_center(pair.first));
+        const std::vector<double>& face_center = grid.face_center(pair.first);
+        std::array<double, 3> center_arr = {0.0, 0.0, 0.0};
+        for (size_t i = 0; i < std::min(face_center.size(), center_arr.size()); ++i)
+        {
+            center_arr[i] = face_center[i];
+        }
+        centers.push_back(center_arr);
     }
 }
 
 // Helper function to get face normals for all faces in an interaction region
 void face_normals_of_interaction_region(const InteractionRegion& interaction_region,
-                                        const Grid& grid, std::vector<std::vector<double>>& normals)
+                                        const Grid& grid,
+                                        std::vector<std::array<double, 3>>& normals)
 {
     normals.clear();
     for (const auto& pair : interaction_region.faces())
     {
-        normals.push_back(grid.face_normal(pair.first));
+        const std::vector<double>& face_normal = grid.face_normal(pair.first);
+        std::array<double, 3> normal_arr = {0.0, 0.0, 0.0};
+        for (size_t i = 0; i < std::min(face_normal.size(), normal_arr.size()); ++i)
+        {
+            normal_arr[i] = face_normal[i];
+        }
+        normals.push_back(normal_arr);
     }
 }
 
 std::vector<double> nKgrad(const std::array<double, 3>& nK,
-                           const std::vector<std::vector<double>>& basis_functions)
+                           const std::vector<std::array<double, 3>>& basis_functions)
 {
     // Compute the gradient of the nK expression at the given face index.
     std::vector<double> grad(basis_functions.size(), 0.0);
@@ -117,9 +138,9 @@ std::vector<double> nKgrad(const std::array<double, 3>& nK,
     return grad;
 }
 
-std::vector<double> p_diff(const std::vector<double>& face_center,
-                           const std::vector<double>& cell_center,
-                           const std::vector<std::vector<double>>& basis_functions)
+std::vector<double> p_diff(const std::array<double, 3>& face_center,
+                           const std::array<double, 3>& cell_center,
+                           const std::vector<std::array<double, 3>>& basis_functions)
 {
     std::array<double, 3> dist = {0.0, 0.0, 0.0};
     for (size_t i = 0; i < face_center.size(); ++i)
@@ -249,11 +270,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     BasisConstructor basis_constructor(grid.dim());
     // Data structures for the discretization process. There will be grid.dim() continuity points
     // (outer vector).
-    std::vector<std::vector<double>> continuity_points(grid.dim() + 1,
-                                                       std::vector<double>(SPATIAL_DIM, 0.0));
+    std::vector<std::array<double, 3>> continuity_points(grid.dim() + 1,
+                                                         std::array<double, 3>{0.0, 0.0, 0.0});
 
-    std::vector<std::vector<double>> basis_functions(grid.dim() + 1,
-                                                     std::vector<double>(SPATIAL_DIM, 0.0));
+    std::vector<std::array<double, 3>> basis_functions(grid.dim() + 1,
+                                                       std::array<double, 3>{0.0, 0.0, 0.0});
 
     // Data structures for the computed stencils.
     std::vector<std::vector<double>> flux_matrix_values;
@@ -288,9 +309,9 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     const int DIM = grid.dim();
     int tot_num_transmissibilities = 0;
 
-    std::vector<std::vector<double>> loc_cell_centers;
-    std::vector<std::vector<double>> loc_face_centers;
-    std::vector<std::vector<double>> loc_face_normals;
+    std::vector<std::array<double, SPATIAL_DIM>> loc_cell_centers;
+    std::vector<std::array<double, SPATIAL_DIM>> loc_face_centers;
+    std::vector<std::array<double, SPATIAL_DIM>> loc_face_normals;
 
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
@@ -344,7 +365,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         std::unordered_set<int> loc_boundary_faces;
         std::unordered_set<int> loc_neumann_faces;
         std::unordered_set<int> loc_dirichlet_faces;
-        std::map<int, std::vector<std::vector<double>>> basis_map;
+        std::map<int, std::vector<std::array<double, 3>>> basis_map;
 
         for (const auto& pair : interaction_region.faces())
         {
@@ -411,7 +432,10 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 }
                 else
                 {
-                    continuity_points[face_counter] = loc_face_centers[loc_face_index];
+                    for (int k{0}; k < SPATIAL_DIM; ++k)
+                    {
+                        continuity_points[face_counter][k] = loc_face_centers[loc_face_index][k];
+                    }
                 }
                 ++face_counter;
             }
