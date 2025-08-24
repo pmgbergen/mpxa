@@ -70,39 +70,36 @@ const std::vector<double> nK(const std::vector<double>& face_normal,
 }
 
 // Helper function to get cell center coordinates for all cells in an interaction region
-std::vector<std::vector<double>> cell_centers_of_interaction_region(
-    const InteractionRegion& interaction_region, const Grid& grid)
+void cell_centers_of_interaction_region(const InteractionRegion& interaction_region,
+                                        const Grid& grid, std::vector<std::vector<double>>& centers)
 {
-    std::vector<std::vector<double>> centers;
+    centers.clear();
     for (const int cell_ind : interaction_region.cells())
     {
         centers.push_back(grid.cell_center(cell_ind));
     }
-    return centers;
 }
 
 // Helper function to get face center coordinates for all faces in an interaction region
-std::vector<std::vector<double>> face_centers_of_interaction_region(
-    const InteractionRegion& interaction_region, const Grid& grid)
+void face_centers_of_interaction_region(const InteractionRegion& interaction_region,
+                                        const Grid& grid, std::vector<std::vector<double>>& centers)
 {
-    std::vector<std::vector<double>> centers;
+    centers.clear();
     for (const auto& pair : interaction_region.faces())
     {
         centers.push_back(grid.face_center(pair.first));
     }
-    return centers;
 }
 
 // Helper function to get face normals for all faces in an interaction region
-std::vector<std::vector<double>> face_normals_of_interaction_region(
-    const InteractionRegion& interaction_region, const Grid& grid)
+void face_normals_of_interaction_region(const InteractionRegion& interaction_region,
+                                        const Grid& grid, std::vector<std::vector<double>>& normals)
 {
-    std::vector<std::vector<double>> normals;
+    normals.clear();
     for (const auto& pair : interaction_region.faces())
     {
         normals.push_back(grid.face_normal(pair.first));
     }
-    return normals;
 }
 
 std::vector<double> nKgrad(const std::vector<double>& nK,
@@ -291,6 +288,10 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     const int DIM = grid.dim();
     int tot_num_transmissibilities = 0;
 
+    std::vector<std::vector<double>> loc_cell_centers;
+    std::vector<std::vector<double>> loc_face_centers;
+    std::vector<std::vector<double>> loc_face_normals;
+
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
         // Get the interaction region for the node.
@@ -313,12 +314,12 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         MatrixXd nK_one_sided = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
 
         // TODO: Should we use vectors for the inner quantities?
-        std::vector<std::vector<double>> loc_cell_centers =
-            cell_centers_of_interaction_region(interaction_region, grid);
-        std::vector<std::vector<double>> loc_face_centers =
-            face_centers_of_interaction_region(interaction_region, grid);
-        std::vector<std::vector<double>> loc_face_normals =
-            face_normals_of_interaction_region(interaction_region, grid);
+        loc_cell_centers.resize(num_cells);
+        cell_centers_of_interaction_region(interaction_region, grid, loc_cell_centers);
+        loc_face_centers.resize(num_faces);
+        face_centers_of_interaction_region(interaction_region, grid, loc_face_centers);
+        loc_face_normals.resize(num_faces);
+        face_normals_of_interaction_region(interaction_region, grid, loc_face_normals);
 
         std::map<int, int> num_nodes_of_face = count_nodes_of_faces(interaction_region, grid);
         std::vector<int> num_faces_of_cell = count_faces_of_cells(interaction_region, grid);
