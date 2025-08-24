@@ -277,6 +277,13 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<int> pressure_reconstruction_face_row_idx;
     std::vector<std::vector<int>> pressure_reconstruction_face_col_idx;
 
+    // Data structures for the vector source terms.
+    //
+    // For the term representing imbalances in nK
+    std::vector<std::vector<double>> vector_source_cell_values;
+    std::vector<int> vector_source_cell_row_idx;
+    std::vector<std::vector<int>> vector_source_cell_col_idx;
+
     const int DIM = grid.dim();
     int tot_num_transmissibilities = 0;
 
@@ -296,6 +303,10 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         MatrixXd flux_cells = MatrixXd::Zero(num_faces, num_cells);
         MatrixXd flux_faces = MatrixXd::Zero(num_faces, num_faces);
+
+        // Initialize the matrices used for the nK (vector source) terms.
+        MatrixXd nK_matrix = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
+        MatrixXd nK_one_sided = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
 
         // TODO: Should we use vectors for the inner quantities?
         std::vector<std::vector<double>> loc_cell_centers =
@@ -422,6 +433,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // whether this is an internal or boundary face, and the type of
                 // boundary condition.
                 std::vector<double> flux_vals = nKgrad(flux_expr, basis_functions);
+
                 // Decleare the vector for the Dirichlet values. This may or may not be
                 // used in calculations below.
                 std::vector<double> dirichlet_vals;
@@ -467,6 +479,14 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 else
                 {
                     balance_cells(local_face_index, loc_cell_ind) = -sign * flux_vals[0];
+
+                    // Store the nK values in the nK_matrix for the vector source term.
+                    // This is only necessary for Neumann and internal faces.
+                    for (int i = 0; i < SPATIAL_DIM; ++i)
+                    {
+                        const int col = i + SPATIAL_DIM * loc_cell_ind;
+                        nK_matrix(local_face_index, col) = sign * flux_expr[i];
+                    }
                 }
 
                 for (int i = 1; i < DIM + 1; ++i)
@@ -517,7 +537,22 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
                         flux_faces(local_face_index, face_index_secondary_local) = flux_vals[i];
                     }
+
+                    // Add to the one-sided nK values, unless this is a Dirichlet
+                    // boundary.
+                    if (~(is_boundary_face && (bc == BoundaryCondition::Dirichlet)))
+                    {
+                        for (int k = 0; k < SPATIAL_DIM; ++k)
+                        {
+                            // EK note to self: Not 100% sure about the reason for the
+                            // factor -1 here, but it seems to be necessary to ensure
+                            // equivalence with the PorePy discretization.
+                            nK_one_sided(local_face_index, k + loc_cell_ind * SPATIAL_DIM) =
+                                -flux_expr[k];
+                        }
+                    }
                 }
+
                 // If this is a boundary face, we store the basis function so that we
                 // can compute the boundary pressure reconstruction later.
                 if (is_boundary_face)
@@ -554,6 +589,9 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             flux = bound_flux * diag_matrix * balance_cells + flux_cells;
         }
 
+        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> vector_source_cell;
+        vector_source_cell = bound_flux * nK_matrix + nK_one_sided;
+
         // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
         for (const auto i : interaction_region.faces())
         {
@@ -563,6 +601,23 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
             flux_matrix_row_idx.push_back(i.first);
             flux_matrix_col_idx.push_back(interaction_region.cells());
+
+            // Also treatment of the vector source terms.
+            std::vector<double> vs_row(
+                vector_source_cell.row(i.second).data(),
+                vector_source_cell.row(i.second).data() + vector_source_cell.cols());
+            vector_source_cell_values.push_back(vs_row);
+            vector_source_cell_row_idx.push_back(i.first);
+
+            std::vector<int> cell_indices;
+            for (const auto& loc_ci : interaction_region.cells())
+            {
+                for (int k = 0; k < SPATIAL_DIM; ++k)
+                {
+                    cell_indices.push_back(loc_ci * SPATIAL_DIM + k);
+                }
+            }
+            vector_source_cell_col_idx.push_back(cell_indices);
         }
         tot_num_transmissibilities += num_faces * num_cells;
 
@@ -768,6 +823,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         pressure_reconstruction_face_values, grid.num_faces(), grid.num_faces(),
         pressure_reconstruction_face_row_idx.size());
     discretization.bound_pressure_face = pressure_reconstruction_face_storage;
+
+    auto vector_source_cell_storage = create_csr_matrix(
+        vector_source_cell_row_idx, vector_source_cell_col_idx, vector_source_cell_values,
+        grid.num_faces(), SPATIAL_DIM * grid.num_cells(), vector_source_cell_row_idx.size());
+    discretization.vector_source = vector_source_cell_storage;
 
     return discretization;
 }
