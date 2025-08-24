@@ -38,11 +38,9 @@ def full_tensor(g):
 def _compare_matrices(m_0: mpxa.CompressedDataStorageDouble, m_1: sps.spmatrix):
     """Compare two matrices for equality."""
 
-    m_0_c = porepy_bridge.convert_matrix(m_0)
+    assert m_0.shape == m_1.shape, f"Shape mismatch: {m_0.shape} vs {m_1.shape}"
 
-    assert m_0_c.shape == m_1.shape, f"Shape mismatch: {m_0_c.shape} vs {m_1.shape}"
-
-    diff = m_0_c - m_1
+    diff = m_0 - m_1
     assert np.allclose(diff.data, 0, rtol=1e-10, atol=1e-13)
 
 
@@ -56,7 +54,7 @@ def _compare_matrices(m_0: mpxa.CompressedDataStorageDouble, m_1: sps.spmatrix):
     ],
 )
 @pytest.mark.parametrize("discr_type", ["tpfa", "mpfa"])
-def test_tpfa(g_pp, tensor_func):
+def test_tpfa(g_pp, tensor_func, discr_type):
     K_pp = tensor_func(g_pp)
     bc_pp = pp.BoundaryCondition(g_pp)
     bc_pp.is_dir[0] = True
@@ -90,9 +88,29 @@ def test_tpfa(g_pp, tensor_func):
     elif discr_type == "mpfa":
         discr_cpp = mpxa.mpfa(g, K, bc)
 
-    for attribute in ["flux", "bound_flux", "vector_source"]:
+    for attribute in [
+        "bound_pressure_vector_source",
+        "vector_source",
+        "flux",
+        "bound_flux",
+        "bound_pressure_face",
+        "bound_pressure_cell",
+    ]:
         m_0 = getattr(discr_cpp, attribute)
         m_1 = data[pp.DISCRETIZATION_MATRICES][key][attribute]
+        m_0 = porepy_bridge.convert_matrix(m_0)
+        print(m_1.shape)
+
+        internal_face = np.logical_not(g_pp.tags["domain_boundary_faces"])
+        # The mpxa implementation does not provide reconstruction of the flux on internal
+        # faces, so we set the internal face values to zero also in the PorePy
+        # implementation.
+        if (
+            attribute == "bound_pressure_cell"
+            or attribute == "bound_pressure_face"
+            or attribute == "bound_pressure_vector_source"
+        ):
+            m_1[internal_face, :] = 0.0
 
         _compare_matrices(m_0, m_1)
 
