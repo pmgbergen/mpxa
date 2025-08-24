@@ -252,8 +252,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     BasisConstructor basis_constructor(grid.dim());
     // Data structures for the discretization process. There will be grid.dim() continuity points
     // (outer vector).
-    std::vector<std::vector<double>> continuty_points(grid.dim() + 1,
-                                                      std::vector<double>(SPATIAL_DIM, 0.0));
+    std::vector<std::vector<double>> continuity_points(grid.dim() + 1,
+                                                       std::vector<double>(SPATIAL_DIM, 0.0));
 
     std::vector<std::vector<double>> basis_functions(grid.dim() + 1,
                                                      std::vector<double>(SPATIAL_DIM, 0.0));
@@ -381,57 +381,58 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         // Iterate over the faces in the interaction region.
         for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
         {
-            continuty_points[0] = loc_cell_centers[loc_cell_ind];
-            const int cell_ind = interaction_region.cells()[loc_cell_ind];
+            continuity_points[0] = loc_cell_centers[loc_cell_ind];
+            const int glob_cell_ind = interaction_region.cells()[loc_cell_ind];
 
             std::vector<int> loc_faces_of_cell;
             std::vector<int> glob_faces_of_cell;
 
             int face_counter = 1;
-            for (const int face_ind : interaction_region.faces_of_cells().at(cell_ind))
+            for (const int glob_face_ind : interaction_region.faces_of_cells().at(glob_cell_ind))
             {
                 // Get the face normal and center.
-                const int local_face_index = interaction_region.faces().at(face_ind);
-                glob_faces_of_cell.push_back(face_ind);
-                loc_faces_of_cell.push_back(local_face_index);
+                const int loc_face_index = interaction_region.faces().at(glob_face_ind);
+                glob_faces_of_cell.push_back(glob_face_ind);
+                loc_faces_of_cell.push_back(loc_face_index);
 
-                auto in_dir = loc_dirichlet_faces.find(local_face_index);
-                auto in_neu = loc_neumann_faces.find(local_face_index);
+                auto in_dir = loc_dirichlet_faces.find(loc_face_index);
+                auto in_neu = loc_neumann_faces.find(loc_face_index);
 
                 if (is_simplex && (in_dir == loc_dirichlet_faces.end()) &&
                     (in_neu == loc_neumann_faces.end()))
                 {
                     for (int i = 0; i < SPATIAL_DIM; ++i)
                     {
-                        continuty_points[face_counter][i] =
-                            2.0 / 3 * loc_face_centers[local_face_index][i] +
+                        continuity_points[face_counter][i] =
+                            2.0 / 3 * loc_face_centers[loc_face_index][i] +
                             (1.0 / 3) * node_coord[i];
                     }
                 }
                 else
                 {
-                    continuty_points[face_counter] = loc_face_centers[local_face_index];
+                    continuity_points[face_counter] = loc_face_centers[loc_face_index];
                 }
                 ++face_counter;
             }
-            basis_functions = basis_constructor.compute_basis_functions(continuty_points);
+            basis_functions = basis_constructor.compute_basis_functions(continuity_points);
 
             for (int outer_face_counter{0}; outer_face_counter < loc_faces_of_cell.size();
                  ++outer_face_counter)
             {
                 // Global and local face indices.
-                const int face_ind = glob_faces_of_cell[outer_face_counter];
-                const int local_face_index = loc_faces_of_cell[outer_face_counter];
+                const int glob_face_ind = glob_faces_of_cell[outer_face_counter];
+                const int loc_face_index = loc_faces_of_cell[outer_face_counter];
 
                 // Find the boundary condition for the face, if any.
                 bool is_boundary_face = false;
 
-                std::vector<double> flux_expr = nK(loc_face_normals[local_face_index], tensor,
-                                                   cell_ind, num_nodes_of_face.at(face_ind));
+                std::vector<double> flux_expr =
+                    nK(loc_face_normals[loc_face_index], tensor, glob_cell_ind,
+                       num_nodes_of_face.at(glob_face_ind));
 
                 // Here we need a map to the local flux index to get the right storage in the
                 // matrices.
-                const int sign = grid.sign_of_face_cell(face_ind, cell_ind);
+                const int sign = grid.sign_of_face_cell(glob_face_ind, glob_cell_ind);
 
                 // We need the nK gradient for the flux expression, independent of
                 // whether this is an internal or boundary face, and the type of
@@ -444,10 +445,10 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
                 is_boundary_face = false;
                 BoundaryCondition bc;
-                if (bc_map.find(face_ind) != bc_map.end())
+                if (bc_map.find(glob_face_ind) != bc_map.end())
                 {
                     is_boundary_face = true;
-                    bc = bc_map.at(face_ind);
+                    bc = bc_map.at(glob_face_ind);
                 }
 
                 // Note on the sign of the elements in the balance matrices: For
@@ -469,7 +470,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 {
                     // For Dirichlet boundary conditions, the condition imposed for the
                     // local balance problem is one of pressure continuity.
-                    dirichlet_vals = p_diff(loc_face_centers[local_face_index],
+                    dirichlet_vals = p_diff(loc_face_centers[loc_face_index],
                                             loc_cell_centers[loc_cell_ind], basis_functions);
 
                     // Note to self: There is no multiplication with sign here, since
@@ -478,25 +479,24 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     // difference due to the cell center basis function
                     // (dirichlet_vals[0]) + 1, where the last term represents the
                     // offset from the cell center pressure.
-                    balance_cells(local_face_index, loc_cell_ind) = -dirichlet_vals[0] - 1.0;
+                    balance_cells(loc_face_index, loc_cell_ind) = -dirichlet_vals[0] - 1.0;
                 }
                 else
                 {
-                    balance_cells(local_face_index, loc_cell_ind) = -sign * flux_vals[0];
+                    balance_cells(loc_face_index, loc_cell_ind) = -sign * flux_vals[0];
 
                     // Store the nK values in the nK_matrix for the vector source term.
                     // This is only necessary for Neumann and internal faces.
                     for (int i = 0; i < SPATIAL_DIM; ++i)
                     {
                         const int col = i + SPATIAL_DIM * loc_cell_ind;
-                        nK_matrix(local_face_index, col) = sign * flux_expr[i];
+                        nK_matrix(loc_face_index, col) = sign * flux_expr[i];
                     }
                 }
 
                 for (int i = 1; i < DIM + 1; ++i)
                 {
-                    const int face_index_secondary = glob_faces_of_cell[i - 1];
-                    const int face_index_secondary_local = loc_faces_of_cell[i - 1];
+                    const int loc_face_index_secondary = loc_faces_of_cell[i - 1];
 
                     // For the local balance problem, the condition imposed differs
                     // between on the one hand Dirichlet faces and on the other hand
@@ -508,12 +508,12 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     // different sides of an equation.
                     if (is_boundary_face && (bc == BoundaryCondition::Dirichlet))
                     {
-                        balance_faces(local_face_index, face_index_secondary_local) +=
+                        balance_faces(loc_face_index, loc_face_index_secondary) +=
                             dirichlet_vals[i];
                     }
                     else
                     {
-                        balance_faces(local_face_index, face_index_secondary_local) +=
+                        balance_faces(loc_face_index, loc_face_index_secondary) +=
                             sign * flux_vals[i];
                     }
                 }
@@ -527,19 +527,19 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // to the geometry of the main cell, and n having the direction it has.
                 // Interpretation/distribution of the flux as inwards or outwards is
                 // left to the discrete divergence operator (elsewhere in the code).
-                if (cell_ind == interaction_region.main_cell_of_faces().at(local_face_index))
+                if (glob_cell_ind == interaction_region.main_cell_of_faces().at(loc_face_index))
                 {
                     // If this is the main cell for the face, we store the flux in the
                     // balance_faces matrix.
-                    flux_cells(local_face_index, loc_cell_ind) = flux_vals[0];
+                    flux_cells(loc_face_index, loc_cell_ind) = flux_vals[0];
                     for (int i = 1; i < DIM + 1; ++i)
                     {
-                        const int face_index_secondary =
-                            interaction_region.faces_of_cells().at(cell_ind)[i - 1];
-                        const int face_index_secondary_local =
-                            interaction_region.faces().at(face_index_secondary);
+                        const int glob_face_index_secondary =
+                            interaction_region.faces_of_cells().at(glob_cell_ind)[i - 1];
+                        const int loc_face_index_secondary =
+                            interaction_region.faces().at(glob_face_index_secondary);
 
-                        flux_faces(local_face_index, face_index_secondary_local) = flux_vals[i];
+                        flux_faces(loc_face_index, loc_face_index_secondary) = flux_vals[i];
                     }
 
                     // Add to the one-sided nK values, unless this is a Dirichlet
@@ -551,7 +551,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                             // EK note to self: Not 100% sure about the reason for the
                             // factor -1 here, but it seems to be necessary to ensure
                             // equivalence with the PorePy discretization.
-                            nK_one_sided(local_face_index, k + loc_cell_ind * SPATIAL_DIM) =
+                            nK_one_sided(loc_face_index, k + loc_cell_ind * SPATIAL_DIM) =
                                 -flux_expr[k];
                         }
                     }
@@ -561,7 +561,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // can compute the boundary pressure reconstruction later.
                 if (is_boundary_face)
                 {
-                    basis_map[cell_ind] = basis_functions;
+                    basis_map[glob_cell_ind] = basis_functions;
                 }
             }
         }  // End iteration of cells of the interaction region.
@@ -604,28 +604,28 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         bound_vector_source_matrix = balance_faces_inv * nK_matrix;
 
         // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
-        for (const auto i : interaction_region.faces())
+        for (const auto face_inds : interaction_region.faces())
         {
-            std::vector<double> row(flux.row(i.second).data(),
-                                    flux.row(i.second).data() + flux.cols());
+            std::vector<double> row(flux.row(face_inds.second).data(),
+                                    flux.row(face_inds.second).data() + flux.cols());
             flux_matrix_values.push_back(row);
 
-            flux_matrix_row_idx.push_back(i.first);
+            flux_matrix_row_idx.push_back(face_inds.first);
             flux_matrix_col_idx.push_back(interaction_region.cells());
 
             // Also treatment of the vector source terms.
             std::vector<double> vs_row(
-                vector_source_cell.row(i.second).data(),
-                vector_source_cell.row(i.second).data() + vector_source_cell.cols());
+                vector_source_cell.row(face_inds.second).data(),
+                vector_source_cell.row(face_inds.second).data() + vector_source_cell.cols());
             vector_source_cell_values.push_back(vs_row);
-            vector_source_cell_row_idx.push_back(i.first);
+            vector_source_cell_row_idx.push_back(face_inds.first);
 
             std::vector<int> cell_indices;
-            for (const auto& loc_ci : interaction_region.cells())
+            for (const auto& loc_cell_ind : interaction_region.cells())
             {
                 for (int k = 0; k < SPATIAL_DIM; ++k)
                 {
-                    cell_indices.push_back(loc_ci * SPATIAL_DIM + k);
+                    cell_indices.push_back(loc_cell_ind * SPATIAL_DIM + k);
                 }
             }
             vector_source_cell_col_idx.push_back(cell_indices);
@@ -638,34 +638,36 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             // Pick out the flux discretization associated with boundary faces (this can
             // be thought of as discretization of the flux induced by the boundary
             // condition).
-            for (const auto& face : interaction_region.faces())
+            for (const auto& face_pair : interaction_region.faces())
             {
                 // For the boundary faces, we need to compute the boundary flux matrix.
-                std::vector<double> row(bound_flux.row(face.second).data(),
-                                        bound_flux.row(face.second).data() + bound_flux.cols());
+                std::vector<double> row(
+                    bound_flux.row(face_pair.second).data(),
+                    bound_flux.row(face_pair.second).data() + bound_flux.cols());
 
                 std::vector<int> bf_indices;
                 std::vector<double> bf_val;
 
-                for (const auto& f : loc_boundary_face_map)
+                for (const auto& loc_face_pair : loc_boundary_face_map)
                 {
-                    if (loc_neumann_faces.find(f.first) != loc_neumann_faces.end())
+                    if (loc_neumann_faces.find(loc_face_pair.first) != loc_neumann_faces.end())
                     {
                         // For Neumann boundary faces, scale the flux by the number of
                         // nodes, since the boundary condition will be taken in terms of the
                         // total flux over the face (not the subface).
-                        bf_val.push_back(row[f.first] / num_nodes_of_face.at(f.second));
+                        bf_val.push_back(row[loc_face_pair.first] /
+                                         num_nodes_of_face.at(loc_face_pair.second));
                     }
                     else
                     {
-                        bf_val.push_back(row[f.first]);
+                        bf_val.push_back(row[loc_face_pair.first]);
                     }
-                    bf_indices.push_back(f.second);
+                    bf_indices.push_back(loc_face_pair.second);
                 }
 
                 bound_flux_matrix_values.push_back(bf_val);
                 bound_flux_matrix_col_idx.push_back(bf_indices);
-                bound_flux_matrix_row_idx.push_back(face.first);
+                bound_flux_matrix_row_idx.push_back(face_pair.first);
             }
 
             // Mapping from cell center pressure to face pressures.
@@ -675,27 +677,28 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
             // Vector of the global indices of the interaction region faces.
             std::vector<int> glob_indices_iareg_faces;
-            for (const auto& face : interaction_region.faces())
+            for (const auto& face_pair : interaction_region.faces())
             {
-                glob_indices_iareg_faces.push_back(face.first);
+                glob_indices_iareg_faces.push_back(face_pair.first);
             }
 
-            for (const auto& face : loc_boundary_face_map)
+            for (const auto& loc_face_pair : loc_boundary_face_map)
             {
                 // We need to divide by the number of nodes on the face, since the
                 // pressure at the face is defined as the average of the pressure at the
                 // nodes on the face.
-                const double inv_num_nodes_of_face = 1.0 / num_nodes_of_face.at(face.second);
+                const double inv_num_nodes_of_face =
+                    1.0 / num_nodes_of_face.at(loc_face_pair.second);
 
-                if (loc_dirichlet_faces.find(face.first) != loc_dirichlet_faces.end())
+                if (loc_dirichlet_faces.find(loc_face_pair.first) != loc_dirichlet_faces.end())
                 {
                     // For a Dirichlet boundary face, we only need to assign a unit
                     // value (thereby, the pressure at the face will be equal to the
                     // prescribed boundary condition).
                     std::vector<double> one{1.0 * inv_num_nodes_of_face};
                     pressure_reconstruction_face_values.push_back(one);
-                    pressure_reconstruction_face_row_idx.push_back(face.second);
-                    std::vector<int> col_idx{face.second};
+                    pressure_reconstruction_face_row_idx.push_back(loc_face_pair.second);
+                    std::vector<int> col_idx{loc_face_pair.second};
                     pressure_reconstruction_face_col_idx.push_back(col_idx);
                     // No contribution from other cells or faces.
                     continue;
@@ -705,7 +708,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // boundary face will be a perturbation from the value at this cell
                 // center. A boundary face will per definition have a single cell
                 // neighbor, which will be returned as the main cell for the face.
-                const int glob_cell_ind = interaction_region.main_cell_of_faces().at(face.first);
+                const int glob_cell_ind =
+                    interaction_region.main_cell_of_faces().at(loc_face_pair.first);
                 // Identify the local index of the cell in the interaction region.
                 const int loc_cell_ind =
                     std::find(interaction_region.cells().begin(), interaction_region.cells().end(),
@@ -715,7 +719,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // Compute the pressure difference between the face center and the cell
                 // center, using the set of basis functions for this cell.
                 const std::vector<double> pressure_diff =
-                    p_diff(loc_face_centers[face.first], loc_cell_centers[loc_cell_ind],
+                    p_diff(loc_face_centers[loc_face_pair.first], loc_cell_centers[loc_cell_ind],
                            basis_map[glob_cell_ind]);
 
                 // Cell contribution to pressure reconstruction.
@@ -757,17 +761,18 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                         bound_vector_source_matrix.row(face_local_index).data() +
                             bound_vector_source_matrix.row(face_local_index).size());
 
-                    for (int ci{0}; ci < interaction_region.cells().size(); ++ci)
+                    for (int loc_cell_ind{0}; loc_cell_ind < interaction_region.cells().size();
+                         ++loc_cell_ind)
                     {
                         // If the cell is not the main cell for the face, we need to
                         // multiply the pressure difference with the basis function for
                         // this cell.
-                        cell_contribution[ci] += row_from_cells[ci] *
-                                                 pressure_diff[basis_vector_face_counter] *
-                                                 inv_num_nodes_of_face;
+                        cell_contribution[loc_cell_ind] +=
+                            row_from_cells[loc_cell_ind] *
+                            pressure_diff[basis_vector_face_counter] * inv_num_nodes_of_face;
                         for (int k = 0; k < SPATIAL_DIM; ++k)
                         {
-                            const int col = ci * SPATIAL_DIM + k;
+                            const int col = loc_cell_ind * SPATIAL_DIM + k;
                             vector_source_cell_contribution[col] +=
                                 row_from_cells_vector_source[col] *
                                 pressure_diff[basis_vector_face_counter] * inv_num_nodes_of_face;
@@ -779,12 +784,12 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                         balance_faces_inv.row(face_local_index).data() +
                             balance_faces_inv.row(face_local_index).size());
 
-                    for (const auto& faces : interaction_region.faces())
+                    for (const auto& face_pair : interaction_region.faces())
                     {
-                        const int fi = faces.second;
-                        if (loc_boundary_faces.find(fi) != loc_boundary_faces.end())
+                        const int loc_face_ind = face_pair.second;
+                        if (loc_boundary_faces.find(loc_face_ind) != loc_boundary_faces.end())
                         {
-                            // Get the contribution from faces.first via the basis
+                            // Get the contribution from face_pair.first via the basis
                             // function centered at the face face_ind. Rough explanation
                             // of the double factor inv_num_nodes_of_face: One comes
                             // from dividing the boundary condition (with which the
@@ -802,9 +807,9 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                             // averaged face pressure (over the contribution from the
                             // subfaces).
                             double contribution_from_face =
-                                row_from_faces[fi] * pressure_diff[basis_vector_face_counter] *
-                                inv_num_nodes_of_face;
-                            if (loc_neumann_faces.find(fi) != loc_neumann_faces.end())
+                                row_from_faces[loc_face_ind] *
+                                pressure_diff[basis_vector_face_counter] * inv_num_nodes_of_face;
+                            if (loc_neumann_faces.find(loc_face_ind) != loc_neumann_faces.end())
                             {
                                 // For Neumann faces, we also need to divide the imposed
                                 // flux by the number of nodes. This is equivalent to
@@ -813,27 +818,27 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                                 contribution_from_face *= inv_num_nodes_of_face;
                             }
 
-                            face_contribution[fi] += contribution_from_face;
+                            face_contribution[loc_face_ind] += contribution_from_face;
                         }
                     }
                     ++basis_vector_face_counter;
                 }
                 pressure_reconstruction_cell_values.push_back(cell_contribution);
-                pressure_reconstruction_cell_row_idx.push_back(face.second);
+                pressure_reconstruction_cell_row_idx.push_back(loc_face_pair.second);
                 pressure_reconstruction_cell_col_idx.push_back(interaction_region.cells());
                 pressure_reconstruction_face_values.push_back(face_contribution);
-                pressure_reconstruction_face_row_idx.push_back(face.second);
+                pressure_reconstruction_face_row_idx.push_back(loc_face_pair.second);
                 pressure_reconstruction_face_col_idx.push_back(glob_indices_iareg_faces);
 
                 vector_source_bound_pressure_values.push_back(vector_source_cell_contribution);
-                vector_source_bound_pressure_row_idx.push_back(face.second);
+                vector_source_bound_pressure_row_idx.push_back(loc_face_pair.second);
 
                 std::vector<int> cell_ind_vector_source;
-                for (auto& ci : interaction_region.cells())
+                for (auto& loc_cell_ind : interaction_region.cells())
                 {
                     for (int k = 0; k < SPATIAL_DIM; ++k)
                     {
-                        const int col = ci * SPATIAL_DIM + k;
+                        const int col = loc_cell_ind * SPATIAL_DIM + k;
                         cell_ind_vector_source.push_back(col);
                     }
                 }
