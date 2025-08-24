@@ -14,15 +14,15 @@ using Eigen::MatrixXd;
 namespace
 {
 
-const std::vector<double> nK(const std::vector<double>& face_normal,
-                             const SecondOrderTensor& tensor, const int cell_ind,
-                             const int num_nodes_of_face)
+const std::array<double, 3> nK(const std::vector<double>& face_normal,
+                               const SecondOrderTensor& tensor, const int cell_ind,
+                               const int num_nodes_of_face)
 {
-    // Compute the product between the normal vector, the tensor, and the cell-face
-    // vector.
+    // Compute the product between the normal vector, the tensor, and the cell-face vector.
 
-    const int dim = face_normal.size();
-    std::vector<double> result(dim, 0.0);
+    constexpr int dim = 3;  // face_normal.size();
+    std::array<double, dim> result = {0.0, 0.0, 0.0};
+
     // Compute inverse ratio to limit the number of divisions.
     const double num_nodes_of_face_inv = 1.0 / num_nodes_of_face;
 
@@ -102,7 +102,7 @@ void face_normals_of_interaction_region(const InteractionRegion& interaction_reg
     }
 }
 
-std::vector<double> nKgrad(const std::vector<double>& nK,
+std::vector<double> nKgrad(const std::array<double, 3>& nK,
                            const std::vector<std::vector<double>>& basis_functions)
 {
     // Compute the gradient of the nK expression at the given face index.
@@ -427,7 +427,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // Find the boundary condition for the face, if any.
                 bool is_boundary_face = false;
 
-                std::vector<double> flux_expr =
+                std::array<double, 3> flux_expr =
                     nK(loc_face_normals[loc_face_index], tensor, glob_cell_ind,
                        num_nodes_of_face.at(glob_face_ind));
 
