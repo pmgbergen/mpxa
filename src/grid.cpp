@@ -55,6 +55,16 @@ const int Grid::num_faces() const
     return m_num_faces;
 }
 
+const CompressedDataStorage<int>& Grid::face_nodes() const
+{
+    return *m_face_nodes;
+}
+
+const CompressedDataStorage<int>& Grid::cell_faces() const
+{
+    return *m_cell_faces;
+}
+
 const std::vector<int> Grid::faces_of_node(const int node) const
 {
     return m_face_nodes->cols_in_row(node);

@@ -40,6 +40,9 @@ class Grid
     const int sign_of_face_cell(const int face, const int cell) const;
     const int num_nodes_of_face(const int face) const;
 
+    const CompressedDataStorage<int>& face_nodes() const;
+    const CompressedDataStorage<int>& cell_faces() const;
+
     // Getters for geometric data
     const std::vector<std::vector<double>>& nodes() const;
 
