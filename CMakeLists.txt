@@ -109,3 +109,9 @@ set_target_properties(${PYTHON_PACKAGE_NAME} PROPERTIES
 message(STATUS "Python bindings will be available in: ${CMAKE_BINARY_DIR}/bindings/python")
 
 add_test(NAME ${TEST_EXECUTABLE} COMMAND ${TEST_EXECUTABLE})
+
+# Add the profiling executable
+add_executable(profile_mpfa src/profile_mpfa.cpp)
+
+# Link the profiling executable with the mpxa library and dependencies
+target_link_libraries(profile_mpfa PRIVATE libmpxa pybind11::module GTest::GTest)
