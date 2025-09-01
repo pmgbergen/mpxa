@@ -159,25 +159,29 @@ std::vector<double> p_diff(const std::array<double, 3>& face_center,
     return diff;
 }
 
-std::map<int, int> count_nodes_of_faces(const InteractionRegion& interaction_region,
-                                        const Grid& grid)
+std::vector<int> count_nodes_of_faces(const Grid& grid)
 {
-    // Count the number of nodes for each face in the interaction region.
-    std::map<int, int> num_nodes_of_face;
-    for (const auto& face : interaction_region.faces())
+    // Count the number of nodes for each face in the grid.
+    std::vector<int> num_nodes_of_face(grid.num_faces(), 0);
+
+    CompressedDataStorage<int> face_nodes = grid.face_nodes();
+
+    for (int i{0}; i < face_nodes.col_idx().size(); ++i)
     {
-        num_nodes_of_face[face.first] = grid.num_nodes_of_face(face.first);
+        ++num_nodes_of_face[face_nodes.col_idx()[i]];
     }
+
     return num_nodes_of_face;
 }
 
-std::vector<int> count_faces_of_cells(const InteractionRegion& interaction_region, const Grid& grid)
+std::vector<int> count_faces_of_cells(const Grid& grid)
 {
-    // Count the number of faces for each cell in the interaction region.
-    std::vector<int> num_faces_of_cell;
-    for (const int cell : interaction_region.cells())
+    // Count the number of faces for each cell in the grid.
+    std::vector<int> num_faces_of_cell(grid.num_cells(), 0);
+    CompressedDataStorage<int> cell_faces = grid.cell_faces();
+    for (int i{0}; i < cell_faces.col_idx().size(); ++i)
     {
-        num_faces_of_cell.push_back(grid.faces_of_cell(cell).size());
+        num_faces_of_cell[cell_faces.col_idx()[i]]++;
     }
     return num_faces_of_cell;
 }
@@ -308,6 +312,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     const int DIM = grid.dim();
     int tot_num_transmissibilities = 0;
+    std::vector<int> num_nodes_of_face = count_nodes_of_faces(grid);
+    std::vector<int> num_faces_of_cell = count_faces_of_cells(grid);
 
     std::vector<std::array<double, SPATIAL_DIM>> loc_cell_centers;
     std::vector<std::array<double, SPATIAL_DIM>> loc_face_centers;
@@ -341,9 +347,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         face_centers_of_interaction_region(interaction_region, grid, loc_face_centers);
         loc_face_normals.resize(num_faces);
         face_normals_of_interaction_region(interaction_region, grid, loc_face_normals);
-
-        std::map<int, int> num_nodes_of_face = count_nodes_of_faces(interaction_region, grid);
-        std::vector<int> num_faces_of_cell = count_faces_of_cells(interaction_region, grid);
 
         // If all cells have grid.dim() + 1 faces, this is a simplex. Use a boolean to
         // indicate whether this is a simplex or not.
@@ -453,7 +456,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
                 std::array<double, 3> flux_expr =
                     nK(loc_face_normals[loc_face_index], tensor, glob_cell_ind,
-                       num_nodes_of_face.at(glob_face_ind));
+                       num_nodes_of_face[glob_face_ind]);
 
                 // Here we need a map to the local flux index to get the right storage in the
                 // matrices.
@@ -681,7 +684,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                         // nodes, since the boundary condition will be taken in terms of the
                         // total flux over the face (not the subface).
                         bf_val.push_back(row[loc_face_pair.first] /
-                                         num_nodes_of_face.at(loc_face_pair.second));
+                                         num_nodes_of_face[loc_face_pair.first]);
                     }
                     else
                     {
@@ -712,8 +715,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // We need to divide by the number of nodes on the face, since the
                 // pressure at the face is defined as the average of the pressure at the
                 // nodes on the face.
-                const double inv_num_nodes_of_face =
-                    1.0 / num_nodes_of_face.at(loc_face_pair.second);
+                const double inv_num_nodes_of_face = 1.0 / num_nodes_of_face[loc_face_pair.first];
 
                 if (loc_dirichlet_faces.find(loc_face_pair.first) != loc_dirichlet_faces.end())
                 {
