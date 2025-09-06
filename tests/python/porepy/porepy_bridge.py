@@ -4,11 +4,11 @@ import numpy as np
 import scipy.sparse as sps
 
 
-def convert_matrix(sparse_matrix):
+def convert_matrix(sparse_matrix, csc: bool = False):
     """Convert a sparse matrix to the mpxa format."""
 
     if isinstance(sparse_matrix, (sps.spmatrix, sps.sparray)):
-        return _convert_matrix_to_mpxa(sparse_matrix)
+        return _convert_matrix_to_mpxa(sparse_matrix, csc)
     elif isinstance(
         sparse_matrix, (mpxa.CompressedDataStorageInt, mpxa.CompressedDataStorageDouble)
     ):
@@ -19,7 +19,7 @@ def convert_matrix(sparse_matrix):
         )
 
 
-def _convert_matrix_to_mpxa(sparse_matrix):
+def _convert_matrix_to_mpxa(sparse_matrix, csc: bool = False):
     if sparse_matrix.data.dtype == int:
         matrix_class = mpxa.CompressedDataStorageInt
     elif sparse_matrix.data.dtype == float:
@@ -35,6 +35,7 @@ def _convert_matrix_to_mpxa(sparse_matrix):
         sparse_matrix.indptr,
         sparse_matrix.indices,
         np.ascontiguousarray(sparse_matrix.data),
+        csc,
     )
 
 
@@ -59,8 +60,8 @@ def _convert_matrix_to_scipy(mpxa_matrix):
 def convert_grid(source_grid):
     dim = source_grid.dim
     nodes = source_grid.nodes.T
-    cell_faces = convert_matrix(source_grid.cell_faces.tocsr())
-    face_nodes = convert_matrix(source_grid.face_nodes.tocsr())
+    cell_faces = convert_matrix(source_grid.cell_faces.tocsr(), True)
+    face_nodes = convert_matrix(source_grid.face_nodes.tocsr(), True)
     target_grid = mpxa.Grid(dim, nodes, cell_faces, face_nodes)
     target_grid.set_cell_volumes(source_grid.cell_volumes)
     target_grid.set_face_areas(source_grid.face_areas)
