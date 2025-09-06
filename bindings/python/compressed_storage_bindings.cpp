@@ -23,7 +23,7 @@ void init_compressed_storage(py::module_& m)
         m, "CompressedDataStorageDouble")
         .def(py::init(
             [](int num_rows, int num_cols, py::array_t<int> indptr, py::array_t<int> indices,
-               py::array_t<double> data)
+               py::array_t<double> data, bool csc)
             {
                 // Convert numpy arrays to std::vector. Note to self: This creates a
                 // copy of the data (which on the one hand is not ideal, but on the
@@ -35,7 +35,7 @@ void init_compressed_storage(py::module_& m)
 
                 // Return a new instance of CompressedDataStorage
                 return std::make_shared<CompressedDataStorage<double>>(
-                    num_rows, num_cols, indptr_vec, indices_vec, data_vec);
+                    num_rows, num_cols, indptr_vec, indices_vec, data_vec, csc);
             }))
         .def("num_rows", &CompressedDataStorage<double>::num_rows)
         .def("num_cols", &CompressedDataStorage<double>::num_cols)
@@ -52,7 +52,7 @@ void init_compressed_storage(py::module_& m)
         m, "CompressedDataStorageInt")
         .def(py::init(
             [](int num_rows, int num_cols, py::array_t<int> indptr, py::array_t<int> indices,
-               py::array_t<int> data)
+               py::array_t<int> data, bool csc)
             {
                 // Convert numpy arrays to std::vector
                 std::vector<int> indptr_vec(indptr.data(), indptr.data() + indptr.size());
@@ -61,7 +61,7 @@ void init_compressed_storage(py::module_& m)
 
                 // Return a new instance of CompressedDataStorage
                 return std::make_shared<CompressedDataStorage<int>>(num_rows, num_cols, indptr_vec,
-                                                                    indices_vec, data_vec);
+                                                                    indices_vec, data_vec, csc);
             }))
         .def("num_rows", &CompressedDataStorage<int>::num_rows)
         .def("num_cols", &CompressedDataStorage<int>::num_cols)

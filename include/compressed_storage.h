@@ -13,7 +13,8 @@ class CompressedDataStorage
    public:
     // Constructor for a matrix with indices and values given.
     CompressedDataStorage(const int num_rows, const int num_cols, const std::vector<int>& row_ptr,
-                          const std::vector<int>& col_idx, const std::vector<T>& values);
+                          const std::vector<int>& col_idx, const std::vector<T>& values,
+                          const bool construct_csc = false);
 
     // Destructor
     ~CompressedDataStorage();
@@ -37,7 +38,11 @@ class CompressedDataStorage
     int m_num_cols;
     std::vector<int> m_row_ptr;
     std::vector<int> m_col_idx;
-    std::vector<T> m_values;  // Change from T* to std::vector<T>
+    std::vector<T> m_values;      // Change from T* to std::vector<T>
+    std::vector<int> m_col_ptr;   // For CSC format
+    std::vector<int> m_row_idx;   // For CSC format
+    std::vector<T> m_values_csc;  // For CSC format
+    bool m_csc_constructed = false;
 };
 
 #endif  // LINALG_SPARSE_MATRIX_H
