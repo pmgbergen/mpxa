@@ -283,15 +283,54 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<std::array<double, 3>> basis_functions(grid.dim() + 1,
                                                        std::array<double, 3>{0.0, 0.0, 0.0});
 
+    std::vector<int> num_nodes_of_face = count_nodes_of_faces(grid);
+    std::vector<int> num_faces_of_cell = count_faces_of_cells(grid);
+
+    int avg_num_cells_per_node;
+    int avg_num_cell_per_bound_node;
+    if (grid.dim() == 2)
+    {
+        if (num_faces_of_cell[0] == 4)
+        {
+            avg_num_cells_per_node = 4;  // Rough estimate for structured quadrilateral grids.
+            avg_num_cell_per_bound_node = 2;
+        }
+        else
+        {
+            avg_num_cells_per_node = 6;  // Rough estimate for 2D grids.
+            avg_num_cell_per_bound_node = 3;
+        }
+    }
+    else
+    {
+        if (num_faces_of_cell[0] == 6)
+        {
+            avg_num_cells_per_node = 8;  // Rough estimate for structured hexahedral grids.
+            avg_num_cell_per_bound_node = 4;
+        }
+        else
+        {
+            avg_num_cells_per_node = 14;  // Rough estimate for 3D grids.
+            avg_num_cell_per_bound_node = 6;
+        }
+    }
+    const int num_bound_faces = bc_map.size();
+
     // Data structures for the computed stencils.
-    std::vector<std::vector<double>> flux_matrix_values;
     std::vector<int> flux_matrix_row_idx;
+    flux_matrix_row_idx.reserve(grid.num_faces() * num_faces_of_cell[0] + 1);
     std::vector<std::vector<int>> flux_matrix_col_idx;
+    flux_matrix_col_idx.reserve(grid.num_faces() * num_faces_of_cell[0] + 1);
+    std::vector<std::vector<double>> flux_matrix_values;
+    flux_matrix_values.reserve(grid.num_faces() * num_faces_of_cell[0] + 1);
 
     // Data structures for the discretization of boundary conditions.
-    std::vector<std::vector<double>> bound_flux_matrix_values;
     std::vector<int> bound_flux_matrix_row_idx;
+    bound_flux_matrix_row_idx.reserve(grid.num_faces() * num_faces_of_cell[0] + 1);
     std::vector<std::vector<int>> bound_flux_matrix_col_idx;
+    bound_flux_matrix_col_idx.reserve(num_bound_faces);
+    std::vector<std::vector<double>> bound_flux_matrix_values;
+    bound_flux_matrix_values.reserve(num_bound_faces);
 
     // Data structures for pressure reconstruction on boundary faces. Cell contributions.
     std::vector<std::vector<double>> pressure_reconstruction_cell_values;
@@ -315,8 +354,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     const int DIM = grid.dim();
     int tot_num_transmissibilities = 0;
-    std::vector<int> num_nodes_of_face = count_nodes_of_faces(grid);
-    std::vector<int> num_faces_of_cell = count_faces_of_cells(grid);
 
     std::vector<std::array<double, SPATIAL_DIM>> loc_cell_centers;
     std::vector<std::array<double, SPATIAL_DIM>> loc_face_centers;
@@ -633,17 +670,17 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         {
             std::vector<double> row(flux.row(face_inds.second).data(),
                                     flux.row(face_inds.second).data() + flux.cols());
-            flux_matrix_values.push_back(row);
+            flux_matrix_values.emplace_back(row);
 
             flux_matrix_row_idx.push_back(face_inds.first);
-            flux_matrix_col_idx.push_back(interaction_region.cells());
+            flux_matrix_col_idx.emplace_back(interaction_region.cells());
 
             // Also treatment of the vector source terms.
             std::vector<double> vs_row(
                 vector_source_cell.row(face_inds.second).data(),
                 vector_source_cell.row(face_inds.second).data() + vector_source_cell.cols());
-            vector_source_cell_values.push_back(vs_row);
-            vector_source_cell_row_idx.push_back(face_inds.first);
+            vector_source_cell_values.emplace_back(vs_row);
+            vector_source_cell_row_idx.emplace_back(face_inds.first);
 
             std::vector<int> cell_indices;
             for (const auto& loc_cell_ind : interaction_region.cells())
@@ -697,9 +734,9 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     bf_indices.push_back(loc_face_pair.second);
                 }
 
-                bound_flux_matrix_values.push_back(bf_val);
-                bound_flux_matrix_col_idx.push_back(bf_indices);
-                bound_flux_matrix_row_idx.push_back(face_pair.first);
+                bound_flux_matrix_values.emplace_back(bf_val);
+                bound_flux_matrix_col_idx.emplace_back(bf_indices);
+                bound_flux_matrix_row_idx.emplace_back(face_pair.first);
             }
 
             // Mapping from cell center pressure to face pressures.
@@ -854,14 +891,14 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     }
                     ++basis_vector_face_counter;
                 }
-                pressure_reconstruction_cell_values.push_back(cell_contribution);
+                pressure_reconstruction_cell_values.emplace_back(cell_contribution);
                 pressure_reconstruction_cell_row_idx.push_back(loc_face_pair.second);
-                pressure_reconstruction_cell_col_idx.push_back(interaction_region.cells());
-                pressure_reconstruction_face_values.push_back(face_contribution);
+                pressure_reconstruction_cell_col_idx.emplace_back(interaction_region.cells());
+                pressure_reconstruction_face_values.emplace_back(face_contribution);
                 pressure_reconstruction_face_row_idx.push_back(loc_face_pair.second);
-                pressure_reconstruction_face_col_idx.push_back(glob_indices_iareg_faces);
+                pressure_reconstruction_face_col_idx.emplace_back(glob_indices_iareg_faces);
 
-                vector_source_bound_pressure_values.push_back(vector_source_cell_contribution);
+                vector_source_bound_pressure_values.emplace_back(vector_source_cell_contribution);
                 vector_source_bound_pressure_row_idx.push_back(loc_face_pair.second);
 
                 std::vector<int> cell_ind_vector_source;
@@ -874,7 +911,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     }
                 }
 
-                vector_source_bound_pressure_col_idx.push_back(cell_ind_vector_source);
+                vector_source_bound_pressure_col_idx.emplace_back(cell_ind_vector_source);
             }
         }
 
