@@ -166,9 +166,11 @@ std::vector<int> count_nodes_of_faces(const Grid& grid)
 
     CompressedDataStorage<int> face_nodes = grid.face_nodes();
 
-    for (int i{0}; i < face_nodes.col_idx().size(); ++i)
+    auto& col_idx = face_nodes.col_idx();
+
+    for (int i{0}; i < col_idx.size(); ++i)
     {
-        ++num_nodes_of_face[face_nodes.col_idx()[i]];
+        ++num_nodes_of_face[col_idx[i]];
     }
 
     return num_nodes_of_face;
@@ -179,9 +181,10 @@ std::vector<int> count_faces_of_cells(const Grid& grid)
     // Count the number of faces for each cell in the grid.
     std::vector<int> num_faces_of_cell(grid.num_cells(), 0);
     CompressedDataStorage<int> cell_faces = grid.cell_faces();
-    for (int i{0}; i < cell_faces.col_idx().size(); ++i)
+    auto& col_idx = cell_faces.col_idx();
+    for (int i{0}; i < col_idx.size(); ++i)
     {
-        num_faces_of_cell[cell_faces.col_idx()[i]]++;
+        num_faces_of_cell[col_idx[i]]++;
     }
     return num_faces_of_cell;
 }
