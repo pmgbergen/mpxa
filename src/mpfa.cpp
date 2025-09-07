@@ -3,6 +3,7 @@
 #include <iostream>
 #include <map>
 #include <numeric>
+#include <tuple>
 #include <unordered_set>
 #include <vector>
 
@@ -189,81 +190,90 @@ std::vector<int> count_faces_of_cells(const Grid& grid)
     return num_faces_of_cell;
 }
 
+struct PairHash
+{
+    std::size_t operator()(const std::pair<int, int>& p) const noexcept
+    {
+        return std::hash<int>()(p.first) ^ (std::hash<int>()(p.second) << 1);
+    }
+};
+
 // Helper function to create a compressed sparse row (CSR) matrix from vectors.
 std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
-    const std::vector<int>& flux_matrix_row_idx,
-    const std::vector<std::vector<int>>& flux_matrix_col_idx,
-    const std::vector<std::vector<double>>& flux_matrix_values, const int num_rows,
-    const int num_cols, const int tot_num_transmissibilities)
+    const std::vector<int>& row_indices, const std::vector<std::vector<int>>& col_indices,
+    const std::vector<std::vector<double>>& data_values, const int num_rows, const int num_cols,
+    const int tot_num_transmissibilities)
 {
-    std::vector<int> sorted_indices(flux_matrix_row_idx.size());
+    std::vector<int> sorted_indices(row_indices.size());
     std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
-    std::sort(sorted_indices.begin(), sorted_indices.end(), [&flux_matrix_row_idx](int i1, int i2)
-              { return flux_matrix_row_idx[i1] < flux_matrix_row_idx[i2]; });
+    std::sort(sorted_indices.begin(), sorted_indices.end(),
+              [&row_indices](int i1, int i2) { return row_indices[i1] < row_indices[i2]; });
 
     std::vector<int> row_ptr;
     std::vector<int> col_idx;
-    std::vector<double> flux_values;
+    std::vector<double> values;
+    row_ptr.reserve(num_rows + 1);
     col_idx.reserve(tot_num_transmissibilities);
-    flux_values.reserve(tot_num_transmissibilities);
+    values.reserve(tot_num_transmissibilities);
 
     int previous_row = -1;
 
-    std::map<int, double> flux_matrix_values_map;
+    std::unordered_map<int, double> ind_data_map;
 
     // Loop over the sorted indices, which correspond to the subfaces.
     for (const int index : sorted_indices)
     {
         // If the row index has changed, that is, we have reached a new face, we need to
         // update the row_ptr.
-        if (flux_matrix_row_idx[index] != previous_row)
+        if (row_indices[index] != previous_row)
         {
             // We need to store the flux values for the row, and empty the map for the next
             // row.
-            for (const auto& pair : flux_matrix_values_map)
+            for (const auto& pair : ind_data_map)
             {
                 col_idx.push_back(pair.first);
-                flux_values.push_back(pair.second);
+                values.push_back(pair.second);
             }
-            flux_matrix_values_map.clear();
+            ind_data_map.clear();
 
             // If we have a new row, we need to update the row_ptr. If there are zero
             // rows in the matrix, multiple values of row_ptr will be added.
-            while (previous_row < flux_matrix_row_idx[index])
+            while (previous_row < row_indices[index])
             {
                 // We push the current size of col_idx to row_ptr.
-                row_ptr.push_back(flux_values.size());
+                row_ptr.push_back(values.size());
                 ++previous_row;
             }
         }
 
         int counter = 0;
-        for (const double col_index : flux_matrix_col_idx[index])
+        for (const double col_index : col_indices[index])
         {
             // Store the flux values in a map to gather duplicate column indices (would
             // correspond to the same face-cell combination being present in different
             // interaction regions).
-            flux_matrix_values_map[col_index] += flux_matrix_values[index][counter];
+            ind_data_map[col_index] += data_values[index][counter];
             ++counter;
         }
     }
     // After the loop, we need to empty the map for the last non-zero row.
-    for (const auto& pair : flux_matrix_values_map)
+    for (const auto& pair : ind_data_map)
     {
         col_idx.push_back(pair.first);
-        flux_values.push_back(pair.second);
+        values.push_back(pair.second);
     }
     // We also need to fill the row pointer for the last row. This may need to be
     // repeated, if the last non-zero row is not the last row in the matrix, hence the
     // while loop.
     while (row_ptr.size() <= num_rows)
     {
-        row_ptr.push_back(flux_values.size());
+        row_ptr.push_back(values.size());
     }
 
     // Create the compressed data storage for the flux.
+    // EK note to self: The cost of the matrix construction is negligible here.
     auto flux_storage = std::make_shared<CompressedDataStorage<double>>(num_rows, num_cols, row_ptr,
-                                                                        col_idx, flux_values);
+                                                                        col_idx, values);
     return flux_storage;
 }
 
