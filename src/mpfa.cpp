@@ -223,6 +223,10 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
     // Loop over the sorted indices, which correspond to the subfaces.
     for (const int index : sorted_indices)
     {
+        // References to the column indices and data values for the current subface.
+        const auto& loc_col_indices = col_indices[index];
+        const auto& loc_data_values = data_values[index];
+
         // If the row index has changed, that is, we have reached a new face, we need to
         // update the row_ptr.
         if (row_indices[index] != previous_row)
@@ -247,12 +251,12 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
         }
 
         int counter = 0;
-        for (const double col_index : col_indices[index])
+        for (const int col_index : loc_col_indices)
         {
             // Store the flux values in a map to gather duplicate column indices (would
             // correspond to the same face-cell combination being present in different
             // interaction regions).
-            ind_data_map[col_index] += data_values[index][counter];
+            ind_data_map[col_index] += loc_data_values[counter];
             ++counter;
         }
     }
