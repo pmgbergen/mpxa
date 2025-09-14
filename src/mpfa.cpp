@@ -369,10 +369,25 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<std::array<double, SPATIAL_DIM>> loc_face_centers;
     std::vector<std::array<double, SPATIAL_DIM>> loc_face_normals;
 
+    // Storage for local (to interaction region) and global face indices of a cell.
+    std::vector<int> loc_faces_of_cell(DIM, -1);
+    std::vector<int> glob_faces_of_cell(DIM, -1);
+
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
         // Get the interaction region for the node.
         InteractionRegion interaction_region(node_ind, 1, grid);
+
+        // Iterate over the matrix flux (columns major), store the values in the
+        // flux_triplets.
+        std::vector<int> reg_cell_ind = interaction_region.cells();
+        std::vector<int> reg_face_glob_ind;
+        std::vector<int> reg_face_loc_ind;
+        for (const auto& pair : interaction_region.faces())
+        {
+            reg_face_glob_ind.push_back(pair.first);
+            reg_face_loc_ind.push_back(pair.second);
+        }
 
         const std::vector<double> node_coord = grid.nodes()[node_ind];
 
@@ -457,18 +472,15 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
         {
             continuity_points[0] = loc_cell_centers[loc_cell_ind];
-            const int glob_cell_ind = interaction_region.cells()[loc_cell_ind];
-
-            std::vector<int> loc_faces_of_cell;
-            std::vector<int> glob_faces_of_cell;
+            const int glob_cell_ind = reg_cell_ind[loc_cell_ind];
 
             int face_counter = 1;
             for (const int glob_face_ind : interaction_region.faces_of_cells().at(glob_cell_ind))
             {
                 // Get the face normal and center.
                 const int loc_face_index = interaction_region.faces().at(glob_face_ind);
-                glob_faces_of_cell.push_back(glob_face_ind);
-                loc_faces_of_cell.push_back(loc_face_index);
+                glob_faces_of_cell[face_counter - 1] = glob_face_ind;
+                loc_faces_of_cell[face_counter - 1] = loc_face_index;
 
                 auto in_dir = loc_dirichlet_faces.find(loc_face_index);
                 auto in_neu = loc_neumann_faces.find(loc_face_index);
