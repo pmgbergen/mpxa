@@ -936,7 +936,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                         cell_ind_vector_source.push_back(col);
                     }
                 }
-
                 vector_source_bound_pressure_col_idx.emplace_back(cell_ind_vector_source);
             }
         }
@@ -945,13 +944,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     ScalarDiscretization discretization;
 
-    // CSR storage for the flux matrix.
     auto flux_storage =
         create_csr_matrix(flux_matrix_row_idx, flux_matrix_col_idx, flux_matrix_values,
                           grid.num_faces(), grid.num_cells(), tot_num_transmissibilities);
     discretization.flux = flux_storage;
 
-    // Create the compressed data storage for the boundary flux.
     auto bound_flux_storage = create_csr_matrix(
         bound_flux_matrix_row_idx, bound_flux_matrix_col_idx, bound_flux_matrix_values,
         grid.num_faces(), grid.num_faces(), bound_flux_matrix_row_idx.size());
@@ -974,10 +971,10 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         grid.num_faces(), SPATIAL_DIM * grid.num_cells(), vector_source_cell_row_idx.size());
     discretization.vector_source = vector_source_cell_storage;
 
-    discretization.bound_pressure_vector_source = create_csr_matrix(
+    auto vector_source_bound_pressure_storage = create_csr_matrix(
         vector_source_bound_pressure_row_idx, vector_source_bound_pressure_col_idx,
         vector_source_bound_pressure_values, grid.num_faces(), SPATIAL_DIM * grid.num_cells(),
         vector_source_bound_pressure_row_idx.size());
-
+    discretization.bound_pressure_vector_source = vector_source_bound_pressure_storage;
     return discretization;
 }
