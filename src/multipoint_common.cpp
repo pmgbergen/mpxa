@@ -222,9 +222,14 @@ InteractionRegion::InteractionRegion(const int node, const int dim, const Grid& 
     }
 
     m_cells = std::vector<int>();
+    m_cells.reserve(face_indices.size());
     m_main_cell_of_faces = std::vector<int>(face_indices.size(), -1);
 
     m_faces_of_cells = std::map<int, std::vector<int>>();
+
+    // For the cell indexing, use an unordered set for fast lookup, store the cells
+    // in a vector to maintain the order of insertion.
+    std::unordered_set<int> cell_set(m_cells.begin(), m_cells.end());
 
     for (size_t i = 0; i < face_indices.size(); ++i)
     {
@@ -240,10 +245,6 @@ InteractionRegion::InteractionRegion(const int node, const int dim, const Grid& 
         //    is not already present.
         // 2. Assign this face to the set of faces of the cell.
 
-        // For the cell indexing, use an unordered set for fast lookup, store the cells
-        // in a vector to maintain the order of insertion.
-        std::unordered_set<int> cell_set(m_cells.begin(), m_cells.end());
-
         for (const int cell : cells_of_face)
         {
             if (cell_set.insert(cell).second)
@@ -258,11 +259,12 @@ InteractionRegion::InteractionRegion(const int node, const int dim, const Grid& 
                 // at the node (this will break for pyramid cells, but if we encounter
                 // those, we will have all sorts of problems).
                 m_faces_of_cells[cell] = std::vector<int>();
+                m_faces_of_cells[cell].reserve(m_dim);
             }
             m_faces_of_cells[cell].push_back(face);
         }
     }
-
+    m_cells.resize(cell_set.size());
     // Sort the cells and faces for consistency in the output.
     std::sort(m_cells.begin(), m_cells.end());
 }
