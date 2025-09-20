@@ -265,7 +265,7 @@ InteractionRegion::InteractionRegion(const int node, const int dim, const Grid& 
         }
     }
     m_cells.resize(cell_set.size());
-    // Sort the cells and faces for consistency in the output.
+    // Sort the cells for consistency in the output.
     std::sort(m_cells.begin(), m_cells.end());
 }
 // endregion InteractionRegion
