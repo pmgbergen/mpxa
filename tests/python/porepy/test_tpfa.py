@@ -41,7 +41,7 @@ def _compare_matrices(m_0: mpxa.CompressedDataStorageDouble, m_1: sps.spmatrix):
     assert m_0.shape == m_1.shape, f"Shape mismatch: {m_0.shape} vs {m_1.shape}"
 
     diff = m_0 - m_1
-    assert np.allclose(diff.data, 0, rtol=1e-10, atol=1e-13)
+    assert np.allclose(diff.data, 0, rtol=1e-10, atol=1e-14)
 
 
 @pytest.mark.parametrize("g_pp", grid_list)
@@ -89,12 +89,12 @@ def test_tpfa(g_pp, tensor_func, discr_type):
         discr_cpp = mpxa.mpfa(g, K, bc)
 
     for attribute in [
-        "bound_pressure_vector_source",
         "vector_source",
         "flux",
         "bound_flux",
         "bound_pressure_face",
         "bound_pressure_cell",
+        "bound_pressure_vector_source",
     ]:
         m_0 = getattr(discr_cpp, attribute)
         m_1 = data[pp.DISCRETIZATION_MATRICES][key][attribute]
