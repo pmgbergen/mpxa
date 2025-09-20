@@ -204,74 +204,121 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
     const std::vector<std::vector<double>>& data_values, const int num_rows, const int num_cols,
     const int tot_num_transmissibilities)
 {
-    std::vector<int> sorted_indices(row_indices.size());
-    std::iota(sorted_indices.begin(), sorted_indices.end(), 0);
-    std::sort(sorted_indices.begin(), sorted_indices.end(),
+    std::vector<int> sorted_row_indices(row_indices.size());
+    std::iota(sorted_row_indices.begin(), sorted_row_indices.end(), 0);
+    std::sort(sorted_row_indices.begin(), sorted_row_indices.end(),
               [&row_indices](int i1, int i2) { return row_indices[i1] < row_indices[i2]; });
 
     std::vector<int> row_ptr;
-    std::vector<int> col_idx;
-    std::vector<double> values;
     row_ptr.reserve(num_rows + 1);
+    row_ptr.push_back(0);
+    std::vector<int> col_idx;
     col_idx.reserve(tot_num_transmissibilities);
+    std::vector<double> values;
     values.reserve(tot_num_transmissibilities);
 
-    int previous_row = -1;
-
-    std::unordered_map<int, double> ind_data_map;
-
-    // Loop over the sorted indices, which correspond to the subfaces.
-    for (const int index : sorted_indices)
+    std::vector<int> num_row_occurrences(num_rows, 0);
+    for (const int row_ind : row_indices)
     {
-        // References to the column indices and data values for the current subface.
-        const auto& loc_col_indices = col_indices[index];
-        const auto& loc_data_values = data_values[index];
+        ++num_row_occurrences[row_ind];
+    }
+    std::vector<int> col_index_sizes;
+    col_index_sizes.reserve(col_indices.size());
+    for (const auto& vec : col_indices)
+    {
+        col_index_sizes.push_back(vec.size());
+    }
 
-        // If the row index has changed, that is, we have reached a new face, we need to
-        // update the row_ptr.
-        if (row_indices[index] != previous_row)
+    std::vector<int> sorted_col_indices;
+    std::vector<double> sorted_data_values;
+    std::vector<int> this_row_col_indices;
+    std::vector<double> this_row_data;
+
+    int current_ind = 0;
+    for (int row_ind = 0; row_ind < num_row_occurrences.size(); ++row_ind)
+    {
+        this_row_col_indices.clear();
+        this_row_data.clear();
+        sorted_col_indices.clear();
+        sorted_data_values.clear();
+
+        if (num_row_occurrences[row_ind] == 0)
         {
-            // We need to store the flux values for the row, and empty the map for the next
-            // row.
-            for (const auto& pair : ind_data_map)
-            {
-                col_idx.push_back(pair.first);
-                values.push_back(pair.second);
-            }
-            ind_data_map.clear();
+            // No entries for this row, just copy the previous row pointer.
+            row_ptr.push_back(row_ptr.back());
+            continue;
+        }
+        std::vector<int> loc_sorted_indices(num_row_occurrences[row_ind]);
+        for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
+        {
+            loc_sorted_indices[i] = sorted_row_indices[current_ind + i];
+        }
+        current_ind += num_row_occurrences[row_ind];
 
-            // If we have a new row, we need to update the row_ptr. If there are zero
-            // rows in the matrix, multiple values of row_ptr will be added.
-            while (previous_row < row_indices[index])
+        int num_data_this_row = 0;
+        for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
+        {
+            //
+            num_data_this_row += col_index_sizes[loc_sorted_indices[i]];
+        }
+
+        this_row_col_indices.reserve(num_data_this_row);
+        this_row_data.reserve(num_data_this_row);
+
+        for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
+        {
+            const auto& loc_col_indices = col_indices[loc_sorted_indices[i]];
+            const auto& loc_data_values = data_values[loc_sorted_indices[i]];
+            this_row_col_indices.insert(this_row_col_indices.end(), loc_col_indices.begin(),
+                                        loc_col_indices.end());
+            this_row_data.insert(this_row_data.end(), loc_data_values.begin(),
+                                 loc_data_values.end());
+        }
+
+        if (this_row_col_indices.size() == 0)
+        {
+            // No entries for this row, just copy the previous row pointer.
+            row_ptr.push_back(col_idx.size());
+            continue;
+        }
+
+        // Now we need to sort the column indices and data values according to column
+        std::vector<int> sorting_col_indices(this_row_col_indices.size());
+        std::iota(sorting_col_indices.begin(), sorting_col_indices.end(), 0);
+        std::sort(sorting_col_indices.begin(), sorting_col_indices.end(),
+                  [&this_row_col_indices](int a, int b)
+                  { return this_row_col_indices[a] < this_row_col_indices[b]; });
+
+        // Create the sorted column indices and data values.
+        sorted_col_indices.reserve(this_row_col_indices.size());
+        sorted_data_values.reserve(this_row_data.size());
+
+        int prev_col = this_row_col_indices[sorting_col_indices[0]];
+        double accum_data = 0.0;
+
+        for (int i : sorting_col_indices)
+        {
+            if (this_row_col_indices[i] == prev_col)
             {
-                // We push the current size of col_idx to row_ptr.
-                row_ptr.push_back(values.size());
-                ++previous_row;
+                accum_data += this_row_data[i];
+            }
+            else
+            {
+                sorted_col_indices.push_back(prev_col);
+                sorted_data_values.push_back(accum_data);
+
+                prev_col = this_row_col_indices[i];
+                accum_data = this_row_data[i];
             }
         }
 
-        int counter = 0;
-        for (const int col_index : loc_col_indices)
-        {
-            // Store the flux values in a map to gather duplicate column indices (would
-            // correspond to the same face-cell combination being present in different
-            // interaction regions).
-            ind_data_map[col_index] += loc_data_values[counter];
-            ++counter;
-        }
-    }
-    // After the loop, we need to empty the map for the last non-zero row.
-    for (const auto& pair : ind_data_map)
-    {
-        col_idx.push_back(pair.first);
-        values.push_back(pair.second);
-    }
-    // We also need to fill the row pointer for the last row. This may need to be
-    // repeated, if the last non-zero row is not the last row in the matrix, hence the
-    // while loop.
-    while (row_ptr.size() <= num_rows)
-    {
-        row_ptr.push_back(values.size());
+        // Add the last accumulated value
+        sorted_col_indices.push_back(prev_col);
+        sorted_data_values.push_back(accum_data);
+
+        col_idx.insert(col_idx.end(), sorted_col_indices.begin(), sorted_col_indices.end());
+        values.insert(values.end(), sorted_data_values.begin(), sorted_data_values.end());
+        row_ptr.push_back(col_idx.size());
     }
 
     // Create the compressed data storage for the flux.
