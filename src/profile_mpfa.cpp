@@ -1,3 +1,4 @@
+#include <chrono>
 #include <iostream>
 #include <numeric>
 
@@ -12,16 +13,16 @@ int main()
     std::unique_ptr<Grid> grid;
     // Initialize the grid with test data (you'll need to implement this)
     // grid.initialize(...);
-    const std::vector<int> num_cells_2d = {100, 100};
+    const std::vector<int> num_cells_2d = {10, 10};
     const std::vector<double> lengths_2d = {2.0, 3.0};
     const std::vector<double> unit_lengths_2d = {1.0, 1.0};
 
     // For 3D Cartesian grids.
     std::unique_ptr<Grid> grid_3d;
-    const std::vector<int> num_cells_3d = {2, 2, 2};
+    const std::vector<int> num_cells_3d = {30, 20, 30};
 
     // Create grids, compute geometry.
-    if (true)  // Replace with actual condition to choose between 2D and 3D
+    if (false)  // Replace with actual condition to choose between 2D and 3D
     {
         grid = Grid::create_cartesian_grid(2, num_cells_2d, lengths_2d);
     }
@@ -52,16 +53,23 @@ int main()
         }
     }
 
+    auto start = std::chrono::high_resolution_clock::now();
     // Call the mpfa function
     try
     {
-        ScalarDiscretization result = mpfa(*grid, tensor, bc_map);
-        std::cout << "mpfa function executed successfully." << std::endl;
+        for (int i = 0; i < 3; ++i)
+        {
+            ScalarDiscretization result = mpfa(*grid, tensor, bc_map);
+            std::cout << "mpfa function executed successfully." << std::endl;
+        }
     }
     catch (const std::exception& e)
     {
         std::cerr << "Error during mpfa execution: " << e.what() << std::endl;
     }
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    std::cout << "Elapsed time for 3 runs: " << elapsed.count() << " seconds." << std::endl;
 
     return 0;
 }
