@@ -709,15 +709,17 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         // Compute the inverse of balance_faces matrix.
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> balance_faces_inv;
-        balance_faces_inv = balance_faces.inverse();
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> bound_flux;
-        bound_flux = flux_faces * balance_faces_inv;
-
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> flux;
+        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> bound_flux;
+        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> vector_source_cell;
+
+        balance_faces_inv = balance_faces.inverse();
+        bound_flux.noalias() = flux_faces * balance_faces_inv;
+
         if (loc_dirichlet_faces.empty())
         {
             // If there are no Dirichlet faces, we can directly use the flux_cells matrix.
-            flux = bound_flux * balance_cells + flux_cells;
+            flux.noalias() = bound_flux * balance_cells + flux_cells;
         }
         else
         {
@@ -731,12 +733,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 diag_matrix(face, face) = 0.0;  // Dirichlet faces
             }
 
-            flux = bound_flux * diag_matrix * balance_cells + flux_cells;
+            flux.noalias() = bound_flux * diag_matrix * balance_cells + flux_cells;
         }
 
         // Matrix needed to compute the vector source term.
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> vector_source_cell;
-        vector_source_cell = bound_flux * nK_matrix + nK_one_sided;
+        vector_source_cell.noalias() = bound_flux * nK_matrix + nK_one_sided;
 
         // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
         for (const auto face_inds : interaction_region.faces())
@@ -774,12 +775,15 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             // sources.
             Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
                 bound_vector_source_matrix;
-            bound_vector_source_matrix = balance_faces_inv * nK_matrix;
+            Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
+                face_pressure_from_cells;
+            bound_vector_source_matrix.noalias() = balance_faces_inv * nK_matrix;
 
             // Loop over all faces in the interaction region (internal and boundary).
             // Pick out the flux discretization associated with boundary faces (this can
             // be thought of as discretization of the flux induced by the boundary
             // condition).
+
             for (const auto& face_pair : interaction_region.faces())
             {
                 // For the boundary faces, we need to compute the boundary flux matrix.
@@ -813,9 +817,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             }
 
             // Mapping from cell center pressure to face pressures.
-            Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
-                face_pressure_from_cells;
-            face_pressure_from_cells = balance_faces_inv * balance_cells;
+            face_pressure_from_cells.noalias() = balance_faces_inv * balance_cells;
 
             // Vector of the global indices of the interaction region faces.
             std::vector<int> glob_indices_iareg_faces;
