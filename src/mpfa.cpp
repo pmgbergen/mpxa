@@ -237,11 +237,6 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
     int current_ind = 0;
     for (int row_ind = 0; row_ind < num_row_occurrences.size(); ++row_ind)
     {
-        this_row_col_indices.clear();
-        this_row_data.clear();
-        sorted_col_indices.clear();
-        sorted_data_values.clear();
-
         if (num_row_occurrences[row_ind] == 0)
         {
             // No entries for this row, just copy the previous row pointer.
@@ -319,6 +314,11 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
         col_idx.insert(col_idx.end(), sorted_col_indices.begin(), sorted_col_indices.end());
         values.insert(values.end(), sorted_data_values.begin(), sorted_data_values.end());
         row_ptr.push_back(col_idx.size());
+
+        this_row_col_indices.clear();
+        this_row_data.clear();
+        sorted_col_indices.clear();
+        sorted_data_values.clear();
     }
 
     // Create the compressed data storage for the flux.
