@@ -379,39 +379,54 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     // Data structures for the computed stencils.
     std::vector<int> flux_matrix_row_idx;
-    flux_matrix_row_idx.reserve(grid.num_faces() * num_faces_of_cell[0] + 1);
+    flux_matrix_row_idx.reserve(grid.num_faces() * num_nodes_of_face[0] + 1);
     std::vector<std::vector<int>> flux_matrix_col_idx;
-    flux_matrix_col_idx.reserve(grid.num_faces() * num_faces_of_cell[0] + 1);
+    flux_matrix_col_idx.reserve(grid.num_faces() * num_nodes_of_face[0] + 1);
     std::vector<std::vector<double>> flux_matrix_values;
-    flux_matrix_values.reserve(grid.num_faces() * num_faces_of_cell[0] + 1);
+    flux_matrix_values.reserve(grid.num_faces() * num_nodes_of_face[0] + 1);
 
     // Data structures for the discretization of boundary conditions.
     std::vector<int> bound_flux_matrix_row_idx;
-    bound_flux_matrix_row_idx.reserve(grid.num_faces() * num_faces_of_cell[0] + 1);
+    bound_flux_matrix_row_idx.reserve(grid.num_faces() * num_nodes_of_face[0]);
     std::vector<std::vector<int>> bound_flux_matrix_col_idx;
-    bound_flux_matrix_col_idx.reserve(num_bound_faces);
+    bound_flux_matrix_col_idx.reserve(num_bound_faces * num_nodes_of_face[0]);
     std::vector<std::vector<double>> bound_flux_matrix_values;
-    bound_flux_matrix_values.reserve(num_bound_faces);
+    bound_flux_matrix_values.reserve(num_bound_faces * num_nodes_of_face[0]);
 
     // Data structures for pressure reconstruction on boundary faces. Cell contributions.
     std::vector<std::vector<double>> pressure_reconstruction_cell_values;
+    pressure_reconstruction_cell_values.reserve(num_bound_faces * num_nodes_of_face[0]);
     std::vector<int> pressure_reconstruction_cell_row_idx;
+    pressure_reconstruction_cell_row_idx.reserve(grid.num_faces() * num_nodes_of_face[0]);
     std::vector<std::vector<int>> pressure_reconstruction_cell_col_idx;
+    pressure_reconstruction_cell_col_idx.reserve(num_bound_faces * num_nodes_of_face[0]);
     // .. and for the face contributions.
     std::vector<std::vector<double>> pressure_reconstruction_face_values;
+    pressure_reconstruction_face_values.reserve(num_bound_faces * num_nodes_of_face[0]);
     std::vector<int> pressure_reconstruction_face_row_idx;
+    pressure_reconstruction_face_row_idx.reserve(grid.num_faces() * num_nodes_of_face[0]);
     std::vector<std::vector<int>> pressure_reconstruction_face_col_idx;
+    pressure_reconstruction_face_col_idx.reserve(num_bound_faces * num_nodes_of_face[0]);
 
     // Data structures for the vector source terms.
     //
     // For the term representing imbalances in nK.
     std::vector<std::vector<double>> vector_source_cell_values;
+    vector_source_cell_values.reserve(grid.num_faces() * grid.dim() * num_nodes_of_face[0] + 1);
     std::vector<int> vector_source_cell_row_idx;
+    vector_source_cell_row_idx.reserve(grid.num_faces() * grid.dim() * num_nodes_of_face[0] + 1);
     std::vector<std::vector<int>> vector_source_cell_col_idx;
+    vector_source_cell_col_idx.reserve(grid.num_faces() * grid.dim() * num_nodes_of_face[0] + 1);
     // And for the face pressure reconstruction term (bound_pressure_vector_source).
     std::vector<std::vector<double>> vector_source_bound_pressure_values;
+    vector_source_bound_pressure_values.reserve(
+        num_bound_faces * grid.dim() * num_nodes_of_face[0] + 1);
     std::vector<int> vector_source_bound_pressure_row_idx;
+    vector_source_bound_pressure_row_idx.reserve(
+        grid.num_faces() * grid.dim() * num_nodes_of_face[0] + 1);
     std::vector<std::vector<int>> vector_source_bound_pressure_col_idx;
+    vector_source_bound_pressure_col_idx.reserve(
+        num_bound_faces * grid.dim() * num_nodes_of_face[0] + 1);
 
     const int DIM = grid.dim();
     int tot_num_transmissibilities = 0;
