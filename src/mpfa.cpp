@@ -760,9 +760,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             std::vector<double> row(flux.row(face_inds.second).data(),
                                     flux.row(face_inds.second).data() + flux.cols());
             flux_matrix_values.emplace_back(row);
-
             flux_matrix_row_idx.push_back(face_inds.first);
-            flux_matrix_col_idx.emplace_back(interaction_region.cells());
 
             // Also treatment of the vector source terms.
             std::vector<double> vs_row(
@@ -770,17 +768,23 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 vector_source_cell.row(face_inds.second).data() + vector_source_cell.cols());
             vector_source_cell_values.emplace_back(vs_row);
             vector_source_cell_row_idx.emplace_back(face_inds.first);
-
-            std::vector<int> cell_indices;
-            for (const auto& loc_cell_ind : interaction_region.cells())
-            {
-                for (int k = 0; k < SPATIAL_DIM; ++k)
-                {
-                    cell_indices.push_back(loc_cell_ind * SPATIAL_DIM + k);
-                }
-            }
-            vector_source_cell_col_idx.push_back(cell_indices);
         }
+        // Store column indices for the flux and vector source matrices.
+        std::vector<int> cell_indices;
+        cell_indices.reserve(num_cells * SPATIAL_DIM);
+        for (const auto& loc_cell_ind : interaction_region.cells())
+        {
+            for (int k = 0; k < SPATIAL_DIM; ++k)
+            {
+                cell_indices.push_back(loc_cell_ind * SPATIAL_DIM + k);
+            }
+        }
+        for (int i = 0; i < num_faces; ++i)
+        {
+            flux_matrix_col_idx.emplace_back(interaction_region.cells());
+            vector_source_cell_col_idx.emplace_back(cell_indices);
+        }
+
         tot_num_transmissibilities += num_faces * num_cells;
 
         if (loc_boundary_face_map.size() > 0)
