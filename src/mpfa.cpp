@@ -229,6 +229,8 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
         col_index_sizes.push_back(vec.size());
     }
 
+    // Local storage for the sorted column indices and data values for each row. Will be
+    // erased for each iteration.
     std::vector<int> sorted_col_indices;
     std::vector<double> sorted_data_values;
     std::vector<int> this_row_col_indices;
@@ -243,6 +245,7 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
             row_ptr.push_back(row_ptr.back());
             continue;
         }
+        // Create a vector of the local sorted indices for this row.
         std::vector<int> loc_sorted_indices(num_row_occurrences[row_ind]);
         for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
         {
@@ -250,18 +253,23 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
         }
         current_ind += num_row_occurrences[row_ind];
 
+        // Determine the total number of column indices for this row. This may contained
+        // repeated indices, but we will ignore that for now.
         int num_data_this_row = 0;
         for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
         {
-            //
             num_data_this_row += col_index_sizes[loc_sorted_indices[i]];
         }
 
+        // Gather all column indices and data values for this row. This will gather
+        // contributions from several local calculations (several interaction regions).
         this_row_col_indices.reserve(num_data_this_row);
         this_row_data.reserve(num_data_this_row);
-
         for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
         {
+            // Get the local column indices and data values for this local calculation.
+            // This may be a performance bottleneck (risk of page faults), but
+            // considering the data is unstructured, we need to take that hit somewhere.
             const auto& loc_col_indices = col_indices[loc_sorted_indices[i]];
             const auto& loc_data_values = data_values[loc_sorted_indices[i]];
             this_row_col_indices.insert(this_row_col_indices.end(), loc_col_indices.begin(),
@@ -284,7 +292,8 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
                   [&this_row_col_indices](int a, int b)
                   { return this_row_col_indices[a] < this_row_col_indices[b]; });
 
-        // Create the sorted column indices and data values.
+        // Create the sorted column indices and data values. These are used to
+        // accumulate values for repeated column indices.
         sorted_col_indices.reserve(this_row_col_indices.size());
         sorted_data_values.reserve(this_row_data.size());
 
@@ -295,10 +304,12 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
         {
             if (this_row_col_indices[i] == prev_col)
             {
+                // Accumulate data for repeated column indices.
                 accum_data += this_row_data[i];
             }
             else
             {
+                // Store the accumulated value and reset for the new column index.
                 sorted_col_indices.push_back(prev_col);
                 sorted_data_values.push_back(accum_data);
 
@@ -307,14 +318,15 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
             }
         }
 
-        // Add the last accumulated value
+        // Add the last accumulated value.
         sorted_col_indices.push_back(prev_col);
         sorted_data_values.push_back(accum_data);
 
+        // Append the sorted column indices and data values to the global storage.
         col_idx.insert(col_idx.end(), sorted_col_indices.begin(), sorted_col_indices.end());
         values.insert(values.end(), sorted_data_values.begin(), sorted_data_values.end());
         row_ptr.push_back(col_idx.size());
-
+        // Clear the local storage for the next iteration.
         this_row_col_indices.clear();
         this_row_data.clear();
         sorted_col_indices.clear();
