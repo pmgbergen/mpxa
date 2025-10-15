@@ -335,9 +335,212 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
 
     // Create the compressed data storage for the flux.
     // EK note to self: The cost of the matrix construction is negligible here.
-    auto flux_storage = std::make_shared<CompressedDataStorage<double>>(num_rows, num_cols, row_ptr,
-                                                                        col_idx, values);
-    return flux_storage;
+    auto matrix = std::make_shared<CompressedDataStorage<double>>(num_rows, num_cols, row_ptr,
+                                                                  col_idx, values);
+    return matrix;
+}
+
+// Helper function to create a compressed sparse row (CSR) matrix from vectors for both
+// flux and vector source terms. This is a specialized version of the above function
+// that exploits the fact that the column indices for the flux and vector source terms
+// are closely related, hence we need not do all sorting operations twice.
+std::pair<std::shared_ptr<CompressedDataStorage<double>>,
+          std::shared_ptr<CompressedDataStorage<double>>>
+create_flux_vector_source_matrix(const std::vector<int>& row_indices,
+                                 const std::vector<std::vector<int>>& col_indices,
+                                 const std::vector<std::vector<double>>& data_flux,
+                                 const std::vector<std::vector<double>>& data_vector_source,
+                                 const int num_rows, const int num_cols,
+                                 const int tot_num_transmissibilities)
+{
+    constexpr int SPATIAL_DIM = 3;
+    // Get the sorted indices for the row indices. This is common for the flux and
+    // vector source data.
+    std::vector<int> sorted_row_indices(row_indices.size());
+    std::iota(sorted_row_indices.begin(), sorted_row_indices.end(), 0);
+    std::sort(sorted_row_indices.begin(), sorted_row_indices.end(),
+              [&row_indices](int i1, int i2) { return row_indices[i1] < row_indices[i2]; });
+
+    std::vector<int> row_ptr_flux, row_ptr_vector_source;
+    row_ptr_flux.reserve(num_rows + 1);
+    row_ptr_flux.push_back(0);
+    row_ptr_vector_source.reserve(num_rows + 1);
+    row_ptr_vector_source.push_back(0);
+    std::vector<int> col_idx_flux, col_idx_vector_source;
+    col_idx_flux.reserve(tot_num_transmissibilities);
+    col_idx_vector_source.reserve(SPATIAL_DIM * tot_num_transmissibilities);
+    std::vector<double> values_flux, values_vector_source;
+    values_flux.reserve(tot_num_transmissibilities);
+    values_vector_source.reserve(SPATIAL_DIM * tot_num_transmissibilities);
+
+    // Count the number of occurrences of each row index.
+    std::vector<int> num_row_occurrences(num_rows, 0);
+    for (const int row_ind : row_indices)
+    {
+        ++num_row_occurrences[row_ind];
+    }
+    std::vector<int> col_index_sizes;
+    col_index_sizes.reserve(col_indices.size());
+    for (const auto& vec : col_indices)
+    {
+        col_index_sizes.push_back(vec.size());
+    }
+
+    std::vector<int> sorted_col_indices_flux, sorted_col_indices_vector_source;
+    std::vector<double> sorted_data_values_flux, sorted_data_values_vector_source;
+    std::vector<int> this_row_col_indices_flux, this_row_col_indices_vector_source;
+    std::vector<double> this_row_data_flux, this_row_data_vector_source;
+
+    int current_ind = 0;
+    for (int row_ind = 0; row_ind < num_row_occurrences.size(); ++row_ind)
+    {
+        if (num_row_occurrences[row_ind] == 0)
+        {
+            // No entries for this row, just copy the previous row pointer.
+            row_ptr_flux.push_back(row_ptr_flux.back());
+            row_ptr_vector_source.push_back(row_ptr_vector_source.back());
+            continue;
+        }
+        std::vector<int> loc_sorted_indices(num_row_occurrences[row_ind]);
+        for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
+        {
+            loc_sorted_indices[i] = sorted_row_indices[current_ind + i];
+        }
+        current_ind += num_row_occurrences[row_ind];
+
+        int num_data_this_row = 0;
+        for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
+        {
+            //
+            num_data_this_row += col_index_sizes[loc_sorted_indices[i]];
+        }
+
+        this_row_col_indices_flux.reserve(num_data_this_row);
+        this_row_data_flux.reserve(num_data_this_row);
+        this_row_col_indices_vector_source.reserve(SPATIAL_DIM * num_data_this_row);
+        this_row_data_vector_source.reserve(SPATIAL_DIM * num_data_this_row);
+
+        for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
+        {
+            const auto& loc_col_indices_flux = col_indices[loc_sorted_indices[i]];
+            const auto& loc_data_flux = data_flux[loc_sorted_indices[i]];
+            const auto& loc_data_vector_source = data_vector_source[loc_sorted_indices[i]];
+            this_row_col_indices_flux.insert(this_row_col_indices_flux.end(),
+                                             loc_col_indices_flux.begin(),
+                                             loc_col_indices_flux.end());
+            this_row_data_flux.insert(this_row_data_flux.end(), loc_data_flux.begin(),
+                                      loc_data_flux.end());
+            // For the vector source, we need to add SPATIAL_DIM entries for each
+            // column index in the flux data.
+            for (size_t j = 0; j < loc_col_indices_flux.size(); ++j)
+            {
+                for (int k = 0; k < SPATIAL_DIM; ++k)
+                {
+                    this_row_col_indices_vector_source.push_back(
+                        SPATIAL_DIM * loc_col_indices_flux[j] + k);
+                }
+            }
+            this_row_data_vector_source.insert(this_row_data_vector_source.end(),
+                                               loc_data_vector_source.begin(),
+                                               loc_data_vector_source.end());
+        }
+
+        if (this_row_col_indices_flux.size() == 0)
+        {
+            // No entries for this row, just copy the previous row pointer.
+            row_ptr_flux.push_back(col_idx_flux.size());
+            row_ptr_vector_source.push_back(col_idx_vector_source.size());
+            continue;
+        }
+
+        // Now we need to sort the column indices and data values according to column
+        std::vector<int> sorting_col_indices(this_row_col_indices_flux.size());
+        std::iota(sorting_col_indices.begin(), sorting_col_indices.end(), 0);
+        std::sort(sorting_col_indices.begin(), sorting_col_indices.end(),
+                  [&this_row_col_indices_flux](int a, int b)
+                  { return this_row_col_indices_flux[a] < this_row_col_indices_flux[b]; });
+
+        // Create the sorted column indices and data values.
+        sorted_col_indices_flux.reserve(this_row_col_indices_flux.size());
+        sorted_data_values_flux.reserve(this_row_data_flux.size());
+        sorted_col_indices_vector_source.reserve(this_row_col_indices_vector_source.size());
+        sorted_data_values_vector_source.reserve(this_row_data_vector_source.size());
+
+        int prev_col = this_row_col_indices_flux[sorting_col_indices[0]];
+        double accum_data_flux = 0.0;
+        double accum_data_vector_source[SPATIAL_DIM] = {0.0, 0.0, 0.0};
+
+        for (int i : sorting_col_indices)
+        {
+            if (this_row_col_indices_flux[i] == prev_col)
+            {
+                accum_data_flux += this_row_data_flux[i];
+                for (int k = 0; k < SPATIAL_DIM; ++k)
+                {
+                    accum_data_vector_source[k] += this_row_data_vector_source[SPATIAL_DIM * i + k];
+                }
+            }
+            else
+            {
+                sorted_col_indices_flux.push_back(prev_col);
+                sorted_data_values_flux.push_back(accum_data_flux);
+                for (int k = 0; k < SPATIAL_DIM; ++k)
+                {
+                    sorted_col_indices_vector_source.push_back(SPATIAL_DIM * prev_col + k);
+                    sorted_data_values_vector_source.push_back(accum_data_vector_source[k]);
+                }
+
+                prev_col = this_row_col_indices_flux[i];
+                accum_data_flux = this_row_data_flux[i];
+                for (int k = 0; k < SPATIAL_DIM; ++k)
+                {
+                    accum_data_vector_source[k] = this_row_data_vector_source[SPATIAL_DIM * i + k];
+                }
+            }
+        }
+
+        // Add the last accumulated value
+        sorted_col_indices_flux.push_back(prev_col);
+        sorted_data_values_flux.push_back(accum_data_flux);
+
+        for (int k = 0; k < SPATIAL_DIM; ++k)
+        {
+            sorted_col_indices_vector_source.push_back(SPATIAL_DIM * prev_col + k);
+            sorted_data_values_vector_source.push_back(accum_data_vector_source[k]);
+        }
+
+        col_idx_flux.insert(col_idx_flux.end(), sorted_col_indices_flux.begin(),
+                            sorted_col_indices_flux.end());
+        values_flux.insert(values_flux.end(), sorted_data_values_flux.begin(),
+                           sorted_data_values_flux.end());
+        col_idx_vector_source.insert(col_idx_vector_source.end(),
+                                     sorted_col_indices_vector_source.begin(),
+                                     sorted_col_indices_vector_source.end());
+        values_vector_source.insert(values_vector_source.end(),
+                                    sorted_data_values_vector_source.begin(),
+                                    sorted_data_values_vector_source.end());
+        row_ptr_flux.push_back(col_idx_flux.size());
+        row_ptr_vector_source.push_back(col_idx_vector_source.size());
+
+        this_row_col_indices_flux.clear();
+        this_row_data_flux.clear();
+        sorted_col_indices_flux.clear();
+        sorted_data_values_flux.clear();
+        this_row_col_indices_vector_source.clear();
+        this_row_data_vector_source.clear();
+        sorted_col_indices_vector_source.clear();
+        sorted_data_values_vector_source.clear();
+    }
+
+    // Create the compressed data storage for the flux.
+    // EK note to self: The cost of the matrix construction is negligible here.
+    auto flux_matrix = std::make_shared<CompressedDataStorage<double>>(
+        num_rows, num_cols, row_ptr_flux, col_idx_flux, values_flux);
+    auto vector_source_matrix = std::make_shared<CompressedDataStorage<double>>(
+        num_rows, SPATIAL_DIM * num_cols, row_ptr_vector_source, col_idx_vector_source,
+        values_vector_source);
+
+    return {flux_matrix, vector_source_matrix};
 }
 
 }  // namespace
@@ -422,13 +625,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     // Data structures for the vector source terms.
     //
-    // For the term representing imbalances in nK.
+    // For the term representing imbalances in nK. Here we only need the values, since
+    // the row and column indices can be inferred from the flux matrix.
     std::vector<std::vector<double>> vector_source_cell_values;
     vector_source_cell_values.reserve(grid.num_faces() * grid.dim() * num_nodes_of_face[0] + 1);
-    std::vector<int> vector_source_cell_row_idx;
-    vector_source_cell_row_idx.reserve(grid.num_faces() * grid.dim() * num_nodes_of_face[0] + 1);
-    std::vector<std::vector<int>> vector_source_cell_col_idx;
-    vector_source_cell_col_idx.reserve(grid.num_faces() * grid.dim() * num_nodes_of_face[0] + 1);
+
     // And for the face pressure reconstruction term (bound_pressure_vector_source).
     std::vector<std::vector<double>> vector_source_bound_pressure_values;
     vector_source_bound_pressure_values.reserve(
@@ -779,22 +980,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 vector_source_cell.row(face_inds.second).data(),
                 vector_source_cell.row(face_inds.second).data() + vector_source_cell.cols());
             vector_source_cell_values.emplace_back(vs_row);
-            vector_source_cell_row_idx.emplace_back(face_inds.first);
         }
-        // Store column indices for the flux and vector source matrices.
-        std::vector<int> cell_indices;
-        cell_indices.reserve(num_cells * SPATIAL_DIM);
-        for (const auto& loc_cell_ind : interaction_region.cells())
-        {
-            for (int k = 0; k < SPATIAL_DIM; ++k)
-            {
-                cell_indices.push_back(loc_cell_ind * SPATIAL_DIM + k);
-            }
-        }
+        // Store column indices for the flux matrix.
         for (int i = 0; i < num_faces; ++i)
         {
             flux_matrix_col_idx.emplace_back(interaction_region.cells());
-            vector_source_cell_col_idx.emplace_back(cell_indices);
         }
 
         tot_num_transmissibilities += num_faces * num_cells;
@@ -1022,39 +1212,42 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     }  // End iteration of nodes in the grid.
 
+    // Gather the computed data into CSR matrices and further into the discretization
+    // structure.
+
     ScalarDiscretization discretization;
 
-    auto flux_storage =
-        create_csr_matrix(flux_matrix_row_idx, flux_matrix_col_idx, flux_matrix_values,
-                          grid.num_faces(), grid.num_cells(), tot_num_transmissibilities);
-    discretization.flux = flux_storage;
+    // Use a tailored method for creating CSR matrices for the flux and vector source
+    // matrices, since they have similar sparsity pattern, and the construction of these
+    // take considerable time.
+    auto flux_and_vs = create_flux_vector_source_matrix(
+        flux_matrix_row_idx, flux_matrix_col_idx, flux_matrix_values, vector_source_cell_values,
+        grid.num_faces(), grid.num_cells(), tot_num_transmissibilities);
+    discretization.flux = flux_and_vs.first;
+    discretization.vector_source = flux_and_vs.second;
 
+    // For the remaining matrices we use a more general method. There could be some
+    // savings to be gained here as well, but in the bigger picture, the time spent
+    // here is not that important.
     auto bound_flux_storage = create_csr_matrix(
         bound_flux_matrix_row_idx, bound_flux_matrix_col_idx, bound_flux_matrix_values,
         grid.num_faces(), grid.num_faces(), bound_flux_matrix_row_idx.size());
     discretization.bound_flux = bound_flux_storage;
-
     auto pressure_reconstruction_cell_storage = create_csr_matrix(
         pressure_reconstruction_cell_row_idx, pressure_reconstruction_cell_col_idx,
         pressure_reconstruction_cell_values, grid.num_faces(), grid.num_cells(),
         pressure_reconstruction_cell_row_idx.size());
     discretization.bound_pressure_cell = pressure_reconstruction_cell_storage;
-
     auto pressure_reconstruction_face_storage = create_csr_matrix(
         pressure_reconstruction_face_row_idx, pressure_reconstruction_face_col_idx,
         pressure_reconstruction_face_values, grid.num_faces(), grid.num_faces(),
         pressure_reconstruction_face_row_idx.size());
     discretization.bound_pressure_face = pressure_reconstruction_face_storage;
-
-    auto vector_source_cell_storage = create_csr_matrix(
-        vector_source_cell_row_idx, vector_source_cell_col_idx, vector_source_cell_values,
-        grid.num_faces(), SPATIAL_DIM * grid.num_cells(), vector_source_cell_row_idx.size());
-    discretization.vector_source = vector_source_cell_storage;
-
     auto vector_source_bound_pressure_storage = create_csr_matrix(
         vector_source_bound_pressure_row_idx, vector_source_bound_pressure_col_idx,
         vector_source_bound_pressure_values, grid.num_faces(), SPATIAL_DIM * grid.num_cells(),
         vector_source_bound_pressure_row_idx.size());
     discretization.bound_pressure_vector_source = vector_source_bound_pressure_storage;
+
     return discretization;
 }
