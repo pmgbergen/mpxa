@@ -1,3 +1,8 @@
+"""Tests for the finite volume discretizations in PorePy against the mpxa bindings.
+
+The test assumes that PorePy is installed.
+"""
+
 import porepy as pp
 import numpy as np
 import pytest
@@ -101,10 +106,10 @@ def test_tpfa(g_pp, tensor_func, discr_type):
         m_0 = porepy_bridge.convert_matrix(m_0)
         print(m_1.shape)
 
-        internal_face = np.logical_not(g_pp.tags["domain_boundary_faces"])
         # The mpxa implementation does not provide reconstruction of the flux on internal
         # faces, so we set the internal face values to zero also in the PorePy
         # implementation.
+        internal_face = np.logical_not(g_pp.tags["domain_boundary_faces"])
         if (
             attribute == "bound_pressure_cell"
             or attribute == "bound_pressure_face"
@@ -113,8 +118,3 @@ def test_tpfa(g_pp, tensor_func, discr_type):
             m_1[internal_face, :] = 0.0
 
         _compare_matrices(m_0, m_1)
-
-
-# test_tpfa(grid_list[0], isotropic_tensor)
-# print("Isotropic tensor test passed.")
-# test_tpfa(grid_list[0], anisotropic_tensor)
