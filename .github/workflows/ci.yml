@@ -51,5 +51,9 @@ jobs:
           ctest
 
       - name: Run Python tests
+        # Rudimentary solution to python-path issue: Add the known path to the Python
+        # bindings to PYTHONPATH.
+        # The better option would be to make 'pip install .' work.
         run: |
+          export PYTHONPATH=${PYTHONPATH}:${HOME}/mpxa/build/bindings/python
           pytest tests/python --ignore=tests/python/porepy
