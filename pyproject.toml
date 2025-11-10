@@ -2,10 +2,23 @@
 requires = ["setuptools", "wheel", "pybind11>=2.6.0"]
 build-backend = "setuptools.build_meta"
 
-
 [project]
 name = "mpxa"
 version = "0.0.1"
+description="Python bindings for the MPXA C++ library"
+readme = "Readme.md"
+license = "GPL-3.0-or-later"
+keywords = ["finite volume elliptic equation"]
+maintainers = [
+    { name = "Eirik Keilegavlen", email = "Eirik.Keilegavlen@uib.no" },
+]
+urls = { "Homepage" = "https://github.com/keileg/mpxa" }
+classifiers = [
+    "Programming Language :: C++",    
+    "Programming Language :: Python",
+]
+
+
 dependencies = [
     "numpy",
     "pybind11>=2.6.0",

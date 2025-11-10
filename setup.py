@@ -28,13 +28,8 @@ class CustomInstall(install):
 
 
 setup(
-    name="mpxa",
-    version="0.1.0",
-    author="Eirik Keilegavlen",
-    description="Python bindings for the MPXA C++ library",
     packages=find_packages(),  # Specify the package containing the bindings
     package_data={"mpxa": ["*.so"]},  # Include the prebuilt grid.so file
-    zip_safe=False,
     install_requires=["pybind11>=2.6.0"],  # Ensure pybind11 is installed
     cmdclass={
         "install": CustomInstall,
