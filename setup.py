@@ -1,12 +1,40 @@
-from setuptools import setup
+from setuptools import setup, find_packages
+from setuptools.command.install import install
+import subprocess
+import os
+import shutil
+
+
+class CustomInstall(install):
+    def run(self):
+        # Run the default install command
+        super().run()
+        # Ensure the CMake build is triggered
+        build_dir = "build"
+        bindings_dir = os.path.join(build_dir, "bindings/python")
+        target_dir = os.path.join(os.getcwd(), "mpxa")
+        os.makedirs(target_dir, exist_ok=True)
+
+        # Run CMake and make
+        subprocess.check_call(["cmake", "-B", build_dir])
+        subprocess.check_call(["cmake", "--build", build_dir])
+
+        # Copy the built .so file to the package directory
+        for file in os.listdir(bindings_dir):
+            if file.endswith(".so"):
+                shutil.copy(os.path.join(bindings_dir, file), target_dir)
+
 
 setup(
     name="mpxa",
     version="0.1.0",
     author="Eirik Keilegavlen",
     description="Python bindings for the MPXA C++ library",
-    packages=["bindings.python"],  # Specify the package containing the bindings
-    package_data={"bindings.python": ["grid.so"]},  # Include the prebuilt grid.so file
+    packages=find_packages(),  # Specify the package containing the bindings
+    package_data={"mpxa": ["*.so"]},  # Include the prebuilt grid.so file
     zip_safe=False,
     install_requires=["pybind11>=2.6.0"],  # Ensure pybind11 is installed
+    cmdclass={
+        "install": CustomInstall,
+    },
 )
