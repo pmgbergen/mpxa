@@ -37,23 +37,11 @@ jobs:
           pip install .[testing]
           pip freeze
 
-      - name: Build C++ package
-        run: |
-          mkdir -p build
-          cd build
-          cmake ..
-          make
-          cd ..
-
       - name: Build and run C++ tests
         run: |
           cd build
           ctest
 
       - name: Run Python tests
-        # Rudimentary solution to python-path issue: Add the known path to the Python
-        # bindings to PYTHONPATH.
-        # The better option would be to make 'pip install .' work.
         run: |
-          export PYTHONPATH=${PYTHONPATH}:${HOME}/mpxa/build/bindings/python
           pytest tests/python --ignore=tests/python/porepy
