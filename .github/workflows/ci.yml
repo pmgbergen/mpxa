@@ -33,6 +33,8 @@ jobs:
           
       - name: Install Python dependencies
         run: |
+          python -m venv .venv
+          source .venv/bin/activate
           python -m pip install --upgrade pip
           pip install .[testing]
           pip install .
@@ -46,4 +48,5 @@ jobs:
 
       - name: Run Python tests
         run: |
-          python -m pytest tests/python --ignore=tests/python/porepy
+          source .venv/bin/activate
+          pytest tests/python --ignore=tests/python/porepy
