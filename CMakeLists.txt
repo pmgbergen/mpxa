@@ -57,7 +57,20 @@ set(LIBRARY_NAME libmpxa)
 # Define the test executable name variable
 set(TEST_EXECUTABLE test_mpxa)
 
-include_directories(${CMAKE_SOURCE_DIR}/external/eigen)
+# Find Eigen library
+find_package(Eigen3 REQUIRED)
+if(EIGEN3_FOUND)
+    include_directories(${EIGEN3_INCLUDE_DIR})
+    message(STATUS "Eigen3 found at: ${EIGEN3_INCLUDE_DIR}")
+else()
+    # Fallback to external/eigen if it exists
+    if(EXISTS ${CMAKE_SOURCE_DIR}/external/eigen)
+        include_directories(${CMAKE_SOURCE_DIR}/external/eigen)
+        message(STATUS "Using local Eigen from: ${CMAKE_SOURCE_DIR}/external/eigen")
+    else()
+        message(FATAL_ERROR "Eigen3 not found. Please install Eigen3 or provide it in external/eigen")
+    endif()
+endif()
 
 # Set (empty) list of library dependencies
 set(LIBRARY_DEPENDENCIES)
