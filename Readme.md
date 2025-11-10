@@ -11,9 +11,9 @@ The software provided here, both the C++ code and Python wrappers, should be con
 immature and be used with some caution.
 
 # Getting started
-Currently, the best starting point for the software is likely the PorePy wrappers, see
+Currently, the best (least bad) starting point for the software is likely the PorePy wrappers, see
 [here](https://github.com/keileg/mpxa/tree/main/tests/python/porepy), in particular
-the file `test_tpfa.py`.
+the file `test_fv.py`.
 
 # Licence
 See [Licence](https://github.com/keileg/mpxa/blob/main/LICENSE).
