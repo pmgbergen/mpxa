@@ -3,6 +3,7 @@ from setuptools.command.install import install
 import subprocess
 import os
 import shutil
+import site
 
 
 class CustomInstall(install):
@@ -12,7 +13,8 @@ class CustomInstall(install):
         # Ensure the CMake build is triggered
         build_dir = "build"
         bindings_dir = os.path.join(build_dir, "bindings/python")
-        target_dir = os.path.join(os.getcwd(), "mpxa")
+        target_dir = site.getsitepackages()[0]
+        # target_dir = os.path.join(os.getcwd(), ".venv/lib/python3.13/site-packages")
         os.makedirs(target_dir, exist_ok=True)
 
         # Run CMake and make
