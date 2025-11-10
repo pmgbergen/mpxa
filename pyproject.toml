@@ -12,7 +12,9 @@ dependencies = [
     "scipy",
 ]
 
-[dependency-groups]
-dev = [
+[project.optional-dependencies]
+testing = [
     "pytest",
+    "pytest-cov",
+    "pytest-runner"
 ]
