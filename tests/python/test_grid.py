@@ -1,4 +1,8 @@
-import pytest
+"""Test of the python bindings for the Grid class.
+
+Only a 2x2 grid is tested here for simplicity.
+"""
+
 import numpy as np
 import scipy.sparse as sps
 
@@ -15,13 +19,19 @@ def test_grid_bindings():
     ).tocsr()
 
     fn_cpp = mpxa.CompressedDataStorageInt(
-        9, 12, face_nodes.indptr, face_nodes.indices, face_nodes.data
+        9, 12, face_nodes.indptr, face_nodes.indices, face_nodes.data, False
     )
 
+    # Lazy construction of a CSR matrix for cell-face connectivity: A hard-coded
+    # COO-version of the matrix is fed to scipy to create the CSR-format, which is then
+    # used to create the C++ object.
     cf_faces = np.array([0, 1, 6, 8, 1, 2, 7, 9, 3, 4, 8, 10, 4, 5, 9, 11])
     cf_cells = np.repeat(np.arange(4), 4)
     cf_sgn = np.array([-1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1])
-    cf_cpp = mpxa.CompressedDataStorageInt(12, 4, cf_faces, cf_cells, cf_sgn)
+    cf_sps = sps.coo_matrix((cf_sgn, (cf_faces, cf_cells)), shape=(12, 4)).tocsr()
+    cf_cpp = mpxa.CompressedDataStorageInt(
+        12, 4, cf_sps.indptr, cf_sps.indices, cf_sps.data, False
+    )
 
     nodes = np.array(
         [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]]
