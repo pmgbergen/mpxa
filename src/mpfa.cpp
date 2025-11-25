@@ -672,15 +672,15 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         const int num_cells = interaction_region.cells().size();
 
         // Initialize matrices for the discretization.
-        auto balance_cells = MatrixXd::Zero(num_faces, num_cells);
-        auto balance_faces = MatrixXd::Zero(num_faces, num_faces);
+        MatrixXd balance_cells = MatrixXd::Zero(num_faces, num_cells);
+        MatrixXd balance_faces = MatrixXd::Zero(num_faces, num_faces);
 
-        auto flux_cells = MatrixXd::Zero(num_faces, num_cells);
-        auto flux_faces = MatrixXd::Zero(num_faces, num_faces);
+        MatrixXd flux_cells = MatrixXd::Zero(num_faces, num_cells);
+        MatrixXd flux_faces = MatrixXd::Zero(num_faces, num_faces);
 
         // Initialize the matrices used for the nK (vector source) terms.
-        auto nK_matrix = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
-        auto nK_one_sided = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
+        MatrixXd nK_matrix = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
+        MatrixXd nK_one_sided = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
 
         // TODO: Should we use vectors for the inner quantities?
         loc_cell_centers.resize(num_cells);
@@ -953,7 +953,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             // all other faces.
             // TODO: EK believes this also applies to Neumann faces. That should become
             // clear when applying this to a grid that is not K-orthogonal.
-            auto diag_matrix = Eigen::MatrixXd::Identity(num_faces, num_faces);
+            Eigen::MatrixXd diag_matrix = Eigen::MatrixXd::Identity(num_faces, num_faces);
             for (const auto& face : loc_dirichlet_faces)
             {
                 diag_matrix(face, face) = 0.0;  // Dirichlet faces
