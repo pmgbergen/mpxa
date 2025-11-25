@@ -51,21 +51,14 @@ const double nKproj(const std::vector<double>& face_normal, const SecondOrderTen
         {
             for (int j{0}; j < dim; ++j)
             {
-                double tensor_val;
-                if (i == 0 && j == 0)
-                    tensor_val = full_data[0];
-                else if (i == 1 && j == 1)
-                    tensor_val = full_data[1];
-                else if (i == 2 && j == 2)
-                    tensor_val = full_data[2];
-                else if (i == 0 && j == 1 || i == 1 && j == 0)
-                    tensor_val = full_data[3];
-                else if (i == 0 && j == 2 || i == 2 && j == 0)
-                    tensor_val = full_data[4];
-                else if (i == 1 && j == 2 || i == 2 && j == 1)
-                    tensor_val = full_data[5];
-
-                prod += sign * face_normal[i] * cell_face_vec[j] * tensor_val;
+                if (i == j) {
+                    double tensor_val = full_data[i];  // 0,1,2 for diagonal
+                    prod += sign * face_normal[i] * cell_face_vec[j] * tensor_val;
+                } else {
+                    int k = 2 + i + j;
+                    double tensor_val = full_data[k];
+                    prod += sign * face_normal[i] * cell_face_vec[j] * tensor_val;
+                }
             }
         }
         return prod / dist;
