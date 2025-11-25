@@ -31,3 +31,4 @@ testing = [
     "pytest-cov",
     "pytest-runner"
 ]
+porepy = ["porepy"]
