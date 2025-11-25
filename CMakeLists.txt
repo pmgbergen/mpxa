@@ -76,7 +76,7 @@ endif()
 set(LIBRARY_DEPENDENCIES)
 
 # Define the Python package name
-set(PYTHON_PACKAGE_NAME "mpxa")
+set(PYTHON_PACKAGE_NAME "_mpxa")
 
 # Add the Google Test framework
 enable_testing()
