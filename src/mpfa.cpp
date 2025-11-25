@@ -48,21 +48,19 @@ const std::array<double, 3> nK(const std::array<double, 3>& face_normal,
         for (int i{0}; i < dim; ++i)
         {
             double tensor_val;
-            for (int j{0}; j < dim; ++j)
-            {
-                if (i == 0 && j == 0)
-                    tensor_val = full_data[0];
-                else if (i == 1 && j == 1)
-                    tensor_val = full_data[1];
-                else if (i == 2 && j == 2)
-                    tensor_val = full_data[2];
-                else if (i == 0 && j == 1 || i == 1 && j == 0)
-                    tensor_val = full_data[3];
-                else if (i == 0 && j == 2 || i == 2 && j == 0)
-                    tensor_val = full_data[4];
-                else if (i == 1 && j == 2 || i == 2 && j == 1)
-                    tensor_val = full_data[5];
-                // TODO: Check i and j indices for correctness.
+            for (int j = 0; j < dim; ++j) {
+                double tensor_val;
+                
+                if (i == j) {
+                    tensor_val = full_data[i];  // Diagonal
+                } else {
+                    // For off-diagonal: use the fact that indices follow a pattern
+                    // (0,1) and (1,0) -> index 3
+                    // (0,2) and (2,0) -> index 4  
+                    // (1,2) and (2,1) -> index 5
+                    tensor_val = full_data[3 + ((i | j) - 1)];  // Bitwise OR trick
+                }
+                
                 result[i] -= face_normal[j] * tensor_val * num_nodes_of_face_inv;
             }
         }
@@ -674,15 +672,15 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         const int num_cells = interaction_region.cells().size();
 
         // Initialize matrices for the discretization.
-        MatrixXd balance_cells = MatrixXd::Zero(num_faces, num_cells);
-        MatrixXd balance_faces = MatrixXd::Zero(num_faces, num_faces);
+        auto balance_cells = MatrixXd::Zero(num_faces, num_cells);
+        auto balance_faces = MatrixXd::Zero(num_faces, num_faces);
 
-        MatrixXd flux_cells = MatrixXd::Zero(num_faces, num_cells);
-        MatrixXd flux_faces = MatrixXd::Zero(num_faces, num_faces);
+        auto flux_cells = MatrixXd::Zero(num_faces, num_cells);
+        auto flux_faces = MatrixXd::Zero(num_faces, num_faces);
 
         // Initialize the matrices used for the nK (vector source) terms.
-        MatrixXd nK_matrix = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
-        MatrixXd nK_one_sided = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
+        auto nK_matrix = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
+        auto nK_one_sided = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
 
         // TODO: Should we use vectors for the inner quantities?
         loc_cell_centers.resize(num_cells);
@@ -955,7 +953,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             // all other faces.
             // TODO: EK believes this also applies to Neumann faces. That should become
             // clear when applying this to a grid that is not K-orthogonal.
-            Eigen::MatrixXd diag_matrix = Eigen::MatrixXd::Identity(num_faces, num_faces);
+            auto diag_matrix = Eigen::MatrixXd::Identity(num_faces, num_faces);
             for (const auto& face : loc_dirichlet_faces)
             {
                 diag_matrix(face, face) = 0.0;  // Dirichlet faces
