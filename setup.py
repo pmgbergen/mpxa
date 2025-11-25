@@ -23,7 +23,7 @@ class CustomInstall(install):
 
         # Copy the built .so file to the package directory
         for file in os.listdir(bindings_dir):
-            if file.endswith(".so"):
+            if file.endswith(".so") and file.startswith("_mpxa"):
                 shutil.copy(os.path.join(bindings_dir, file), target_dir)
 
 
