@@ -277,38 +277,23 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
         row_ptr_bound_pressure_face.push_back(col_idx_bound_pressure_face.size());
     }
 
-    // Gather the data into the compressed data storage.
-    CompressedDataStorage<double>* flux = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_cells(), row_ptr_flux, col_idx_flux, trm);
-
-    CompressedDataStorage<double>* bound_flux = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_faces(), row_ptr_bound_flux, col_idx_bound_flux, trm_bound);
-
-    CompressedDataStorage<double>* bound_pressure_cell_storage = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_cells(), row_ptr_bound_pressure_cell,
-        col_idx_bound_pressure_cell, bound_pressure_cell);
-
-    CompressedDataStorage<double>* bound_pressure_face_storage = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_faces(), row_ptr_bound_pressure_face,
-        col_idx_bound_pressure_face, bound_pressure_face);
-
-    CompressedDataStorage<double>* vector_source_storage = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source, col_idx_vector_source,
-        vector_source);
-    CompressedDataStorage<double>* vector_source_bound_storage = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source_bound,
-        col_idx_vector_source_bound, vector_source_bound);
-
     // Create the ScalarDiscretization object and return it.
     ScalarDiscretization discr;
-    discr.flux = std::unique_ptr<CompressedDataStorage<double>>(flux);
-    discr.bound_flux = std::unique_ptr<CompressedDataStorage<double>>(bound_flux);
-    discr.vector_source = std::unique_ptr<CompressedDataStorage<double>>(vector_source_storage);
-    discr.bound_pressure_vector_source =
-        std::unique_ptr<CompressedDataStorage<double>>(vector_source_bound_storage);
-    discr.bound_pressure_cell =
-        std::unique_ptr<CompressedDataStorage<double>>(bound_pressure_cell_storage);
-    discr.bound_pressure_face =
-        std::unique_ptr<CompressedDataStorage<double>>(bound_pressure_face_storage);
+    discr.flux = std::make_shared<CompressedDataStorage<double>>(grid.num_faces(), grid.num_cells(),
+                                                                 row_ptr_flux, col_idx_flux, trm);
+    discr.bound_flux = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_faces(), row_ptr_bound_flux, col_idx_bound_flux, trm_bound);
+    discr.vector_source = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source, col_idx_vector_source,
+        vector_source);
+    discr.bound_pressure_vector_source = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source_bound,
+        col_idx_vector_source_bound, vector_source_bound);
+    discr.bound_pressure_cell = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_cells(), row_ptr_bound_pressure_cell,
+        col_idx_bound_pressure_cell, bound_pressure_cell);
+    discr.bound_pressure_face = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_faces(), row_ptr_bound_pressure_face,
+        col_idx_bound_pressure_face, bound_pressure_face);
     return discr;
 }
