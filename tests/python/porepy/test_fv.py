@@ -6,7 +6,6 @@ The test assumes that PorePy is installed.
 import porepy as pp
 import numpy as np
 import pytest
-import porepy_bridge
 import mpxa
 
 import scipy.sparse as sps
@@ -65,9 +64,9 @@ def test_tpfa(g_pp, tensor_func, discr_type):
     bc_pp.is_dir[0] = True
     bc_pp.is_neu[0] = False
 
-    K = porepy_bridge.convert_tensor(K_pp, g_pp.dim)
-    bc = porepy_bridge.convert_bc(bc_pp)
-    g = porepy_bridge.convert_grid(g_pp)
+    K = mpxa.convert_tensor(K_pp, g_pp.dim)
+    bc = mpxa.convert_bc(bc_pp)
+    g = mpxa.convert_grid(g_pp)
 
     key = "flow"
 
@@ -103,7 +102,7 @@ def test_tpfa(g_pp, tensor_func, discr_type):
     ]:
         m_0 = getattr(discr_cpp, attribute)
         m_1 = data[pp.DISCRETIZATION_MATRICES][key][attribute]
-        m_0 = porepy_bridge.convert_matrix(m_0)
+        m_0 = mpxa.convert_matrix(m_0)
         print(m_1.shape)
 
         # The mpxa implementation does not provide reconstruction of the flux on internal
