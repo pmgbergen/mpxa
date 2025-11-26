@@ -19,7 +19,7 @@ int main()
 
     // For 3D Cartesian grids.
     std::unique_ptr<Grid> grid_3d;
-    const std::vector<int> num_cells_3d = {30, 20, 30};
+    const std::vector<int> num_cells_3d = {300, 40, 30};
 
     // Create grids, compute geometry.
     if (false)  // Replace with actual condition to choose between 2D and 3D
@@ -33,8 +33,27 @@ int main()
     grid->compute_geometry();
 
     std::vector<double> k_xx(grid->num_cells());
+    std::vector<double> k_yy(grid->num_cells());
+    std::vector<double> k_zz(grid->num_cells());
+    std::vector<double> k_xy(grid->num_cells());
+    std::vector<double> k_xz(grid->num_cells());
+    std::vector<double> k_yz(grid->num_cells());
     std::iota(k_xx.begin(), k_xx.end(), 1.0);  // Fill with 1.0, 2.0, ..., num_cells
-    SecondOrderTensor tensor = SecondOrderTensor(grid->dim(), grid->num_cells(), k_xx);
+    for (auto i{0}; i < grid->num_cells(); ++i)
+    {
+        k_yy[i] = k_xx[i] * 2;
+        k_zz[i] = k_xx[i] * 3;
+        k_xy[i] = k_xx[i] * -1;
+        k_xz[i] = k_xx[i] * -0.5;
+        k_yz[i] = k_xx[i] * -0.3;
+    }
+
+    SecondOrderTensor tensor = SecondOrderTensor(grid->dim(), grid->num_cells(), k_xx)
+                                   .with_kyy(k_yy)
+                                   .with_kzz(k_zz)
+                                   .with_kxy(k_xy)
+                                   .with_kxz(k_xz)
+                                   .with_kyz(k_yz);
 
     // Create a mock boundary condition map
     std::vector<int> boundary_faces = grid->boundary_faces();
@@ -55,9 +74,12 @@ int main()
 
     auto start = std::chrono::high_resolution_clock::now();
     // Call the mpfa function
+
+    int num_runs = 5;
+
     try
     {
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < num_runs; ++i)
         {
             ScalarDiscretization result = mpfa(*grid, tensor, bc_map);
             std::cout << "mpfa function executed successfully." << std::endl;
@@ -69,7 +91,8 @@ int main()
     }
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
-    std::cout << "Elapsed time for 3 runs: " << elapsed.count() << " seconds." << std::endl;
+    std::cout << "Elapsed time for " << num_runs << " runs: " << elapsed.count() << " seconds."
+              << std::endl;
 
     return 0;
 }
