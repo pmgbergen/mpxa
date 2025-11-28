@@ -94,15 +94,11 @@ const int CompressedDataStorage<T>::num_cols()
 }
 
 template <typename T>
-std::vector<int> CompressedDataStorage<T>::cols_in_row(int row)
+std::span<const int> CompressedDataStorage<T>::cols_in_row(int row)
 {
-    const int size = m_row_ptr[row + 1] - m_row_ptr[row];
-    std::vector<int> cols(size);
-    for (int i = 0; i < size; i++)
-    {
-        cols[i] = m_col_idx[m_row_ptr[row] + i];
-    }
-    return cols;
+    const int start = m_row_ptr[row];
+    const int size = m_row_ptr[row + 1] - start;
+    return std::span<const int>(&m_col_idx[start], size);
 }
 
 template <typename T>
@@ -144,7 +140,7 @@ const std::vector<int>& CompressedDataStorage<T>::row_ptr()
 }
 
 template <typename T>
-const std::vector<int>& CompressedDataStorage<T>::col_idx()
+const std::vector<int>& CompressedDataStorage<T>::col_idx() const
 {
     return m_col_idx;
 }

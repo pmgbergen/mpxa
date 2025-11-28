@@ -36,7 +36,7 @@ TEST_F(CompressedDataStorageTest, ConstructorWithValues)
 // Test the cols_in_row method
 TEST_F(CompressedDataStorageTest, ColsInRow)
 {
-    std::vector<int> cols = storage->cols_in_row(1);
+    auto cols = storage->cols_in_row(1);
     EXPECT_EQ(cols[0], 1);
     EXPECT_EQ(cols[1], 2);
 }

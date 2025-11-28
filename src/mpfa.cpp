@@ -1,8 +1,10 @@
 #include <Eigen/Dense>
 #include <array>
+#include <chrono>
 #include <iostream>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <tuple>
 #include <unordered_set>
 #include <vector>
@@ -36,7 +38,7 @@ const std::array<double, 3> nK(const std::array<double, 3>& face_normal,
     }
     else if (tensor.is_diagonal())
     {
-        std::vector<double> diag = tensor.diagonal_data(cell_ind);
+        auto diag = tensor.diagonal_data(cell_ind);
         for (int i{0}; i < dim; ++i)
         {
             result[i] = -face_normal[i] * diag[i] * num_nodes_of_face_inv;
@@ -44,26 +46,19 @@ const std::array<double, 3> nK(const std::array<double, 3>& face_normal,
     }
     else
     {
-        std::vector<double> full_data = tensor.full_data(cell_ind);
-        for (int i{0}; i < dim; ++i)
-        {
-            double tensor_val;
-            for (int j = 0; j < dim; ++j) {
-                double tensor_val;
-                
-                if (i == j) {
-                    tensor_val = full_data[i];  // Diagonal
-                } else {
-                    // For off-diagonal: use the fact that indices follow a pattern
-                    // (0,1) and (1,0) -> index 3
-                    // (0,2) and (2,0) -> index 4  
-                    // (1,2) and (2,1) -> index 5
-                    tensor_val = full_data[3 + ((i | j) - 1)];  // Bitwise OR trick
-                }
-                
-                result[i] -= face_normal[j] * tensor_val * num_nodes_of_face_inv;
-            }
-        }
+        auto full_data = tensor.full_data(cell_ind);
+        const double xx = full_data[0];
+        const double yy = full_data[1];
+        const double zz = full_data[2];
+        const double xy = full_data[3];
+        const double xz = full_data[4];
+        const double yz = full_data[5];
+        result[0] = -num_nodes_of_face_inv *
+                    (face_normal[0] * xx + face_normal[1] * xy + face_normal[2] * xz);
+        result[1] = -num_nodes_of_face_inv *
+                    (face_normal[0] * xy + face_normal[1] * yy + face_normal[2] * yz);
+        result[2] = -num_nodes_of_face_inv *
+                    (face_normal[0] * xz + face_normal[1] * yz + face_normal[2] * zz);
     }
     return result;
 }
@@ -163,9 +158,9 @@ std::vector<int> count_nodes_of_faces(const Grid& grid)
     // Count the number of nodes for each face in the grid.
     std::vector<int> num_nodes_of_face(grid.num_faces(), 0);
 
-    CompressedDataStorage<int> face_nodes = grid.face_nodes();
+    const auto& face_nodes = grid.face_nodes();
 
-    auto& col_idx = face_nodes.col_idx();
+    const auto& col_idx = face_nodes.col_idx();
 
     for (int i{0}; i < col_idx.size(); ++i)
     {
@@ -179,8 +174,8 @@ std::vector<int> count_faces_of_cells(const Grid& grid)
 {
     // Count the number of faces for each cell in the grid.
     std::vector<int> num_faces_of_cell(grid.num_cells(), 0);
-    CompressedDataStorage<int> cell_faces = grid.cell_faces();
-    auto& col_idx = cell_faces.col_idx();
+    const auto& cell_faces = grid.cell_faces();
+    const auto& col_idx = cell_faces.col_idx();
     for (int i{0}; i < col_idx.size(); ++i)
     {
         num_faces_of_cell[col_idx[i]]++;
@@ -544,8 +539,11 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
 }  // namespace
 
 ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
-                          const std::map<int, BoundaryCondition>& bc_map)
+                          const std::unordered_map<int, BoundaryCondition>& bc_map)
 {
+    auto tick = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> duration;
+
     constexpr int SPATIAL_DIM = 3;  // Assuming 3D for now, can be generalized later.
 
     BasisConstructor basis_constructor(grid.dim());
@@ -560,6 +558,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<int> num_nodes_of_face = count_nodes_of_faces(grid);
     std::vector<int> num_faces_of_cell = count_faces_of_cells(grid);
 
+    // YZ: We are not using the things below.
     int avg_num_cells_per_node;
     int avg_num_cell_per_bound_node;
     if (grid.dim() == 2)
@@ -650,16 +649,38 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<int> loc_faces_of_cell(DIM, -1);
     std::vector<int> glob_faces_of_cell(DIM, -1);
 
+    duration = std::chrono::high_resolution_clock::now() - tick;
+    std::cout << "Before outer loop: " << duration.count() << " seconds." << std::endl;
+
+    tick = std::chrono::high_resolution_clock::now();
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
+        std::cout << std::endl;
+        auto tick = std::chrono::high_resolution_clock::now();
+
         // Get the interaction region for the node.
         InteractionRegion interaction_region(node_ind, 1, grid);
 
+        duration = std::chrono::high_resolution_clock::now() - tick;
+        std::cout << "interaction_region constructor: " << duration.count() << " seconds."
+                  << std::endl;
+        tick = std::chrono::high_resolution_clock::now();
+
+        const int num_faces = interaction_region.faces().size();
+        const int num_cells = interaction_region.cells().size();
+
+        duration = std::chrono::high_resolution_clock::now() - tick;
+        std::cout << "interaction_region num_faces: " << duration.count() << " seconds."
+                  << std::endl;
+        tick = std::chrono::high_resolution_clock::now();
+
         // Iterate over the matrix flux (columns major), store the values in the
         // flux_triplets.
-        std::vector<int> reg_cell_ind = interaction_region.cells();
+        const auto& reg_cell_ind = interaction_region.cells();
         std::vector<int> reg_face_glob_ind;
+        reg_face_glob_ind.reserve(num_faces);
         std::vector<int> reg_face_loc_ind;
+        reg_face_loc_ind.reserve(num_faces);
         for (const auto& pair : interaction_region.faces())
         {
             reg_face_glob_ind.push_back(pair.first);
@@ -667,9 +688,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         }
 
         const std::vector<double> node_coord = grid.nodes()[node_ind];
-
-        const int num_faces = interaction_region.faces().size();
-        const int num_cells = interaction_region.cells().size();
 
         // Initialize matrices for the discretization.
         MatrixXd balance_cells = MatrixXd::Zero(num_faces, num_cells);
@@ -690,6 +708,10 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         loc_face_normals.resize(num_faces);
         face_normals_of_interaction_region(interaction_region, grid, loc_face_normals);
 
+        duration = std::chrono::high_resolution_clock::now() - tick;
+        std::cout << "Before inner loop: " << duration.count() << " seconds." << std::endl;
+        tick = std::chrono::high_resolution_clock::now();
+
         // If all cells have grid.dim() + 1 faces, this is a simplex. Use a boolean to
         // indicate whether this is a simplex or not.
         bool is_simplex = true;
@@ -706,44 +728,46 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         // Mapping from local face index to global face index.
         std::vector<std::pair<int, int>> loc_boundary_face_map;
-        // Sets to store the local boundary faces, Neumann faces, and Dirichlet faces.
-        std::unordered_set<int> loc_boundary_faces;
-        std::unordered_set<int> loc_neumann_faces;
-        std::unordered_set<int> loc_dirichlet_faces;
+        // Mapping from local face to an optional boundary condition type. If the face
+        // is not on a boundary, contains `std::nullopt`.
+        std::vector<std::optional<BoundaryCondition>> loc_boundary_faces_type(
+            interaction_region.faces().size(), std::nullopt);
         std::map<int, std::vector<std::array<double, 3>>> basis_map;
 
         for (const auto& pair : interaction_region.faces())
         {
             // Initialize the local boundary faces with the local face index and the
             // global face index.
-            BoundaryCondition bc;
             auto it = bc_map.find(pair.first);
             if (it != bc_map.end())
             {
-                bc = it->second;
-                if (bc == BoundaryCondition::Neumann)
+                BoundaryCondition bc = it->second;
+                if (bc == BoundaryCondition::Dirichlet || bc == BoundaryCondition::Neumann)
                 {
                     // Store the local face index for Neumann faces. We need to do
                     // some scaling of this in the boundary condition
                     // discretization.
-                    loc_neumann_faces.insert(pair.second);
-                }
-                if (bc == BoundaryCondition::Dirichlet)
-                {
-                    // Store the local face index for Dirichlet faces. We need to do
-                    // some scaling of this in the boundary condition
+                    // Store the local face index for Dirichlet or Neumann faces. We
+                    // need to do some scaling of this in the boundary condition
                     // discretization.
-                    loc_dirichlet_faces.insert(pair.second);
+                    loc_boundary_face_map.push_back({pair.second, pair.first});
+                    loc_boundary_faces_type.at(pair.second) = bc;
                 }
-                if (bc == BoundaryCondition::Robin)
+                // Other cases are not implemented.
+                else if (bc == BoundaryCondition::Robin)
                 {
                     throw std::logic_error("Robin boundary condition not implemented");
                 }
-
-                loc_boundary_face_map.push_back({pair.second, pair.first});
-                loc_boundary_faces.insert(pair.second);
+                else
+                {
+                    throw std::logic_error("Unknown boundary condition");
+                }
             }
         }
+
+        duration = std::chrono::high_resolution_clock::now() - tick;
+        std::cout << "1st inner loop: " << duration.count() << " seconds." << std::endl;
+        tick = std::chrono::high_resolution_clock::now();
 
         // Iterate over the faces in the interaction region.
         for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
@@ -759,11 +783,14 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 glob_faces_of_cell[face_counter - 1] = glob_face_ind;
                 loc_faces_of_cell[face_counter - 1] = loc_face_index;
 
-                auto in_dir = loc_dirichlet_faces.find(loc_face_index);
-                auto in_neu = loc_neumann_faces.find(loc_face_index);
+                bool in_dir = false, in_neu = false;
+                if (const auto bc = loc_boundary_faces_type[loc_face_index]; bc.has_value())
+                {
+                    in_dir = *bc == BoundaryCondition::Dirichlet;
+                    in_neu = *bc == BoundaryCondition::Neumann;
+                }
 
-                if (is_simplex && (in_dir == loc_dirichlet_faces.end()) &&
-                    (in_neu == loc_neumann_faces.end()))
+                if (is_simplex && (!in_dir) && (!in_neu))
                 {
                     for (int i = 0; i < SPATIAL_DIM; ++i)
                     {
@@ -812,10 +839,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
                 is_boundary_face = false;
                 BoundaryCondition bc;
-                if (bc_map.find(glob_face_ind) != bc_map.end())
+                if (const auto optional_bc = loc_boundary_faces_type[loc_face_index];
+                    optional_bc.has_value())
                 {
                     is_boundary_face = true;
-                    bc = bc_map.at(glob_face_ind);
+                    bc = *optional_bc;
                 }
 
                 // Note on the sign of the elements in the balance matrices: For
@@ -933,6 +961,10 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             }
         }  // End iteration of cells of the interaction region.
 
+        duration = std::chrono::high_resolution_clock::now() - tick;
+        std::cout << "2nd inner loop: " << duration.count() << " seconds." << std::endl;
+        tick = std::chrono::high_resolution_clock::now();
+
         // Compute the inverse of balance_faces matrix.
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> balance_faces_inv;
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> flux;
@@ -942,42 +974,81 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         balance_faces_inv = balance_faces.inverse();
         bound_flux.noalias() = flux_faces * balance_faces_inv;
 
-        if (loc_dirichlet_faces.empty())
+        // bound_flux.noalias() =
+        //     balance_faces.transpose().partialPivLu().solve(flux_faces.transpose()).transpose();
+
+        duration = std::chrono::high_resolution_clock::now() - tick;
+        std::cout << "3rd inner loop (inverse part): " << duration.count() << " seconds."
+                  << std::endl;
+        tick = std::chrono::high_resolution_clock::now();
+
+        bool has_dirichlet = false;
+        for (const auto bc : loc_boundary_faces_type)
+        {
+            if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
+            {
+                has_dirichlet = true;
+                break;
+            }
+        }
+
+        if (!has_dirichlet)
         {
             // If there are no Dirichlet faces, we can directly use the flux_cells matrix.
             flux.noalias() = bound_flux * balance_cells + flux_cells;
         }
         else
         {
-            // Create a diagonal matrix which has value 0.0 for Dirichlet faces and 1.0 for
-            // all other faces.
+            // Create a mask representing a diagonal matrix which has value 0.0 for
+            // Dirichlet faces and 1.0 for all other faces.
             // TODO: EK believes this also applies to Neumann faces. That should become
             // clear when applying this to a grid that is not K-orthogonal.
-            Eigen::MatrixXd diag_matrix = Eigen::MatrixXd::Identity(num_faces, num_faces);
-            for (const auto& face : loc_dirichlet_faces)
+            Eigen::VectorXd mask = Eigen::VectorXd::Ones(num_faces);
+
+            for (int face{0}; face < loc_boundary_faces_type.size(); ++face)
             {
-                diag_matrix(face, face) = 0.0;  // Dirichlet faces
+                const auto bc = loc_boundary_faces_type[face];
+                if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
+                {
+                    mask(face) = 0.0;  // Dirichlet faces
+                }
             }
 
-            flux.noalias() = bound_flux * diag_matrix * balance_cells + flux_cells;
+            flux.noalias() = bound_flux * mask.asDiagonal() * balance_cells + flux_cells;
         }
 
         // Matrix needed to compute the vector source term.
         vector_source_cell.noalias() = bound_flux * nK_matrix + nK_one_sided;
 
+        duration = std::chrono::high_resolution_clock::now() - tick;
+        std::cout << "3rd inner loop (multiplication part): " << duration.count() << " seconds."
+                  << std::endl;
+        tick = std::chrono::high_resolution_clock::now();
+
         // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
+        size_t vs_cols = vector_source_cell.cols();
+        size_t cols = flux.cols();
         for (const auto face_inds : interaction_region.faces())
         {
-            std::vector<double> row(flux.row(face_inds.second).data(),
-                                    flux.row(face_inds.second).data() + flux.cols());
-            flux_matrix_values.emplace_back(row);
+            long row_id = face_inds.second;
+
+            // Constructing the vector IN PLACE at the end of the list. This avoids
+            // creating a temporary vector and then moving/copying it.
+            flux_matrix_values.emplace_back();
+            auto& new_flux_row = flux_matrix_values.back();
+            new_flux_row.resize(cols);
+
+            // Copying raw data. We use RowMajor format, so data is contiguous.
+            std::memcpy(new_flux_row.data(), flux.row(row_id).data(), cols * sizeof(double));
+
             flux_matrix_row_idx.push_back(face_inds.first);
 
-            // Also treatment of the vector source terms.
-            std::vector<double> vs_row(
-                vector_source_cell.row(face_inds.second).data(),
-                vector_source_cell.row(face_inds.second).data() + vector_source_cell.cols());
-            vector_source_cell_values.emplace_back(vs_row);
+            // Same for Vector Source.
+            vector_source_cell_values.emplace_back();
+            auto& new_vs_row = vector_source_cell_values.back();
+            new_vs_row.resize(vs_cols);
+            std::memcpy(new_vs_row.data(), vector_source_cell.row(row_id).data(),
+                        vs_cols * sizeof(double));
         }
         // Store column indices for the flux matrix.
         for (int i = 0; i < num_faces; ++i)
@@ -985,10 +1056,22 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             flux_matrix_col_idx.emplace_back(interaction_region.cells());
         }
 
+        duration = std::chrono::high_resolution_clock::now() - tick;
+        std::cout << "3rd inner loop (copying part): " << duration.count() << " seconds."
+                  << std::endl;
+        tick = std::chrono::high_resolution_clock::now();
+
         tot_num_transmissibilities += num_faces * num_cells;
+
+        duration = std::chrono::high_resolution_clock::now() - tick;
+        std::cout << "3rd inner loop (addition part): " << duration.count() << " seconds."
+                  << std::endl;
+        tick = std::chrono::high_resolution_clock::now();
 
         if (loc_boundary_face_map.size() > 0)
         {
+            auto tick = std::chrono::high_resolution_clock::now();
+
             // Also need to find the face pressures as generated by the nK imbalances; this
             // will enter the reconstruction of face boundary pressures from the vector
             // sources.
@@ -1006,33 +1089,33 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             for (const auto& face_pair : interaction_region.faces())
             {
                 // For the boundary faces, we need to compute the boundary flux matrix.
-                std::vector<double> row(
-                    bound_flux.row(face_pair.second).data(),
-                    bound_flux.row(face_pair.second).data() + bound_flux.cols());
 
-                std::vector<int> bf_indices;
-                std::vector<double> bf_val;
+                bound_flux_matrix_row_idx.emplace_back(face_pair.first);
+                // Creating the inner vectors in place to avoid additional copying into
+                // them.
+                bound_flux_matrix_col_idx.emplace_back();
+                bound_flux_matrix_values.emplace_back();
+                auto& bf_indices = bound_flux_matrix_col_idx.back();
+                auto& bf_val = bound_flux_matrix_values.back();
 
                 for (const auto& loc_face_pair : loc_boundary_face_map)
                 {
-                    if (loc_neumann_faces.find(loc_face_pair.first) != loc_neumann_faces.end())
+                    if (const auto bc = loc_boundary_faces_type[loc_face_pair.first];
+                        bc.has_value() && *bc == BoundaryCondition::Neumann)
                     {
                         // For Neumann boundary faces, scale the flux by the number of
                         // nodes, since the boundary condition will be taken in terms of the
                         // total flux over the face (not the subface).
-                        bf_val.push_back(row[loc_face_pair.first] /
+                        bf_val.push_back(bound_flux(face_pair.second, loc_face_pair.first) /
                                          num_nodes_of_face[loc_face_pair.first]);
                     }
                     else
                     {
-                        bf_val.push_back(row[loc_face_pair.first]);
+                        // We know it can be only Dirichlet.
+                        bf_val.push_back(bound_flux(face_pair.second, loc_face_pair.first));
                     }
                     bf_indices.push_back(loc_face_pair.second);
                 }
-
-                bound_flux_matrix_values.emplace_back(bf_val);
-                bound_flux_matrix_col_idx.emplace_back(bf_indices);
-                bound_flux_matrix_row_idx.emplace_back(face_pair.first);
             }
 
             // Mapping from cell center pressure to face pressures.
@@ -1045,6 +1128,10 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 glob_indices_iareg_faces.push_back(face_pair.first);
             }
 
+            duration = std::chrono::high_resolution_clock::now() - tick;
+            std::cout << "inside if: " << duration.count() << " seconds." << std::endl;
+            tick = std::chrono::high_resolution_clock::now();
+
             for (const auto& loc_face_pair : loc_boundary_face_map)
             {
                 // We need to divide by the number of nodes on the face, since the
@@ -1052,16 +1139,20 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // nodes on the face.
                 const double inv_num_nodes_of_face = 1.0 / num_nodes_of_face[loc_face_pair.first];
 
-                if (loc_dirichlet_faces.find(loc_face_pair.first) != loc_dirichlet_faces.end())
+                if (const auto bc = loc_boundary_faces_type[loc_face_pair.first];
+                    bc.has_value() && *bc == BoundaryCondition::Dirichlet)
                 {
                     // For a Dirichlet boundary face, we only need to assign a unit
                     // value (thereby, the pressure at the face will be equal to the
                     // prescribed boundary condition).
-                    std::vector<double> one{1.0 * inv_num_nodes_of_face};
-                    pressure_reconstruction_face_values.push_back(one);
+
+                    // Creates a vector of one element in place.
+                    pressure_reconstruction_face_values.emplace_back(
+                        std::initializer_list<double>{1.0 * inv_num_nodes_of_face});
                     pressure_reconstruction_face_row_idx.push_back(loc_face_pair.second);
-                    std::vector<int> col_idx{loc_face_pair.second};
-                    pressure_reconstruction_face_col_idx.push_back(col_idx);
+                    // Same in place construction.
+                    pressure_reconstruction_face_col_idx.emplace_back(
+                        std::initializer_list<int>{loc_face_pair.second});
                     // No contribution from other cells or faces.
                     continue;
                 }
@@ -1149,7 +1240,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     for (const auto& face_pair : interaction_region.faces())
                     {
                         const int loc_face_ind = face_pair.second;
-                        if (loc_boundary_faces.find(loc_face_ind) != loc_boundary_faces.end())
+                        if (const auto bc = loc_boundary_faces_type[loc_face_ind]; bc.has_value())
                         {
                             // Get the contribution from face_pair.first via the basis
                             // function centered at the face face_ind. Rough explanation
@@ -1171,7 +1262,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                             double contribution_from_face =
                                 row_from_faces[loc_face_ind] *
                                 pressure_diff[basis_vector_face_counter] * inv_num_nodes_of_face;
-                            if (loc_neumann_faces.find(loc_face_ind) != loc_neumann_faces.end())
+
+                            if (*bc == BoundaryCondition::Neumann)
                             {
                                 // For Neumann faces, we also need to divide the imposed
                                 // flux by the number of nodes. This is equivalent to
@@ -1206,9 +1298,19 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 }
                 vector_source_bound_pressure_col_idx.emplace_back(cell_ind_vector_source);
             }
+            duration = std::chrono::high_resolution_clock::now() - tick;
+            std::cout << "end inner-inner loop: " << duration.count() << " seconds." << std::endl;
         }
+        duration = std::chrono::high_resolution_clock::now() - tick;
+        std::cout << "4rd inner loop: " << duration.count() << " seconds." << std::endl;
+        tick = std::chrono::high_resolution_clock::now();
 
     }  // End iteration of nodes in the grid.
+
+    duration = std::chrono::high_resolution_clock::now() - tick;
+    std::cout << "First outer loop: " << duration.count() << " seconds." << std::endl;
+
+    tick = std::chrono::high_resolution_clock::now();
 
     // Gather the computed data into CSR matrices and further into the discretization
     // structure.
@@ -1246,6 +1348,9 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         vector_source_bound_pressure_values, grid.num_faces(), SPATIAL_DIM * grid.num_cells(),
         vector_source_bound_pressure_row_idx.size());
     discretization.bound_pressure_vector_source = vector_source_bound_pressure_storage;
+
+    duration = std::chrono::high_resolution_clock::now() - tick;
+    std::cout << "After creating CSR matrices: " << duration.count() << " seconds." << std::endl;
 
     return discretization;
 }

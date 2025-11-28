@@ -65,7 +65,7 @@ const CompressedDataStorage<int>& Grid::cell_faces() const
     return *m_cell_faces;
 }
 
-const std::vector<int> Grid::faces_of_node(const int node) const
+const std::span<const int> Grid::faces_of_node(const int node) const
 {
     return m_face_nodes->cols_in_row(node);
 }
@@ -75,7 +75,7 @@ const std::vector<int> Grid::nodes_of_face(const int face) const
     return m_face_nodes->rows_in_col(face);
 }
 
-const std::vector<int> Grid::cells_of_face(const int face) const
+const std::span<const int> Grid::cells_of_face(const int face) const
 {
     return m_cell_faces->cols_in_row(face);
 }
@@ -326,7 +326,7 @@ void Grid::compute_geometry()
     // vector.
     for (int i{0}; i < m_num_faces; ++i)
     {
-        const std::vector<int> loc_cells = cells_of_face(i);
+        const auto loc_cells = cells_of_face(i);
 
         // Create a vector from the face center to the cell center
         double dot_prod = 0.0;

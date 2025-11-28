@@ -36,7 +36,7 @@ const double nKproj(const std::vector<double>& face_normal, const SecondOrderTen
     else if (tensor.is_diagonal())
     {
         double prod = 0.0;
-        std::vector<double> diag = tensor.diagonal_data(cell_ind);
+        auto diag = tensor.diagonal_data(cell_ind);
         for (int i{0}; i < dim; ++i)
         {
             prod += sign * face_normal[i] * cell_face_vec[i] * diag[i];
@@ -46,7 +46,7 @@ const double nKproj(const std::vector<double>& face_normal, const SecondOrderTen
     else
     {
         double prod = 0.0;
-        std::vector<double> full_data = tensor.full_data(cell_ind);
+        auto full_data = tensor.full_data(cell_ind);
         for (int i{0}; i < dim; ++i)
         {
             for (int j{0}; j < dim; ++j)
@@ -145,7 +145,7 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     for (int face_ind{0}; face_ind < grid.num_faces(); ++face_ind)
     {
         // Get various properties of the face and its first neighboring cell.
-        std::vector<int> cells = grid.cells_of_face(face_ind);
+        auto cells = grid.cells_of_face(face_ind);
         face_center = grid.face_center(face_ind);
         normal = grid.face_normal(face_ind);
         const int cell_a = cells[0];

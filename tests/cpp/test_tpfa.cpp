@@ -11,7 +11,7 @@ class TPFA : public ::testing::Test
     std::unique_ptr<Grid> grid;
     SecondOrderTensor tensor;
     ScalarDiscretization discr;
-    std::map<int, BoundaryCondition> bc_map;
+    std::unordered_map<int, BoundaryCondition> bc_map;
 
     // Constructor. Create a dummy tensor and empty discretization.
     TPFA() : grid(nullptr), tensor(2, 1, {1.0}), discr(), bc_map() {}

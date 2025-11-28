@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <vector>
+#include <span>
 
 template <typename T>
 class CompressedDataStorage
@@ -23,13 +24,18 @@ class CompressedDataStorage
     const int num_cols();
 
     const std::vector<int>& row_ptr();
-    const std::vector<int>& col_idx();
+    const std::vector<int>& col_idx() const;
     const std::vector<T>& data();
 
-    // Getters for the compressed data storage. These return *copies* of the data. TODO!
-    std::vector<int> cols_in_row(int row);
-    std::vector<int> rows_in_col(int col);  // Change from int* to std::vector<int>
-
+    // Getters for the compressed data storage.
+    
+    // Getter for columns in a row, returns an immutable view of the data.
+    std::span<const int> cols_in_row(int row);
+    // Getter of rows in a column, creates a new vector, since the underlying data is
+    // not contiguious.
+    std::vector<int> rows_in_col(int col);
+    // Getter for values, returns a copy of the values. Use `data` to access the
+    // underlying data.
     std::vector<T> values();
     T value(const int row, const int col);
 
@@ -42,6 +48,8 @@ class CompressedDataStorage
     std::vector<int> m_col_ptr;   // For CSC format
     std::vector<int> m_row_idx;   // For CSC format
     std::vector<T> m_values_csc;  // For CSC format
+    // This class stores a sparse matrix in the CSR format. Optionally, the CSC indices
+    // can be constructed alongside. 
     bool m_csc_constructed = false;
 };
 

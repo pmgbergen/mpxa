@@ -12,7 +12,7 @@ class MPFA : public ::testing::Test
    protected:
     std::unique_ptr<Grid> grid_2d;
     ScalarDiscretization discr_2d;
-    std::map<int, BoundaryCondition> bc_map_2d;
+    std::unordered_map<int, BoundaryCondition> bc_map_2d;
 
     // Constructor. Create a dummy tensor and empty discretization.
     MPFA() : grid_2d(nullptr), discr_2d(), bc_map_2d() {}

@@ -19,7 +19,9 @@ int main()
 
     // For 3D Cartesian grids.
     std::unique_ptr<Grid> grid_3d;
-    const std::vector<int> num_cells_3d = {300, 40, 30};
+    const std::vector<int> num_cells_3d = {300, 80, 30};
+    // const std::vector<int> num_cells_3d = {480, 40, 30};
+
 
     // Create grids, compute geometry.
     if (false)  // Replace with actual condition to choose between 2D and 3D
@@ -58,7 +60,7 @@ int main()
     // Create a mock boundary condition map
     std::vector<int> boundary_faces = grid->boundary_faces();
 
-    std::map<int, BoundaryCondition> bc_map;
+    std::unordered_map<int, BoundaryCondition> bc_map;
     for (int face_id : boundary_faces)
     {
         // For testing, assign Dirichlet to even faces and Neumann to odd faces
