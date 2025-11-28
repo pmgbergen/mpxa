@@ -1,6 +1,6 @@
 #include <array>
 #include <iostream>
-#include <map>
+#include <unordered_map>
 #include <vector>
 
 #include "../include/discr.h"
@@ -67,7 +67,7 @@ const double nKproj(const std::vector<double>& face_normal, const SecondOrderTen
 }  // namespace
 
 ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
-                          const std::map<int, BoundaryCondition>& bc_map)
+                          const std::unordered_map<int, BoundaryCondition>& bc_map)
 {
     const int num_boundary_faces = bc_map.size();
     const int num_internal_faces = grid.num_faces() - num_boundary_faces;
