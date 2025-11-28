@@ -1,7 +1,5 @@
 #include <Eigen/Dense>
 #include <array>
-#include <chrono>
-#include <iostream>
 #include <map>
 #include <numeric>
 #include <optional>
@@ -541,9 +539,6 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
 ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                           const std::unordered_map<int, BoundaryCondition>& bc_map)
 {
-    auto tick = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> duration;
-
     constexpr int SPATIAL_DIM = 3;  // Assuming 3D for now, can be generalized later.
 
     BasisConstructor basis_constructor(grid.dim());
@@ -649,30 +644,13 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<int> loc_faces_of_cell(DIM, -1);
     std::vector<int> glob_faces_of_cell(DIM, -1);
 
-    duration = std::chrono::high_resolution_clock::now() - tick;
-    std::cout << "Before outer loop: " << duration.count() << " seconds." << std::endl;
-
-    tick = std::chrono::high_resolution_clock::now();
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
-        std::cout << std::endl;
-        auto tick = std::chrono::high_resolution_clock::now();
-
         // Get the interaction region for the node.
         InteractionRegion interaction_region(node_ind, 1, grid);
 
-        duration = std::chrono::high_resolution_clock::now() - tick;
-        std::cout << "interaction_region constructor: " << duration.count() << " seconds."
-                  << std::endl;
-        tick = std::chrono::high_resolution_clock::now();
-
         const int num_faces = interaction_region.faces().size();
         const int num_cells = interaction_region.cells().size();
-
-        duration = std::chrono::high_resolution_clock::now() - tick;
-        std::cout << "interaction_region num_faces: " << duration.count() << " seconds."
-                  << std::endl;
-        tick = std::chrono::high_resolution_clock::now();
 
         // Iterate over the matrix flux (columns major), store the values in the
         // flux_triplets.
@@ -707,10 +685,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         face_centers_of_interaction_region(interaction_region, grid, loc_face_centers);
         loc_face_normals.resize(num_faces);
         face_normals_of_interaction_region(interaction_region, grid, loc_face_normals);
-
-        duration = std::chrono::high_resolution_clock::now() - tick;
-        std::cout << "Before inner loop: " << duration.count() << " seconds." << std::endl;
-        tick = std::chrono::high_resolution_clock::now();
 
         // If all cells have grid.dim() + 1 faces, this is a simplex. Use a boolean to
         // indicate whether this is a simplex or not.
@@ -764,10 +738,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 }
             }
         }
-
-        duration = std::chrono::high_resolution_clock::now() - tick;
-        std::cout << "1st inner loop: " << duration.count() << " seconds." << std::endl;
-        tick = std::chrono::high_resolution_clock::now();
 
         // Iterate over the faces in the interaction region.
         for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
@@ -961,10 +931,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             }
         }  // End iteration of cells of the interaction region.
 
-        duration = std::chrono::high_resolution_clock::now() - tick;
-        std::cout << "2nd inner loop: " << duration.count() << " seconds." << std::endl;
-        tick = std::chrono::high_resolution_clock::now();
-
         // Compute the inverse of balance_faces matrix.
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> balance_faces_inv;
         Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> flux;
@@ -973,14 +939,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         balance_faces_inv = balance_faces.inverse();
         bound_flux.noalias() = flux_faces * balance_faces_inv;
-
-        // bound_flux.noalias() =
-        //     balance_faces.transpose().partialPivLu().solve(flux_faces.transpose()).transpose();
-
-        duration = std::chrono::high_resolution_clock::now() - tick;
-        std::cout << "3rd inner loop (inverse part): " << duration.count() << " seconds."
-                  << std::endl;
-        tick = std::chrono::high_resolution_clock::now();
 
         bool has_dirichlet = false;
         for (const auto bc : loc_boundary_faces_type)
@@ -1020,11 +978,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         // Matrix needed to compute the vector source term.
         vector_source_cell.noalias() = bound_flux * nK_matrix + nK_one_sided;
 
-        duration = std::chrono::high_resolution_clock::now() - tick;
-        std::cout << "3rd inner loop (multiplication part): " << duration.count() << " seconds."
-                  << std::endl;
-        tick = std::chrono::high_resolution_clock::now();
-
         // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
         size_t vs_cols = vector_source_cell.cols();
         size_t cols = flux.cols();
@@ -1056,22 +1009,10 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             flux_matrix_col_idx.emplace_back(interaction_region.cells());
         }
 
-        duration = std::chrono::high_resolution_clock::now() - tick;
-        std::cout << "3rd inner loop (copying part): " << duration.count() << " seconds."
-                  << std::endl;
-        tick = std::chrono::high_resolution_clock::now();
-
         tot_num_transmissibilities += num_faces * num_cells;
-
-        duration = std::chrono::high_resolution_clock::now() - tick;
-        std::cout << "3rd inner loop (addition part): " << duration.count() << " seconds."
-                  << std::endl;
-        tick = std::chrono::high_resolution_clock::now();
 
         if (loc_boundary_face_map.size() > 0)
         {
-            auto tick = std::chrono::high_resolution_clock::now();
-
             // Also need to find the face pressures as generated by the nK imbalances; this
             // will enter the reconstruction of face boundary pressures from the vector
             // sources.
@@ -1127,10 +1068,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             {
                 glob_indices_iareg_faces.push_back(face_pair.first);
             }
-
-            duration = std::chrono::high_resolution_clock::now() - tick;
-            std::cout << "inside if: " << duration.count() << " seconds." << std::endl;
-            tick = std::chrono::high_resolution_clock::now();
 
             for (const auto& loc_face_pair : loc_boundary_face_map)
             {
@@ -1298,23 +1235,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 }
                 vector_source_bound_pressure_col_idx.emplace_back(cell_ind_vector_source);
             }
-            duration = std::chrono::high_resolution_clock::now() - tick;
-            std::cout << "end inner-inner loop: " << duration.count() << " seconds." << std::endl;
         }
-        duration = std::chrono::high_resolution_clock::now() - tick;
-        std::cout << "4rd inner loop: " << duration.count() << " seconds." << std::endl;
-        tick = std::chrono::high_resolution_clock::now();
-
     }  // End iteration of nodes in the grid.
-
-    duration = std::chrono::high_resolution_clock::now() - tick;
-    std::cout << "First outer loop: " << duration.count() << " seconds." << std::endl;
-
-    tick = std::chrono::high_resolution_clock::now();
 
     // Gather the computed data into CSR matrices and further into the discretization
     // structure.
-
     ScalarDiscretization discretization;
 
     // Use a tailored method for creating CSR matrices for the flux and vector source
@@ -1348,9 +1273,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         vector_source_bound_pressure_values, grid.num_faces(), SPATIAL_DIM * grid.num_cells(),
         vector_source_bound_pressure_row_idx.size());
     discretization.bound_pressure_vector_source = vector_source_bound_pressure_storage;
-
-    duration = std::chrono::high_resolution_clock::now() - tick;
-    std::cout << "After creating CSR matrices: " << duration.count() << " seconds." << std::endl;
 
     return discretization;
 }
