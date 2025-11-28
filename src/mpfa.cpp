@@ -6,6 +6,8 @@
 #include <tuple>
 #include <unordered_set>
 #include <vector>
+#include <chrono>
+#include <iostream>
 
 #include "../include/discr.h"
 #include "../include/multipoint_common.h"
@@ -344,6 +346,9 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
                                  const int num_rows, const int num_cols,
                                  const int tot_num_transmissibilities)
 {
+    std::chrono::duration<double> duration;
+    auto tick = std::chrono::high_resolution_clock::now();
+
     constexpr int SPATIAL_DIM = 3;
     // Get the sorted indices for the row indices. This is common for the flux and
     // vector source data.
@@ -351,6 +356,11 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
     std::iota(sorted_row_indices.begin(), sorted_row_indices.end(), 0);
     std::sort(sorted_row_indices.begin(), sorted_row_indices.end(),
               [&row_indices](int i1, int i2) { return row_indices[i1] < row_indices[i2]; });
+
+    duration = std::chrono::high_resolution_clock::now() - tick;
+    std::cout << "first sort: " << duration.count() << " seconds."
+                << std::endl;
+    tick = std::chrono::high_resolution_clock::now();
 
     std::vector<int> row_ptr_flux, row_ptr_vector_source;
     row_ptr_flux.reserve(num_rows + 1);
@@ -381,6 +391,12 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
     std::vector<double> sorted_data_values_flux, sorted_data_values_vector_source;
     std::vector<int> this_row_col_indices_flux, this_row_col_indices_vector_source;
     std::vector<double> this_row_data_flux, this_row_data_vector_source;
+    std::vector<int> loc_sorted_indices, sorting_col_indices;
+
+    duration = std::chrono::high_resolution_clock::now() - tick;
+    std::cout << "before outer loop: " << duration.count() << " seconds."
+                << std::endl;
+    tick = std::chrono::high_resolution_clock::now();
 
     int current_ind = 0;
     for (int row_ind = 0; row_ind < num_row_occurrences.size(); ++row_ind)
@@ -392,10 +408,10 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
             row_ptr_vector_source.push_back(row_ptr_vector_source.back());
             continue;
         }
-        std::vector<int> loc_sorted_indices(num_row_occurrences[row_ind]);
+        loc_sorted_indices.reserve(num_row_occurrences[row_ind]);
         for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
         {
-            loc_sorted_indices[i] = sorted_row_indices[current_ind + i];
+            loc_sorted_indices.push_back(sorted_row_indices[current_ind + i]);
         }
         current_ind += num_row_occurrences[row_ind];
 
@@ -445,8 +461,10 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
         }
 
         // Now we need to sort the column indices and data values according to column
-        std::vector<int> sorting_col_indices(this_row_col_indices_flux.size());
-        std::iota(sorting_col_indices.begin(), sorting_col_indices.end(), 0);
+        sorting_col_indices.reserve(this_row_col_indices_flux.size());
+        for (auto i = 0; i < this_row_col_indices_flux.size(); ++i) {
+            sorting_col_indices.push_back(i);
+        }
         std::sort(sorting_col_indices.begin(), sorting_col_indices.end(),
                   [&this_row_col_indices_flux](int a, int b)
                   { return this_row_col_indices_flux[a] < this_row_col_indices_flux[b]; });
@@ -521,7 +539,14 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
         this_row_data_vector_source.clear();
         sorted_col_indices_vector_source.clear();
         sorted_data_values_vector_source.clear();
+        loc_sorted_indices.clear();
+        sorting_col_indices.clear();
     }
+
+    duration = std::chrono::high_resolution_clock::now() - tick;
+    std::cout << "after outer loop: " << duration.count() << " seconds."
+                << std::endl;
+    tick = std::chrono::high_resolution_clock::now();
 
     // Create the compressed data storage for the flux.
     // EK note to self: The cost of the matrix construction is negligible here.
@@ -530,6 +555,11 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
     auto vector_source_matrix = std::make_shared<CompressedDataStorage<double>>(
         num_rows, SPATIAL_DIM * num_cols, row_ptr_vector_source, col_idx_vector_source,
         values_vector_source);
+
+    duration = std::chrono::high_resolution_clock::now() - tick;
+    std::cout << "end: " << duration.count() << " seconds."
+                << std::endl;
+    tick = std::chrono::high_resolution_clock::now();
 
     return {flux_matrix, vector_source_matrix};
 }
