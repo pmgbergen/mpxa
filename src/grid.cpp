@@ -589,7 +589,7 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
     std::vector<int> data_face_nodes(face_nodes_vector.size(), 1);
 
     auto face_nodes = std::make_shared<CompressedDataStorage<int>>(
-        num_nodes, tot_num_faces, row_ptr_face_nodes, col_ptr_face_nodes, data_face_nodes, true);
+        num_nodes, tot_num_faces, std::move(row_ptr_face_nodes), std::move(col_ptr_face_nodes), std::move(data_face_nodes), true);
 
     // Create cell faces
     int tot_num_cells = num_cells[0] * num_cells[1];
@@ -753,7 +753,7 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
     row_ptr[tot_num_faces] = col_idx_vector.size();
 
     auto face_cells = std::make_shared<CompressedDataStorage<int>>(
-        tot_num_faces, tot_num_cells, row_ptr, col_idx_vector, face_cell_sign_vector, true);
+        tot_num_faces, tot_num_cells, std::move(row_ptr), std::move(col_idx_vector), std::move(face_cell_sign_vector), true);
 
     Grid* g = new Grid(dim, std::move(nodes), face_cells, face_nodes);
 

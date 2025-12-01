@@ -273,20 +273,20 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     // Create the ScalarDiscretization object and return it.
     ScalarDiscretization discr;
     discr.flux = std::make_shared<CompressedDataStorage<double>>(grid.num_faces(), grid.num_cells(),
-                                                                 row_ptr_flux, col_idx_flux, trm);
+                                                                 std::move(row_ptr_flux), std::move(col_idx_flux), std::move(trm));
     discr.bound_flux = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_faces(), row_ptr_bound_flux, col_idx_bound_flux, trm_bound);
+        grid.num_faces(), grid.num_faces(), std::move(row_ptr_bound_flux), std::move(col_idx_bound_flux), std::move(trm_bound));
     discr.vector_source = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source, col_idx_vector_source,
-        vector_source);
+        grid.num_faces(), grid.num_cells() * DIM, std::move(row_ptr_vector_source), std::move(col_idx_vector_source),
+        std::move(vector_source));
     discr.bound_pressure_vector_source = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source_bound,
-        col_idx_vector_source_bound, vector_source_bound);
+        grid.num_faces(), grid.num_cells() * DIM, std::move(row_ptr_vector_source_bound),
+        std::move(col_idx_vector_source_bound), std::move(vector_source_bound));
     discr.bound_pressure_cell = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_cells(), row_ptr_bound_pressure_cell,
-        col_idx_bound_pressure_cell, bound_pressure_cell);
+        grid.num_faces(), grid.num_cells(), std::move(row_ptr_bound_pressure_cell),
+        std::move(col_idx_bound_pressure_cell), std::move(bound_pressure_cell));
     discr.bound_pressure_face = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_faces(), row_ptr_bound_pressure_face,
-        col_idx_bound_pressure_face, bound_pressure_face);
+        grid.num_faces(), grid.num_faces(), std::move(row_ptr_bound_pressure_face),
+        std::move(col_idx_bound_pressure_face), std::move(bound_pressure_face));
     return discr;
 }

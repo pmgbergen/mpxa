@@ -9,17 +9,25 @@ template class CompressedDataStorage<double>;
 // Constructor for a matrix with indices and values given.
 template <typename T>
 CompressedDataStorage<T>::CompressedDataStorage(const int num_rows, const int num_cols,
-                                                const std::vector<int>& row_ptr,
-                                                const std::vector<int>& col_idx,
-                                                const std::vector<T>& values,
-                                                const bool construct_csc)
+                                                std::vector<int> row_ptr, std::vector<int> col_idx,
+                                                std::vector<T> values, const bool construct_csc)
     : m_num_rows(num_rows),
       m_num_cols(num_cols),
-      m_row_ptr(row_ptr),
-      m_col_idx(col_idx),
-      m_values(values),
+      m_row_ptr(std::move(row_ptr)),
+      m_col_idx(std::move(col_idx)),
+      m_values(std::move(values)),
       m_csc_constructed(construct_csc)
 {
+    /*
+    Implementation note about passing by value and move semantics. An intuitive way to pass
+    const vector<T>& does not avoid copying memory - it happens when m_values(value) constructor
+    is called. It seems that the right way is to pass by value. If the lvalue is passed, e.g.
+    CompressedDataStorage(..., values, ...), it makes a copy once, and then moves values to
+    m_values. If the rvalue is passed, e.g. CompressedDataStorage(..., move(values), ...),
+    it does a move twice and avoids copying data. YZ does not understand why the same does not
+    work with passing by reference, but passing by value does the job.
+    */
+
     // Check if the sizes of the vectors are consistent with the number of rows and columns.
     if (m_row_ptr.size() != m_num_rows + 1)
     {

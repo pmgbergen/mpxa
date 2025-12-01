@@ -13,7 +13,8 @@ class CompressedDataStorageTest : public ::testing::Test
 
     void SetUp() override
     {
-        storage = new CompressedDataStorage<double>(3, 3, row_ptr, col_idx, values);
+        storage = new CompressedDataStorage<double>(3, 3, std::move(row_ptr), std::move(col_idx),
+                                                    std::move(values));
     }
 
     void TearDown() override
