@@ -1,7 +1,5 @@
 #include <Eigen/Dense>
 #include <array>
-#include <chrono>
-#include <iostream>
 #include <map>
 #include <numeric>
 #include <optional>
@@ -1180,18 +1178,23 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     }
                     ++basis_vector_face_counter;
                 }
-                pressure_reconstruction_cell_values.emplace_back(cell_contribution);
-                pressure_reconstruction_cell_row_idx.push_back(loc_face_pair.second);
-                pressure_reconstruction_cell_col_idx.emplace_back(interaction_region.cells());
-                pressure_reconstruction_face_values.emplace_back(face_contribution);
-                pressure_reconstruction_face_row_idx.push_back(loc_face_pair.second);
-                pressure_reconstruction_face_col_idx.emplace_back(glob_indices_iareg_faces);
 
-                vector_source_bound_pressure_values.emplace_back(vector_source_cell_contribution);
+                // Moving the vectors allocated at this iteration to the global storages.
+
+                pressure_reconstruction_cell_values.push_back(std::move(cell_contribution));
+                pressure_reconstruction_cell_row_idx.push_back(loc_face_pair.second);
+                pressure_reconstruction_cell_col_idx.push_back(interaction_region.cells());
+                pressure_reconstruction_face_values.push_back(std::move(face_contribution));
+                pressure_reconstruction_face_row_idx.push_back(loc_face_pair.second);
+                pressure_reconstruction_face_col_idx.push_back(std::move(glob_indices_iareg_faces));
+
+                vector_source_bound_pressure_values.push_back(
+                    std::move(vector_source_cell_contribution));
                 vector_source_bound_pressure_row_idx.push_back(loc_face_pair.second);
 
                 std::vector<int> cell_ind_vector_source;
-                for (auto& loc_cell_ind : interaction_region.cells())
+                cell_ind_vector_source.reserve(interaction_region.cells().size() * SPATIAL_DIM);
+                for (const auto& loc_cell_ind : interaction_region.cells())
                 {
                     for (int k = 0; k < SPATIAL_DIM; ++k)
                     {
@@ -1199,7 +1202,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                         cell_ind_vector_source.push_back(col);
                     }
                 }
-                vector_source_bound_pressure_col_idx.emplace_back(cell_ind_vector_source);
+
+                vector_source_bound_pressure_col_idx.push_back(std::move(cell_ind_vector_source));
             }
         }
     }  // End iteration of nodes in the grid.
@@ -1211,62 +1215,33 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     // Use a tailored method for creating CSR matrices for the flux and vector source
     // matrices, since they have similar sparsity pattern, and the construction of these
     // take considerable time.
-
-    std::chrono::duration<double> duration;
-    auto tick = std::chrono::high_resolution_clock::now();
-
     auto flux_and_vs = create_flux_vector_source_matrix(
         flux_matrix_row_idx, flux_matrix_col_idx, flux_matrix_values, vector_source_cell_values,
         grid.num_faces(), grid.num_cells(), tot_num_transmissibilities);
     discretization.flux = flux_and_vs.first;
     discretization.vector_source = flux_and_vs.second;
 
-    duration = std::chrono::high_resolution_clock::now() - tick;
-    std::cout << "create_flux_vector_source_matrix: " << duration.count() << " seconds."
-              << std::endl;
-    tick = std::chrono::high_resolution_clock::now();
-
     // For the remaining matrices we use a more general method. There could be some
     // savings to be gained here as well, but in the bigger picture, the time spent
     // here is not that important.
-    auto bound_flux_storage = create_csr_matrix(
+    discretization.bound_flux = create_csr_matrix(
         bound_flux_matrix_row_idx, bound_flux_matrix_col_idx, bound_flux_matrix_values,
         grid.num_faces(), grid.num_faces(), bound_flux_matrix_row_idx.size());
-    discretization.bound_flux = bound_flux_storage;
 
-    duration = std::chrono::high_resolution_clock::now() - tick;
-    std::cout << "bound_flux: " << duration.count() << " seconds." << std::endl;
-    tick = std::chrono::high_resolution_clock::now();
-
-    auto pressure_reconstruction_cell_storage = create_csr_matrix(
+    discretization.bound_pressure_cell = create_csr_matrix(
         pressure_reconstruction_cell_row_idx, pressure_reconstruction_cell_col_idx,
         pressure_reconstruction_cell_values, grid.num_faces(), grid.num_cells(),
         pressure_reconstruction_cell_row_idx.size());
-    discretization.bound_pressure_cell = pressure_reconstruction_cell_storage;
 
-    duration = std::chrono::high_resolution_clock::now() - tick;
-    std::cout << "bound_pressure_cell: " << duration.count() << " seconds." << std::endl;
-    tick = std::chrono::high_resolution_clock::now();
-
-    auto pressure_reconstruction_face_storage = create_csr_matrix(
+    discretization.bound_pressure_face = create_csr_matrix(
         pressure_reconstruction_face_row_idx, pressure_reconstruction_face_col_idx,
         pressure_reconstruction_face_values, grid.num_faces(), grid.num_faces(),
         pressure_reconstruction_face_row_idx.size());
-    discretization.bound_pressure_face = pressure_reconstruction_face_storage;
 
-    duration = std::chrono::high_resolution_clock::now() - tick;
-    std::cout << "bound_pressure_face: " << duration.count() << " seconds." << std::endl;
-    tick = std::chrono::high_resolution_clock::now();
-
-    auto vector_source_bound_pressure_storage = create_csr_matrix(
+    discretization.bound_pressure_vector_source = create_csr_matrix(
         vector_source_bound_pressure_row_idx, vector_source_bound_pressure_col_idx,
         vector_source_bound_pressure_values, grid.num_faces(), SPATIAL_DIM * grid.num_cells(),
         vector_source_bound_pressure_row_idx.size());
-    discretization.bound_pressure_vector_source = vector_source_bound_pressure_storage;
-
-    duration = std::chrono::high_resolution_clock::now() - tick;
-    std::cout << "bound_pressure_vector_source: " << duration.count() << " seconds." << std::endl;
-    tick = std::chrono::high_resolution_clock::now();
 
     return discretization;
 }
