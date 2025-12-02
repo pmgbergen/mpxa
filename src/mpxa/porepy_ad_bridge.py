@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import Callable
 import porepy as pp
+from porepy.numerics.ad._ad_utils import MergedOperator, wrap_discretization
 import mpxa
-
 
 class Tpfa(pp.Tpfa):
 
@@ -63,3 +64,40 @@ class Mpfa(pp.Mpfa):
             "bound_pressure_vector_source",
         ]:
             data[pp.DISCRETIZATION_MATRICES][self.keyword][attribute] = mpxa.convert_matrix(getattr(mpfa_cpp, attribute))
+
+
+class TpfaAd(pp.Discretization):
+
+    def __init__(self, keyword: str, subdomains: list[pp.Grid]) -> None:
+        self.subdomains = subdomains
+        self._name = "Tpfa"
+        self._discretization = Tpfa(keyword)
+        self.keyword = keyword
+
+        # Prepare the cpp discretization
+        self.flux: Callable[[], MergedOperator]
+        self.bound_flux: Callable[[], MergedOperator]
+        self.bound_pressure_cell: Callable[[], MergedOperator]
+        self.bound_pressure_face: Callable[[], MergedOperator]
+        self.vector_source: Callable[[], MergedOperator]
+        self.bound_pressure_vector_source: Callable[[], MergedOperator]
+
+        wrap_discretization(self, self._discretization, subdomains=subdomains)
+
+class MpfaAd(pp.Discretization):
+
+    def __init__(self, keyword: str, subdomains: list[pp.Grid]) -> None:
+        self.subdomains = subdomains
+        self._name = "Mpfa"
+        self._discretization = Mpfa(keyword)
+        self.keyword = keyword
+
+        # Prepare the cpp discretization
+        self.flux: Callable[[], MergedOperator]
+        self.bound_flux: Callable[[], MergedOperator]
+        self.bound_pressure_cell: Callable[[], MergedOperator]
+        self.bound_pressure_face: Callable[[], MergedOperator]
+        self.vector_source: Callable[[], MergedOperator]
+        self.bound_pressure_vector_source: Callable[[], MergedOperator]
+
+        wrap_discretization(self, self._discretization, subdomains=subdomains)
