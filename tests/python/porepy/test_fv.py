@@ -126,8 +126,7 @@ def test_tpfa(g_pp, tensor_func, discr_type):
         full_tensor,
     ],
 )
-#@pytest.mark.parametrize("discr_type", ["tpfa", "mpfa"])
-@pytest.mark.parametrize("discr_type", ["mpfa"])
+@pytest.mark.parametrize("discr_type", ["tpfa", "mpfa"])
 def test_tpfa_discretization(g_pp, tensor_func, discr_type):
     K_pp = tensor_func(g_pp)
     bc_pp = pp.BoundaryCondition(g_pp)
@@ -154,9 +153,9 @@ def test_tpfa_discretization(g_pp, tensor_func, discr_type):
     discr_pp.discretize(g_pp, data_pp)
 
     if discr_type == "tpfa":
-        discr_cpp = mpxa.TpfaNonAd(key)
+        discr_cpp = mpxa.Tpfa(key)
     elif discr_type == "mpfa":
-        discr_cpp = mpxa.MpfaNonAd(key)
+        discr_cpp = mpxa.Mpfa(key)
     data_cpp = {
         pp.PARAMETERS: {
             key: {"second_order_tensor": K_pp, "bc": bc_pp, "ambient_dimension": 3}
