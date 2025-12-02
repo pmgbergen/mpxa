@@ -19,7 +19,7 @@ int main()
 
     // For 3D Cartesian grids.
     std::unique_ptr<Grid> grid_3d;
-    const std::vector<int> num_cells_3d = {300, 80, 30};
+    const std::vector<int> num_cells_3d = {30, 80, 30};
     // const std::vector<int> num_cells_3d = {480, 40, 30};
 
 
