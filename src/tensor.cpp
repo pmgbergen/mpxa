@@ -120,7 +120,6 @@ SecondOrderTensor& SecondOrderTensor::with_kyz(const std::vector<double>& k_yz)
     m_is_isotropic = false;
     m_is_diagonal = false;
 
-
     return *this;
 }
 
