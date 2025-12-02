@@ -8,4 +8,4 @@ except ImportError as e:
 from .porepy_bridge import convert_matrix, convert_tensor, convert_bc, convert_grid
 
 # Import ad modules
-from .porepy_ad_bridge import MpfaNonAd
+from .porepy_ad_bridge import Tpfa, Mpfa
