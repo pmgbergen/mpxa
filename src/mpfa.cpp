@@ -1028,6 +1028,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
             // Vector of the global indices of the interaction region faces.
             std::vector<int> glob_indices_iareg_faces;
+            glob_indices_iareg_faces.reserve(interaction_region.faces().size());
             for (const auto& face_pair : interaction_region.faces())
             {
                 glob_indices_iareg_faces.push_back(face_pair.first);
@@ -1074,7 +1075,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // center, using the set of basis functions for this cell.
                 const std::vector<double> pressure_diff =
                     p_diff(loc_face_centers[loc_face_pair.first], loc_cell_centers[loc_cell_ind],
-                           basis_map[glob_cell_ind]);
+                           basis_map.at(glob_cell_ind));
 
                 // Cell contribution to pressure reconstruction.
                 std::vector<double> cell_contribution(interaction_region.cells().size(), 0.0);
@@ -1186,7 +1187,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 pressure_reconstruction_cell_col_idx.push_back(interaction_region.cells());
                 pressure_reconstruction_face_values.push_back(std::move(face_contribution));
                 pressure_reconstruction_face_row_idx.push_back(loc_face_pair.second);
-                pressure_reconstruction_face_col_idx.push_back(std::move(glob_indices_iareg_faces));
+                // The vector below is copied, it is constructed outside the loop once.
+                pressure_reconstruction_face_col_idx.push_back(glob_indices_iareg_faces);
 
                 vector_source_bound_pressure_values.push_back(
                     std::move(vector_source_cell_contribution));
