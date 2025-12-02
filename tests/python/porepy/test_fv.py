@@ -103,7 +103,6 @@ def test_tpfa(g_pp, tensor_func, discr_type):
         m_0 = getattr(discr_cpp, attribute)
         m_1 = data[pp.DISCRETIZATION_MATRICES][key][attribute]
         m_0 = mpxa.convert_matrix(m_0)
-        print(m_1.shape)
 
         # The mpxa implementation does not provide reconstruction of the flux on internal
         # faces, so we set the internal face values to zero also in the PorePy
@@ -117,3 +116,75 @@ def test_tpfa(g_pp, tensor_func, discr_type):
             m_1[internal_face, :] = 0.0
 
         _compare_matrices(m_0, m_1)
+
+@pytest.mark.parametrize("g_pp", grid_list)
+@pytest.mark.parametrize(
+    "tensor_func",
+    [
+        isotropic_tensor,
+        anisotropic_tensor,
+        full_tensor,
+    ],
+)
+#@pytest.mark.parametrize("discr_type", ["tpfa", "mpfa"])
+@pytest.mark.parametrize("discr_type", ["mpfa"])
+def test_tpfa_discretization(g_pp, tensor_func, discr_type):
+    K_pp = tensor_func(g_pp)
+    bc_pp = pp.BoundaryCondition(g_pp)
+    bc_pp.is_dir[0] = True
+    bc_pp.is_neu[0] = False
+
+    key = "flow"
+
+    if discr_type == "tpfa":
+        discr_pp = pp.Tpfa(key)
+    elif discr_type == "mpfa":
+        discr_pp = pp.Mpfa(key)
+
+    # Set the parameters for the discretization. Note that the ambient dimension for the
+    # vector source discretization is always set to 3. This follows the C++ code, but
+    # breaks with the standard PorePy implementation in the case where the computational
+    # domain is 2D. Todo, I guess.
+    data_pp = {
+        pp.PARAMETERS: {
+            key: {"second_order_tensor": K_pp, "bc": bc_pp, "ambient_dimension": 3}
+        },
+        pp.DISCRETIZATION_MATRICES: {key: {}},
+    }
+    discr_pp.discretize(g_pp, data_pp)
+
+    if discr_type == "tpfa":
+        discr_cpp = mpxa.TpfaNonAd(key)
+    elif discr_type == "mpfa":
+        discr_cpp = mpxa.MpfaNonAd(key)
+    data_cpp = {
+        pp.PARAMETERS: {
+            key: {"second_order_tensor": K_pp, "bc": bc_pp, "ambient_dimension": 3}
+        },
+        pp.DISCRETIZATION_MATRICES: {key: {}},
+    }
+    discr_cpp.discretize(g_pp, data_cpp)
+
+    for attribute in [
+        "vector_source",
+        "flux",
+        "bound_flux",
+        "bound_pressure_face",
+        "bound_pressure_cell",
+        "bound_pressure_vector_source",
+    ]:
+        m_pp = data_pp[pp.DISCRETIZATION_MATRICES][key][attribute]
+        m_cpp = data_cpp[pp.DISCRETIZATION_MATRICES][key][attribute]
+
+        # The mpxa implementation does not provide reconstruction of the flux on internal
+        # faces, so we set the internal face values to zero also in the PorePy
+        # implementation.
+        internal_face = np.logical_not(g_pp.tags["domain_boundary_faces"])
+        if (
+            attribute == "bound_pressure_cell"
+            or attribute == "bound_pressure_face"
+            or attribute == "bound_pressure_vector_source"
+        ):
+            m_pp[internal_face, :] = 0.0
+
+        _compare_matrices(m_pp, m_cpp)
