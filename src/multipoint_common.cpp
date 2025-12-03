@@ -21,7 +21,8 @@ BasisConstructor::BasisConstructor(const int dim)
     m_rhs_matrix = MatrixXd::Identity(dim + 1, dim + 1);
 }
 
-std::vector<std::array<double, 3>> BasisConstructor::compute_basis_functions(
+std::vector<std::array<double, 3>> BasisConstructor::
+compute_basis_functions(
     const std::vector<std::array<double, 3>>& coords)
 {
     double inv[4][4];  // To store the inverse matrix.
@@ -211,7 +212,9 @@ InteractionRegion::InteractionRegion(const int node, const int dim, const Grid& 
     : m_node(node), m_dim(dim), m_faces(), m_cells(), m_faces_of_cells(), m_main_cell_of_faces()
 {
     // Initialize the interaction region based on the node and the grid.
-    auto face_indices = grid.faces_of_node(node);
+    auto face_indices_span = grid.faces_of_node(node);
+    // Copying the face_indices data to a new vector to sort it.
+    std::vector<int> face_indices(face_indices_span.begin(), face_indices_span.end());
     // Sort the face indices to ensure consistent ordering.
     std::sort(face_indices.begin(), face_indices.end());
 
@@ -221,11 +224,8 @@ InteractionRegion::InteractionRegion(const int node, const int dim, const Grid& 
         m_faces[face_indices[i]] = static_cast<int>(i);
     }
 
-    m_cells = std::vector<int>();
     m_cells.reserve(face_indices.size());
     m_main_cell_of_faces = std::vector<int>(face_indices.size(), -1);
-
-    m_faces_of_cells = std::map<int, std::vector<int>>();
 
     // For the cell indexing, use an unordered set for fast lookup, store the cells
     // in a vector to maintain the order of insertion.
@@ -235,7 +235,7 @@ InteractionRegion::InteractionRegion(const int node, const int dim, const Grid& 
     {
         const int face = face_indices[i];
         // Get the cells associated with the face.
-        auto cells_of_face = grid.cells_of_face(face);
+        const auto cells_of_face = grid.cells_of_face(face);
         // Associate the first cell with the face for the flux computation. There will
         // always be at least one cell associated with the face.
         m_main_cell_of_faces[i] = cells_of_face[0];

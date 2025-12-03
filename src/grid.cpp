@@ -65,7 +65,7 @@ const CompressedDataStorage<int>& Grid::cell_faces() const
     return *m_cell_faces;
 }
 
-const std::vector<int> Grid::faces_of_node(const int node) const
+const std::span<const int> Grid::faces_of_node(const int node) const
 {
     return m_face_nodes->cols_in_row(node);
 }
@@ -75,7 +75,7 @@ const std::vector<int> Grid::nodes_of_face(const int face) const
     return m_face_nodes->rows_in_col(face);
 }
 
-const std::vector<int> Grid::cells_of_face(const int face) const
+const std::span<const int> Grid::cells_of_face(const int face) const
 {
     return m_cell_faces->cols_in_row(face);
 }
@@ -326,7 +326,7 @@ void Grid::compute_geometry()
     // vector.
     for (int i{0}; i < m_num_faces; ++i)
     {
-        const std::vector<int> loc_cells = cells_of_face(i);
+        const auto loc_cells = cells_of_face(i);
 
         // Create a vector from the face center to the cell center
         double dot_prod = 0.0;
@@ -589,7 +589,7 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
     std::vector<int> data_face_nodes(face_nodes_vector.size(), 1);
 
     auto face_nodes = std::make_shared<CompressedDataStorage<int>>(
-        num_nodes, tot_num_faces, row_ptr_face_nodes, col_ptr_face_nodes, data_face_nodes, true);
+        num_nodes, tot_num_faces, std::move(row_ptr_face_nodes), std::move(col_ptr_face_nodes), std::move(data_face_nodes), true);
 
     // Create cell faces
     int tot_num_cells = num_cells[0] * num_cells[1];
@@ -753,7 +753,7 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
     row_ptr[tot_num_faces] = col_idx_vector.size();
 
     auto face_cells = std::make_shared<CompressedDataStorage<int>>(
-        tot_num_faces, tot_num_cells, row_ptr, col_idx_vector, face_cell_sign_vector, true);
+        tot_num_faces, tot_num_cells, std::move(row_ptr), std::move(col_idx_vector), std::move(face_cell_sign_vector), true);
 
     Grid* g = new Grid(dim, std::move(nodes), face_cells, face_nodes);
 

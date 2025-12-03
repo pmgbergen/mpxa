@@ -7,13 +7,7 @@
 SecondOrderTensor::SecondOrderTensor(const int dim, const int num_cells,
                                      const std::vector<double>& k_xx)
     : m_dim(dim),
-      m_num_cells(num_cells),
-      m_k_xx(k_xx),
-      m_k_yy(),
-      m_k_xy(),
-      m_k_zz(),
-      m_k_xz(),
-      m_k_yz()
+      m_num_cells(num_cells)
 {
     if (k_xx.size() != static_cast<size_t>(num_cells))
     {
@@ -22,8 +16,13 @@ SecondOrderTensor::SecondOrderTensor(const int dim, const int num_cells,
     m_is_isotropic = true;
     m_is_diagonal = true;
 
-    // Initialize a vector of zeros for the off-diagonal components.
-    m_zeros.resize(num_cells, 0.0);
+    m_k_full.resize(num_cells * DATA_PER_CELL, 0.0);
+    // Filling the diagonal components.
+    for (auto i{0}; i < num_cells; ++i) {
+        m_k_full[i * 6 + K_XX_OFFSET] = k_xx[i];
+        m_k_full[i * 6 + K_YY_OFFSET] = k_xx[i];
+        m_k_full[i * 6 + K_ZZ_OFFSET] = k_xx[i];
+    }
 }
 
 SecondOrderTensor::~SecondOrderTensor() = default;
@@ -46,7 +45,9 @@ SecondOrderTensor& SecondOrderTensor::with_kyy(const std::vector<double>& k_yy)
     {
         throw std::invalid_argument("Size of k_yy does not match num_cells.");
     }
-    m_k_yy = k_yy;
+    for (auto i{0}; i < m_num_cells; ++i) {
+        m_k_full[i * 6 + K_YY_OFFSET] = k_yy[i];
+    }
     m_is_isotropic = false;
     return *this;
 }
@@ -57,16 +58,9 @@ SecondOrderTensor& SecondOrderTensor::with_kxy(const std::vector<double>& k_xy)
     {
         throw std::invalid_argument("Size of k_xy does not match num_cells.");
     }
-    m_k_xy = k_xy;
-    m_is_diagonal = false;
 
-    if (m_k_yy.empty())
-    {
-        m_k_yy = m_k_xx;
-    }
-    if (m_k_zz.empty() && m_dim == 3)
-    {
-        m_k_zz = m_k_xx;
+    for (auto i{0}; i < m_num_cells; ++i) {
+        m_k_full[i * 6 + K_XY_OFFSET] = k_xy[i];
     }
     m_is_isotropic = false;
     m_is_diagonal = false;
@@ -84,7 +78,9 @@ SecondOrderTensor& SecondOrderTensor::with_kzz(const std::vector<double>& k_zz)
     {
         throw std::invalid_argument("Size of k_zz does not match num_cells.");
     }
-    m_k_zz = k_zz;
+    for (auto i{0}; i < m_num_cells; ++i) {
+        m_k_full[i * 6 + K_ZZ_OFFSET] = k_zz[i];
+    }
     m_is_isotropic = false;
     return *this;
 }
@@ -99,16 +95,8 @@ SecondOrderTensor& SecondOrderTensor::with_kxz(const std::vector<double>& k_xz)
     {
         throw std::invalid_argument("Size of k_xz does not match num_cells.");
     }
-    m_k_xz = k_xz;
-    m_is_diagonal = false;
-
-    if (m_k_yy.empty())
-    {
-        m_k_yy = m_k_xx;
-    }
-    if (m_k_zz.empty())
-    {
-        m_k_zz = m_k_xx;
+    for (auto i{0}; i < m_num_cells; ++i) {
+        m_k_full[i * 6 + K_XZ_OFFSET] = k_xz[i];
     }
     m_is_isotropic = false;
     m_is_diagonal = false;
@@ -126,16 +114,8 @@ SecondOrderTensor& SecondOrderTensor::with_kyz(const std::vector<double>& k_yz)
     {
         throw std::invalid_argument("Size of k_yz does not match num_cells.");
     }
-    m_k_yz = k_yz;
-    m_is_diagonal = false;
-
-    if (m_k_yy.empty())
-    {
-        m_k_yy = m_k_xx;
-    }
-    if (m_k_zz.empty())
-    {
-        m_k_zz = m_k_xx;
+    for (auto i{0}; i < m_num_cells; ++i) {
+        m_k_full[i * 6 + K_YZ_OFFSET] = k_yz[i];
     }
     m_is_isotropic = false;
     m_is_diagonal = false;
@@ -147,32 +127,4 @@ SecondOrderTensor& SecondOrderTensor::with_kyz(const std::vector<double>& k_yz)
 const int SecondOrderTensor::dim() const
 {
     return m_dim;
-}
-
-double SecondOrderTensor::isotropic_data(int cell) const
-{
-    return m_k_xx[cell];
-}
-
-std::vector<double> SecondOrderTensor::diagonal_data(int cell) const
-{
-    // Always return a vector of size 3: [xx, yy, zz], zero-padded for 2D
-    std::vector<double> diag(3);
-    diag[0] = m_k_xx[cell];
-    diag[1] = m_k_yy.empty() ? m_k_xx[cell] : m_k_yy[cell];
-    diag[2] = m_k_zz.empty() ? m_k_xx[cell] : m_k_zz[cell];
-    return diag;
-}
-
-std::vector<double> SecondOrderTensor::full_data(int cell) const
-{
-    // Always return a vector of size 6: [xx, yy, zz, xy, xz, yz], zero-padded for 2D
-    std::vector<double> tensor(6);
-    tensor[0] = m_k_xx[cell];
-    tensor[1] = m_k_yy.empty() ? m_k_xx[cell] : m_k_yy[cell];
-    tensor[2] = m_k_zz.empty() ? m_k_xx[cell] : m_k_zz[cell];
-    tensor[3] = m_k_xy.empty() ? 0.0 : m_k_xy[cell];
-    tensor[4] = m_k_xz.empty() ? 0.0 : m_k_xz[cell];
-    tensor[5] = m_k_yz.empty() ? 0.0 : m_k_yz[cell];
-    return tensor;
 }

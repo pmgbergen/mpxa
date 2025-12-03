@@ -35,7 +35,8 @@ void init_compressed_storage(py::module_& m)
 
                 // Return a new instance of CompressedDataStorage
                 return std::make_shared<CompressedDataStorage<double>>(
-                    num_rows, num_cols, indptr_vec, indices_vec, data_vec, csc);
+                    num_rows, num_cols, std::move(indptr_vec), std::move(indices_vec),
+                    std::move(data_vec), csc);
             }))
         .def("num_rows", &CompressedDataStorage<double>::num_rows)
         .def("num_cols", &CompressedDataStorage<double>::num_cols)
@@ -60,8 +61,9 @@ void init_compressed_storage(py::module_& m)
                 std::vector<int> data_vec(data.data(), data.data() + data.size());
 
                 // Return a new instance of CompressedDataStorage
-                return std::make_shared<CompressedDataStorage<int>>(num_rows, num_cols, indptr_vec,
-                                                                    indices_vec, data_vec, csc);
+                return std::make_shared<CompressedDataStorage<int>>(
+                    num_rows, num_cols, std::move(indptr_vec), std::move(indices_vec),
+                    std::move(data_vec), csc);
             }))
         .def("num_rows", &CompressedDataStorage<int>::num_rows)
         .def("num_cols", &CompressedDataStorage<int>::num_cols)

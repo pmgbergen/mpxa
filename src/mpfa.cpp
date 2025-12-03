@@ -1,8 +1,8 @@
 #include <Eigen/Dense>
 #include <array>
-#include <iostream>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <tuple>
 #include <unordered_set>
 #include <vector>
@@ -36,7 +36,7 @@ const std::array<double, 3> nK(const std::array<double, 3>& face_normal,
     }
     else if (tensor.is_diagonal())
     {
-        std::vector<double> diag = tensor.diagonal_data(cell_ind);
+        auto diag = tensor.diagonal_data(cell_ind);
         for (int i{0}; i < dim; ++i)
         {
             result[i] = -face_normal[i] * diag[i] * num_nodes_of_face_inv;
@@ -44,28 +44,19 @@ const std::array<double, 3> nK(const std::array<double, 3>& face_normal,
     }
     else
     {
-        std::vector<double> full_data = tensor.full_data(cell_ind);
-        for (int i{0}; i < dim; ++i)
-        {
-            double tensor_val;
-            for (int j{0}; j < dim; ++j)
-            {
-                if (i == 0 && j == 0)
-                    tensor_val = full_data[0];
-                else if (i == 1 && j == 1)
-                    tensor_val = full_data[1];
-                else if (i == 2 && j == 2)
-                    tensor_val = full_data[2];
-                else if (i == 0 && j == 1 || i == 1 && j == 0)
-                    tensor_val = full_data[3];
-                else if (i == 0 && j == 2 || i == 2 && j == 0)
-                    tensor_val = full_data[4];
-                else if (i == 1 && j == 2 || i == 2 && j == 1)
-                    tensor_val = full_data[5];
-                // TODO: Check i and j indices for correctness.
-                result[i] -= face_normal[j] * tensor_val * num_nodes_of_face_inv;
-            }
-        }
+        auto full_data = tensor.full_data(cell_ind);
+        const double xx = full_data[0];
+        const double yy = full_data[1];
+        const double zz = full_data[2];
+        const double xy = full_data[3];
+        const double xz = full_data[4];
+        const double yz = full_data[5];
+        result[0] = -num_nodes_of_face_inv *
+                    (face_normal[0] * xx + face_normal[1] * xy + face_normal[2] * xz);
+        result[1] = -num_nodes_of_face_inv *
+                    (face_normal[0] * xy + face_normal[1] * yy + face_normal[2] * yz);
+        result[2] = -num_nodes_of_face_inv *
+                    (face_normal[0] * xz + face_normal[1] * yz + face_normal[2] * zz);
     }
     return result;
 }
@@ -165,9 +156,9 @@ std::vector<int> count_nodes_of_faces(const Grid& grid)
     // Count the number of nodes for each face in the grid.
     std::vector<int> num_nodes_of_face(grid.num_faces(), 0);
 
-    CompressedDataStorage<int> face_nodes = grid.face_nodes();
+    const auto& face_nodes = grid.face_nodes();
 
-    auto& col_idx = face_nodes.col_idx();
+    const auto& col_idx = face_nodes.col_idx();
 
     for (int i{0}; i < col_idx.size(); ++i)
     {
@@ -181,8 +172,8 @@ std::vector<int> count_faces_of_cells(const Grid& grid)
 {
     // Count the number of faces for each cell in the grid.
     std::vector<int> num_faces_of_cell(grid.num_cells(), 0);
-    CompressedDataStorage<int> cell_faces = grid.cell_faces();
-    auto& col_idx = cell_faces.col_idx();
+    const auto& cell_faces = grid.cell_faces();
+    const auto& col_idx = cell_faces.col_idx();
     for (int i{0}; i < col_idx.size(); ++i)
     {
         num_faces_of_cell[col_idx[i]]++;
@@ -335,8 +326,8 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
 
     // Create the compressed data storage for the flux.
     // EK note to self: The cost of the matrix construction is negligible here.
-    auto matrix = std::make_shared<CompressedDataStorage<double>>(num_rows, num_cols, row_ptr,
-                                                                  col_idx, values);
+    auto matrix = std::make_shared<CompressedDataStorage<double>>(
+        num_rows, num_cols, std::move(row_ptr), std::move(col_idx), std::move(values));
     return matrix;
 }
 
@@ -386,66 +377,55 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
         col_index_sizes.push_back(vec.size());
     }
 
-    std::vector<int> sorted_col_indices_flux, sorted_col_indices_vector_source;
-    std::vector<double> sorted_data_values_flux, sorted_data_values_vector_source;
-    std::vector<int> this_row_col_indices_flux, this_row_col_indices_vector_source;
-    std::vector<double> this_row_data_flux, this_row_data_vector_source;
+    // A helper structure to store iterated elements in the Array of Structures fashion.
+    struct RowEntry
+    {
+        int col;
+        double flux;
+        double vector_source[SPATIAL_DIM];
+    };
+    // Possibly repeated column indices, flux and vector source values in a single row.
+    std::vector<RowEntry> row_entries;
 
+    // Starting position in `sorted_row_indices` corresponding to the row we work with in this
+    // iteration.
     int current_ind = 0;
+
     for (int row_ind = 0; row_ind < num_row_occurrences.size(); ++row_ind)
     {
-        if (num_row_occurrences[row_ind] == 0)
-        {
-            // No entries for this row, just copy the previous row pointer.
-            row_ptr_flux.push_back(row_ptr_flux.back());
-            row_ptr_vector_source.push_back(row_ptr_vector_source.back());
-            continue;
-        }
-        std::vector<int> loc_sorted_indices(num_row_occurrences[row_ind]);
-        for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
-        {
-            loc_sorted_indices[i] = sorted_row_indices[current_ind + i];
-        }
-        current_ind += num_row_occurrences[row_ind];
-
         int num_data_this_row = 0;
         for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
         {
-            //
-            num_data_this_row += col_index_sizes[loc_sorted_indices[i]];
+            num_data_this_row += col_index_sizes[sorted_row_indices[current_ind + i]];
         }
 
-        this_row_col_indices_flux.reserve(num_data_this_row);
-        this_row_data_flux.reserve(num_data_this_row);
-        this_row_col_indices_vector_source.reserve(SPATIAL_DIM * num_data_this_row);
-        this_row_data_vector_source.reserve(SPATIAL_DIM * num_data_this_row);
+        row_entries.reserve(num_data_this_row);
 
         for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
         {
-            const auto& loc_col_indices_flux = col_indices[loc_sorted_indices[i]];
-            const auto& loc_data_flux = data_flux[loc_sorted_indices[i]];
-            const auto& loc_data_vector_source = data_vector_source[loc_sorted_indices[i]];
-            this_row_col_indices_flux.insert(this_row_col_indices_flux.end(),
-                                             loc_col_indices_flux.begin(),
-                                             loc_col_indices_flux.end());
-            this_row_data_flux.insert(this_row_data_flux.end(), loc_data_flux.begin(),
-                                      loc_data_flux.end());
-            // For the vector source, we need to add SPATIAL_DIM entries for each
-            // column index in the flux data.
-            for (size_t j = 0; j < loc_col_indices_flux.size(); ++j)
+            int loc_sorted_index = sorted_row_indices[current_ind + i];
+            const auto& loc_col_indices_flux = col_indices[loc_sorted_index];
+            const auto& loc_data_flux = data_flux[loc_sorted_index];
+            const auto& loc_data_vector_source = data_vector_source[loc_sorted_index];
+
+            if ((loc_col_indices_flux.size() != loc_data_flux.size()) ||
+                (loc_data_flux.size() != (loc_data_vector_source.size() / SPATIAL_DIM)))
             {
-                for (int k = 0; k < SPATIAL_DIM; ++k)
-                {
-                    this_row_col_indices_vector_source.push_back(
-                        SPATIAL_DIM * loc_col_indices_flux[j] + k);
-                }
+                throw std::logic_error("The sizes of the passed vectors do not match.");
             }
-            this_row_data_vector_source.insert(this_row_data_vector_source.end(),
-                                               loc_data_vector_source.begin(),
-                                               loc_data_vector_source.end());
+
+            for (int i{0}; i < loc_data_flux.size(); ++i)
+            {
+                row_entries.emplace_back();
+                RowEntry& re = row_entries.back();
+                re.col = loc_col_indices_flux[i];
+                re.flux = loc_data_flux[i];
+                std::copy_n(&loc_data_vector_source[i * SPATIAL_DIM], SPATIAL_DIM,
+                            re.vector_source);
+            }
         }
 
-        if (this_row_col_indices_flux.size() == 0)
+        if (row_entries.size() == 0)
         {
             // No entries for this row, just copy the previous row pointer.
             row_ptr_flux.push_back(col_idx_flux.size());
@@ -454,91 +434,66 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
         }
 
         // Now we need to sort the column indices and data values according to column
-        std::vector<int> sorting_col_indices(this_row_col_indices_flux.size());
-        std::iota(sorting_col_indices.begin(), sorting_col_indices.end(), 0);
-        std::sort(sorting_col_indices.begin(), sorting_col_indices.end(),
-                  [&this_row_col_indices_flux](int a, int b)
-                  { return this_row_col_indices_flux[a] < this_row_col_indices_flux[b]; });
+        std::sort(row_entries.begin(), row_entries.end(),
+                  [](const auto& a, const auto& b) { return a.col < b.col; });
 
-        // Create the sorted column indices and data values.
-        sorted_col_indices_flux.reserve(this_row_col_indices_flux.size());
-        sorted_data_values_flux.reserve(this_row_data_flux.size());
-        sorted_col_indices_vector_source.reserve(this_row_col_indices_vector_source.size());
-        sorted_data_values_vector_source.reserve(this_row_data_vector_source.size());
-
-        int prev_col = this_row_col_indices_flux[sorting_col_indices[0]];
+        int prev_col = row_entries[0].col;
         double accum_data_flux = 0.0;
         double accum_data_vector_source[SPATIAL_DIM] = {0.0, 0.0, 0.0};
 
-        for (int i : sorting_col_indices)
+        for (const auto& row_entry : row_entries)
         {
-            if (this_row_col_indices_flux[i] == prev_col)
+            if (row_entry.col == prev_col)
             {
-                accum_data_flux += this_row_data_flux[i];
+                accum_data_flux += row_entry.flux;
                 for (int k = 0; k < SPATIAL_DIM; ++k)
                 {
-                    accum_data_vector_source[k] += this_row_data_vector_source[SPATIAL_DIM * i + k];
+                    accum_data_vector_source[k] += row_entry.vector_source[k];
                 }
             }
             else
             {
-                sorted_col_indices_flux.push_back(prev_col);
-                sorted_data_values_flux.push_back(accum_data_flux);
+                col_idx_flux.push_back(prev_col);
+                values_flux.push_back(accum_data_flux);
                 for (int k = 0; k < SPATIAL_DIM; ++k)
                 {
-                    sorted_col_indices_vector_source.push_back(SPATIAL_DIM * prev_col + k);
-                    sorted_data_values_vector_source.push_back(accum_data_vector_source[k]);
+                    col_idx_vector_source.push_back(SPATIAL_DIM * prev_col + k);
+                    values_vector_source.push_back(accum_data_vector_source[k]);
                 }
 
-                prev_col = this_row_col_indices_flux[i];
-                accum_data_flux = this_row_data_flux[i];
+                prev_col = row_entry.col;
+                accum_data_flux = row_entry.flux;
                 for (int k = 0; k < SPATIAL_DIM; ++k)
                 {
-                    accum_data_vector_source[k] = this_row_data_vector_source[SPATIAL_DIM * i + k];
+                    accum_data_vector_source[k] = row_entry.vector_source[k];
                 }
             }
         }
 
         // Add the last accumulated value
-        sorted_col_indices_flux.push_back(prev_col);
-        sorted_data_values_flux.push_back(accum_data_flux);
-
+        col_idx_flux.push_back(prev_col);
+        values_flux.push_back(accum_data_flux);
         for (int k = 0; k < SPATIAL_DIM; ++k)
         {
-            sorted_col_indices_vector_source.push_back(SPATIAL_DIM * prev_col + k);
-            sorted_data_values_vector_source.push_back(accum_data_vector_source[k]);
+            col_idx_vector_source.push_back(SPATIAL_DIM * prev_col + k);
+            values_vector_source.push_back(accum_data_vector_source[k]);
         }
 
-        col_idx_flux.insert(col_idx_flux.end(), sorted_col_indices_flux.begin(),
-                            sorted_col_indices_flux.end());
-        values_flux.insert(values_flux.end(), sorted_data_values_flux.begin(),
-                           sorted_data_values_flux.end());
-        col_idx_vector_source.insert(col_idx_vector_source.end(),
-                                     sorted_col_indices_vector_source.begin(),
-                                     sorted_col_indices_vector_source.end());
-        values_vector_source.insert(values_vector_source.end(),
-                                    sorted_data_values_vector_source.begin(),
-                                    sorted_data_values_vector_source.end());
         row_ptr_flux.push_back(col_idx_flux.size());
         row_ptr_vector_source.push_back(col_idx_vector_source.size());
 
-        this_row_col_indices_flux.clear();
-        this_row_data_flux.clear();
-        sorted_col_indices_flux.clear();
-        sorted_data_values_flux.clear();
-        this_row_col_indices_vector_source.clear();
-        this_row_data_vector_source.clear();
-        sorted_col_indices_vector_source.clear();
-        sorted_data_values_vector_source.clear();
+        row_entries.clear();
+        current_ind += num_row_occurrences[row_ind];
     }
 
     // Create the compressed data storage for the flux.
     // EK note to self: The cost of the matrix construction is negligible here.
     auto flux_matrix = std::make_shared<CompressedDataStorage<double>>(
-        num_rows, num_cols, row_ptr_flux, col_idx_flux, values_flux);
+        num_rows, num_cols, std::move(row_ptr_flux), std::move(col_idx_flux),
+        std::move(values_flux));
     auto vector_source_matrix = std::make_shared<CompressedDataStorage<double>>(
-        num_rows, SPATIAL_DIM * num_cols, row_ptr_vector_source, col_idx_vector_source,
-        values_vector_source);
+        num_rows, SPATIAL_DIM * num_cols, std::move(row_ptr_vector_source),
+        std::move(col_idx_vector_source), std::move(values_vector_source));
 
     return {flux_matrix, vector_source_matrix};
 }
@@ -546,7 +501,7 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
 }  // namespace
 
 ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
-                          const std::map<int, BoundaryCondition>& bc_map)
+                          const std::unordered_map<int, BoundaryCondition>& bc_map)
 {
     constexpr int SPATIAL_DIM = 3;  // Assuming 3D for now, can be generalized later.
 
@@ -562,6 +517,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<int> num_nodes_of_face = count_nodes_of_faces(grid);
     std::vector<int> num_faces_of_cell = count_faces_of_cells(grid);
 
+    // YZ: We are not using the things below.
     int avg_num_cells_per_node;
     int avg_num_cell_per_bound_node;
     if (grid.dim() == 2)
@@ -657,11 +613,16 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         // Get the interaction region for the node.
         InteractionRegion interaction_region(node_ind, 1, grid);
 
+        const int num_faces = interaction_region.faces().size();
+        const int num_cells = interaction_region.cells().size();
+
         // Iterate over the matrix flux (columns major), store the values in the
         // flux_triplets.
-        std::vector<int> reg_cell_ind = interaction_region.cells();
+        const auto& reg_cell_ind = interaction_region.cells();
         std::vector<int> reg_face_glob_ind;
+        reg_face_glob_ind.reserve(num_faces);
         std::vector<int> reg_face_loc_ind;
+        reg_face_loc_ind.reserve(num_faces);
         for (const auto& pair : interaction_region.faces())
         {
             reg_face_glob_ind.push_back(pair.first);
@@ -669,9 +630,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         }
 
         const std::vector<double> node_coord = grid.nodes()[node_ind];
-
-        const int num_faces = interaction_region.faces().size();
-        const int num_cells = interaction_region.cells().size();
 
         // Initialize matrices for the discretization.
         MatrixXd balance_cells = MatrixXd::Zero(num_faces, num_cells);
@@ -708,42 +666,40 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         // Mapping from local face index to global face index.
         std::vector<std::pair<int, int>> loc_boundary_face_map;
-        // Sets to store the local boundary faces, Neumann faces, and Dirichlet faces.
-        std::unordered_set<int> loc_boundary_faces;
-        std::unordered_set<int> loc_neumann_faces;
-        std::unordered_set<int> loc_dirichlet_faces;
+        // Mapping from local face to an optional boundary condition type. If the face
+        // is not on a boundary, contains `std::nullopt`.
+        std::vector<std::optional<BoundaryCondition>> loc_boundary_faces_type(
+            interaction_region.faces().size(), std::nullopt);
         std::map<int, std::vector<std::array<double, 3>>> basis_map;
 
         for (const auto& pair : interaction_region.faces())
         {
             // Initialize the local boundary faces with the local face index and the
             // global face index.
-            BoundaryCondition bc;
             auto it = bc_map.find(pair.first);
             if (it != bc_map.end())
             {
-                bc = it->second;
-                if (bc == BoundaryCondition::Neumann)
+                BoundaryCondition bc = it->second;
+                if (bc == BoundaryCondition::Dirichlet || bc == BoundaryCondition::Neumann)
                 {
                     // Store the local face index for Neumann faces. We need to do
                     // some scaling of this in the boundary condition
                     // discretization.
-                    loc_neumann_faces.insert(pair.second);
-                }
-                if (bc == BoundaryCondition::Dirichlet)
-                {
-                    // Store the local face index for Dirichlet faces. We need to do
-                    // some scaling of this in the boundary condition
+                    // Store the local face index for Dirichlet or Neumann faces. We
+                    // need to do some scaling of this in the boundary condition
                     // discretization.
-                    loc_dirichlet_faces.insert(pair.second);
+                    loc_boundary_face_map.push_back({pair.second, pair.first});
+                    loc_boundary_faces_type.at(pair.second) = bc;
                 }
-                if (bc == BoundaryCondition::Robin)
+                // Other cases are not implemented.
+                else if (bc == BoundaryCondition::Robin)
                 {
                     throw std::logic_error("Robin boundary condition not implemented");
                 }
-
-                loc_boundary_face_map.push_back({pair.second, pair.first});
-                loc_boundary_faces.insert(pair.second);
+                else
+                {
+                    throw std::logic_error("Unknown boundary condition");
+                }
             }
         }
 
@@ -761,11 +717,14 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 glob_faces_of_cell[face_counter - 1] = glob_face_ind;
                 loc_faces_of_cell[face_counter - 1] = loc_face_index;
 
-                auto in_dir = loc_dirichlet_faces.find(loc_face_index);
-                auto in_neu = loc_neumann_faces.find(loc_face_index);
+                bool in_dir = false, in_neu = false;
+                if (const auto bc = loc_boundary_faces_type[loc_face_index]; bc.has_value())
+                {
+                    in_dir = *bc == BoundaryCondition::Dirichlet;
+                    in_neu = *bc == BoundaryCondition::Neumann;
+                }
 
-                if (is_simplex && (in_dir == loc_dirichlet_faces.end()) &&
-                    (in_neu == loc_neumann_faces.end()))
+                if (is_simplex && (!in_dir) && (!in_neu))
                 {
                     for (int i = 0; i < SPATIAL_DIM; ++i)
                     {
@@ -814,10 +773,11 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
                 is_boundary_face = false;
                 BoundaryCondition bc;
-                if (bc_map.find(glob_face_ind) != bc_map.end())
+                if (const auto optional_bc = loc_boundary_faces_type[loc_face_index];
+                    optional_bc.has_value())
                 {
                     is_boundary_face = true;
-                    bc = bc_map.at(glob_face_ind);
+                    bc = *optional_bc;
                 }
 
                 // Note on the sign of the elements in the balance matrices: For
@@ -944,42 +904,68 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         balance_faces_inv = balance_faces.inverse();
         bound_flux.noalias() = flux_faces * balance_faces_inv;
 
-        if (loc_dirichlet_faces.empty())
+        bool has_dirichlet = false;
+        for (const auto bc : loc_boundary_faces_type)
+        {
+            if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
+            {
+                has_dirichlet = true;
+                break;
+            }
+        }
+
+        if (!has_dirichlet)
         {
             // If there are no Dirichlet faces, we can directly use the flux_cells matrix.
             flux.noalias() = bound_flux * balance_cells + flux_cells;
         }
         else
         {
-            // Create a diagonal matrix which has value 0.0 for Dirichlet faces and 1.0 for
-            // all other faces.
+            // Create a mask representing a diagonal matrix which has value 0.0 for
+            // Dirichlet faces and 1.0 for all other faces.
             // TODO: EK believes this also applies to Neumann faces. That should become
             // clear when applying this to a grid that is not K-orthogonal.
-            Eigen::MatrixXd diag_matrix = Eigen::MatrixXd::Identity(num_faces, num_faces);
-            for (const auto& face : loc_dirichlet_faces)
+            Eigen::VectorXd mask = Eigen::VectorXd::Ones(num_faces);
+
+            for (int face{0}; face < loc_boundary_faces_type.size(); ++face)
             {
-                diag_matrix(face, face) = 0.0;  // Dirichlet faces
+                const auto bc = loc_boundary_faces_type[face];
+                if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
+                {
+                    mask(face) = 0.0;  // Dirichlet faces
+                }
             }
 
-            flux.noalias() = bound_flux * diag_matrix * balance_cells + flux_cells;
+            flux.noalias() = bound_flux * mask.asDiagonal() * balance_cells + flux_cells;
         }
 
         // Matrix needed to compute the vector source term.
         vector_source_cell.noalias() = bound_flux * nK_matrix + nK_one_sided;
 
         // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
+        size_t vs_cols = vector_source_cell.cols();
+        size_t cols = flux.cols();
         for (const auto face_inds : interaction_region.faces())
         {
-            std::vector<double> row(flux.row(face_inds.second).data(),
-                                    flux.row(face_inds.second).data() + flux.cols());
-            flux_matrix_values.emplace_back(row);
+            long row_id = face_inds.second;
+
+            // Constructing the vector IN PLACE at the end of the list. This avoids
+            // creating a temporary vector and then moving/copying it.
+            flux_matrix_values.emplace_back();
+            auto& new_flux_row = flux_matrix_values.back();
+            new_flux_row.resize(cols);
+
+            // Copying raw data. We use RowMajor format, so data is contiguous.
+            std::memcpy(new_flux_row.data(), flux.row(row_id).data(), cols * sizeof(double));
+
             flux_matrix_row_idx.push_back(face_inds.first);
 
-            // Also treatment of the vector source terms.
-            std::vector<double> vs_row(
-                vector_source_cell.row(face_inds.second).data(),
-                vector_source_cell.row(face_inds.second).data() + vector_source_cell.cols());
-            vector_source_cell_values.emplace_back(vs_row);
+            // Same for Vector Source.
+            vector_source_cell_values.emplace_back();
+            auto& new_vs_row = vector_source_cell_values.back();
+            new_vs_row.resize(vs_cols);
+            std::memcpy(new_vs_row.data(), vector_source_cell.row(row_id).data(),
+                        vs_cols * sizeof(double));
         }
         // Store column indices for the flux matrix.
         for (int i = 0; i < num_faces; ++i)
@@ -1008,33 +994,33 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             for (const auto& face_pair : interaction_region.faces())
             {
                 // For the boundary faces, we need to compute the boundary flux matrix.
-                std::vector<double> row(
-                    bound_flux.row(face_pair.second).data(),
-                    bound_flux.row(face_pair.second).data() + bound_flux.cols());
 
-                std::vector<int> bf_indices;
-                std::vector<double> bf_val;
+                bound_flux_matrix_row_idx.emplace_back(face_pair.first);
+                // Creating the inner vectors in place to avoid additional copying into
+                // them.
+                bound_flux_matrix_col_idx.emplace_back();
+                bound_flux_matrix_values.emplace_back();
+                auto& bf_indices = bound_flux_matrix_col_idx.back();
+                auto& bf_val = bound_flux_matrix_values.back();
 
                 for (const auto& loc_face_pair : loc_boundary_face_map)
                 {
-                    if (loc_neumann_faces.find(loc_face_pair.first) != loc_neumann_faces.end())
+                    if (const auto bc = loc_boundary_faces_type[loc_face_pair.first];
+                        bc.has_value() && *bc == BoundaryCondition::Neumann)
                     {
                         // For Neumann boundary faces, scale the flux by the number of
                         // nodes, since the boundary condition will be taken in terms of the
                         // total flux over the face (not the subface).
-                        bf_val.push_back(row[loc_face_pair.first] /
+                        bf_val.push_back(bound_flux(face_pair.second, loc_face_pair.first) /
                                          num_nodes_of_face[loc_face_pair.first]);
                     }
                     else
                     {
-                        bf_val.push_back(row[loc_face_pair.first]);
+                        // We know it can be only Dirichlet.
+                        bf_val.push_back(bound_flux(face_pair.second, loc_face_pair.first));
                     }
                     bf_indices.push_back(loc_face_pair.second);
                 }
-
-                bound_flux_matrix_values.emplace_back(bf_val);
-                bound_flux_matrix_col_idx.emplace_back(bf_indices);
-                bound_flux_matrix_row_idx.emplace_back(face_pair.first);
             }
 
             // Mapping from cell center pressure to face pressures.
@@ -1042,6 +1028,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
             // Vector of the global indices of the interaction region faces.
             std::vector<int> glob_indices_iareg_faces;
+            glob_indices_iareg_faces.reserve(interaction_region.faces().size());
             for (const auto& face_pair : interaction_region.faces())
             {
                 glob_indices_iareg_faces.push_back(face_pair.first);
@@ -1054,16 +1041,20 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // nodes on the face.
                 const double inv_num_nodes_of_face = 1.0 / num_nodes_of_face[loc_face_pair.first];
 
-                if (loc_dirichlet_faces.find(loc_face_pair.first) != loc_dirichlet_faces.end())
+                if (const auto bc = loc_boundary_faces_type[loc_face_pair.first];
+                    bc.has_value() && *bc == BoundaryCondition::Dirichlet)
                 {
                     // For a Dirichlet boundary face, we only need to assign a unit
                     // value (thereby, the pressure at the face will be equal to the
                     // prescribed boundary condition).
-                    std::vector<double> one{1.0 * inv_num_nodes_of_face};
-                    pressure_reconstruction_face_values.push_back(one);
+
+                    // Creates a vector of one element in place.
+                    pressure_reconstruction_face_values.emplace_back(
+                        std::initializer_list<double>{1.0 * inv_num_nodes_of_face});
                     pressure_reconstruction_face_row_idx.push_back(loc_face_pair.second);
-                    std::vector<int> col_idx{loc_face_pair.second};
-                    pressure_reconstruction_face_col_idx.push_back(col_idx);
+                    // Same in place construction.
+                    pressure_reconstruction_face_col_idx.emplace_back(
+                        std::initializer_list<int>{loc_face_pair.second});
                     // No contribution from other cells or faces.
                     continue;
                 }
@@ -1084,7 +1075,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // center, using the set of basis functions for this cell.
                 const std::vector<double> pressure_diff =
                     p_diff(loc_face_centers[loc_face_pair.first], loc_cell_centers[loc_cell_ind],
-                           basis_map[glob_cell_ind]);
+                           basis_map.at(glob_cell_ind));
 
                 // Cell contribution to pressure reconstruction.
                 std::vector<double> cell_contribution(interaction_region.cells().size(), 0.0);
@@ -1151,7 +1142,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     for (const auto& face_pair : interaction_region.faces())
                     {
                         const int loc_face_ind = face_pair.second;
-                        if (loc_boundary_faces.find(loc_face_ind) != loc_boundary_faces.end())
+                        if (const auto bc = loc_boundary_faces_type[loc_face_ind]; bc.has_value())
                         {
                             // Get the contribution from face_pair.first via the basis
                             // function centered at the face face_ind. Rough explanation
@@ -1173,7 +1164,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                             double contribution_from_face =
                                 row_from_faces[loc_face_ind] *
                                 pressure_diff[basis_vector_face_counter] * inv_num_nodes_of_face;
-                            if (loc_neumann_faces.find(loc_face_ind) != loc_neumann_faces.end())
+
+                            if (*bc == BoundaryCondition::Neumann)
                             {
                                 // For Neumann faces, we also need to divide the imposed
                                 // flux by the number of nodes. This is equivalent to
@@ -1187,18 +1179,24 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                     }
                     ++basis_vector_face_counter;
                 }
-                pressure_reconstruction_cell_values.emplace_back(cell_contribution);
-                pressure_reconstruction_cell_row_idx.push_back(loc_face_pair.second);
-                pressure_reconstruction_cell_col_idx.emplace_back(interaction_region.cells());
-                pressure_reconstruction_face_values.emplace_back(face_contribution);
-                pressure_reconstruction_face_row_idx.push_back(loc_face_pair.second);
-                pressure_reconstruction_face_col_idx.emplace_back(glob_indices_iareg_faces);
 
-                vector_source_bound_pressure_values.emplace_back(vector_source_cell_contribution);
+                // Moving the vectors allocated at this iteration to the global storages.
+
+                pressure_reconstruction_cell_values.push_back(std::move(cell_contribution));
+                pressure_reconstruction_cell_row_idx.push_back(loc_face_pair.second);
+                pressure_reconstruction_cell_col_idx.push_back(interaction_region.cells());
+                pressure_reconstruction_face_values.push_back(std::move(face_contribution));
+                pressure_reconstruction_face_row_idx.push_back(loc_face_pair.second);
+                // The vector below is copied, it is constructed outside the loop once.
+                pressure_reconstruction_face_col_idx.push_back(glob_indices_iareg_faces);
+
+                vector_source_bound_pressure_values.push_back(
+                    std::move(vector_source_cell_contribution));
                 vector_source_bound_pressure_row_idx.push_back(loc_face_pair.second);
 
                 std::vector<int> cell_ind_vector_source;
-                for (auto& loc_cell_ind : interaction_region.cells())
+                cell_ind_vector_source.reserve(interaction_region.cells().size() * SPATIAL_DIM);
+                for (const auto& loc_cell_ind : interaction_region.cells())
                 {
                     for (int k = 0; k < SPATIAL_DIM; ++k)
                     {
@@ -1206,15 +1204,14 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                         cell_ind_vector_source.push_back(col);
                     }
                 }
-                vector_source_bound_pressure_col_idx.emplace_back(cell_ind_vector_source);
+
+                vector_source_bound_pressure_col_idx.push_back(std::move(cell_ind_vector_source));
             }
         }
-
     }  // End iteration of nodes in the grid.
 
     // Gather the computed data into CSR matrices and further into the discretization
     // structure.
-
     ScalarDiscretization discretization;
 
     // Use a tailored method for creating CSR matrices for the flux and vector source
@@ -1229,25 +1226,24 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     // For the remaining matrices we use a more general method. There could be some
     // savings to be gained here as well, but in the bigger picture, the time spent
     // here is not that important.
-    auto bound_flux_storage = create_csr_matrix(
+    discretization.bound_flux = create_csr_matrix(
         bound_flux_matrix_row_idx, bound_flux_matrix_col_idx, bound_flux_matrix_values,
         grid.num_faces(), grid.num_faces(), bound_flux_matrix_row_idx.size());
-    discretization.bound_flux = bound_flux_storage;
-    auto pressure_reconstruction_cell_storage = create_csr_matrix(
+
+    discretization.bound_pressure_cell = create_csr_matrix(
         pressure_reconstruction_cell_row_idx, pressure_reconstruction_cell_col_idx,
         pressure_reconstruction_cell_values, grid.num_faces(), grid.num_cells(),
         pressure_reconstruction_cell_row_idx.size());
-    discretization.bound_pressure_cell = pressure_reconstruction_cell_storage;
-    auto pressure_reconstruction_face_storage = create_csr_matrix(
+
+    discretization.bound_pressure_face = create_csr_matrix(
         pressure_reconstruction_face_row_idx, pressure_reconstruction_face_col_idx,
         pressure_reconstruction_face_values, grid.num_faces(), grid.num_faces(),
         pressure_reconstruction_face_row_idx.size());
-    discretization.bound_pressure_face = pressure_reconstruction_face_storage;
-    auto vector_source_bound_pressure_storage = create_csr_matrix(
+
+    discretization.bound_pressure_vector_source = create_csr_matrix(
         vector_source_bound_pressure_row_idx, vector_source_bound_pressure_col_idx,
         vector_source_bound_pressure_values, grid.num_faces(), SPATIAL_DIM * grid.num_cells(),
         vector_source_bound_pressure_row_idx.size());
-    discretization.bound_pressure_vector_source = vector_source_bound_pressure_storage;
 
     return discretization;
 }

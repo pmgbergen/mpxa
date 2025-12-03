@@ -21,9 +21,19 @@ void init_grid(py::module_ &m)
         .def("num_nodes", &Grid::num_nodes)
         .def("num_faces", &Grid::num_faces)
         .def("num_cells", &Grid::num_cells)
-        .def("faces_of_node", &Grid::faces_of_node)
+        .def("faces_of_node", [](const Grid& g, int node) {
+            // faces_of_node return std::span (a non-owning memory view), which is not
+            // supported by pybind11. Therefore, we copy the data into a new vector.
+            // There is a way to avoid a copy here, but it requires more involvement.
+            auto s = g.faces_of_node(node);
+            return std::vector<int>(s.begin(), s.end());
+        })
         .def("nodes_of_face", &Grid::nodes_of_face)
-        .def("cells_of_face", &Grid::cells_of_face)
+        .def("cells_of_face", [](const Grid& g, int node) {
+            // See the comment above at faces_of_node.
+            auto s = g.cells_of_face(node);
+            return std::vector<int>(s.begin(), s.end());
+        })
         .def("faces_of_cell", &Grid::faces_of_cell)
         .def("sign_of_face_cell", &Grid::sign_of_face_cell)
         .def("nodes", &Grid::nodes)

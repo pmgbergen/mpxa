@@ -1,7 +1,7 @@
 #ifndef FV_DISCR_H
 #define FV_DISCR_H
 
-#include <map>     // std::map
+#include <unordered_map>     // std::unordered_map
 #include <memory>  // std::unique_ptr
 
 #include "../include/compressed_storage.h"
@@ -26,9 +26,9 @@ struct ScalarDiscretization
 };
 
 ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
-                          const std::map<int, BoundaryCondition>& bc_map);
+                          const std::unordered_map<int, BoundaryCondition>& bc_map);
 
 ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
-                          const std::map<int, BoundaryCondition>& bc_map);
+                          const std::unordered_map<int, BoundaryCondition>& bc_map);
 
 #endif  // FV_DISCR_H

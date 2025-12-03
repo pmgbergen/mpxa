@@ -1,6 +1,6 @@
 #include <array>
 #include <iostream>
-#include <map>
+#include <unordered_map>
 #include <vector>
 
 #include "../include/discr.h"
@@ -36,7 +36,7 @@ const double nKproj(const std::vector<double>& face_normal, const SecondOrderTen
     else if (tensor.is_diagonal())
     {
         double prod = 0.0;
-        std::vector<double> diag = tensor.diagonal_data(cell_ind);
+        auto diag = tensor.diagonal_data(cell_ind);
         for (int i{0}; i < dim; ++i)
         {
             prod += sign * face_normal[i] * cell_face_vec[i] * diag[i];
@@ -46,26 +46,19 @@ const double nKproj(const std::vector<double>& face_normal, const SecondOrderTen
     else
     {
         double prod = 0.0;
-        std::vector<double> full_data = tensor.full_data(cell_ind);
+        auto full_data = tensor.full_data(cell_ind);
         for (int i{0}; i < dim; ++i)
         {
             for (int j{0}; j < dim; ++j)
             {
-                double tensor_val;
-                if (i == 0 && j == 0)
-                    tensor_val = full_data[0];
-                else if (i == 1 && j == 1)
-                    tensor_val = full_data[1];
-                else if (i == 2 && j == 2)
-                    tensor_val = full_data[2];
-                else if (i == 0 && j == 1 || i == 1 && j == 0)
-                    tensor_val = full_data[3];
-                else if (i == 0 && j == 2 || i == 2 && j == 0)
-                    tensor_val = full_data[4];
-                else if (i == 1 && j == 2 || i == 2 && j == 1)
-                    tensor_val = full_data[5];
-
-                prod += sign * face_normal[i] * cell_face_vec[j] * tensor_val;
+                if (i == j) {
+                    double tensor_val = full_data[i];  // 0,1,2 for diagonal
+                    prod += sign * face_normal[i] * cell_face_vec[j] * tensor_val;
+                } else {
+                    int k = 2 + i + j;
+                    double tensor_val = full_data[k];
+                    prod += sign * face_normal[i] * cell_face_vec[j] * tensor_val;
+                }
             }
         }
         return prod / dist;
@@ -74,7 +67,7 @@ const double nKproj(const std::vector<double>& face_normal, const SecondOrderTen
 }  // namespace
 
 ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
-                          const std::map<int, BoundaryCondition>& bc_map)
+                          const std::unordered_map<int, BoundaryCondition>& bc_map)
 {
     const int num_boundary_faces = bc_map.size();
     const int num_internal_faces = grid.num_faces() - num_boundary_faces;
@@ -152,7 +145,7 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     for (int face_ind{0}; face_ind < grid.num_faces(); ++face_ind)
     {
         // Get various properties of the face and its first neighboring cell.
-        std::vector<int> cells = grid.cells_of_face(face_ind);
+        auto cells = grid.cells_of_face(face_ind);
         face_center = grid.face_center(face_ind);
         normal = grid.face_normal(face_ind);
         const int cell_a = cells[0];
@@ -277,38 +270,23 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
         row_ptr_bound_pressure_face.push_back(col_idx_bound_pressure_face.size());
     }
 
-    // Gather the data into the compressed data storage.
-    CompressedDataStorage<double>* flux = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_cells(), row_ptr_flux, col_idx_flux, trm);
-
-    CompressedDataStorage<double>* bound_flux = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_faces(), row_ptr_bound_flux, col_idx_bound_flux, trm_bound);
-
-    CompressedDataStorage<double>* bound_pressure_cell_storage = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_cells(), row_ptr_bound_pressure_cell,
-        col_idx_bound_pressure_cell, bound_pressure_cell);
-
-    CompressedDataStorage<double>* bound_pressure_face_storage = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_faces(), row_ptr_bound_pressure_face,
-        col_idx_bound_pressure_face, bound_pressure_face);
-
-    CompressedDataStorage<double>* vector_source_storage = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source, col_idx_vector_source,
-        vector_source);
-    CompressedDataStorage<double>* vector_source_bound_storage = new CompressedDataStorage<double>(
-        grid.num_faces(), grid.num_cells() * DIM, row_ptr_vector_source_bound,
-        col_idx_vector_source_bound, vector_source_bound);
-
     // Create the ScalarDiscretization object and return it.
     ScalarDiscretization discr;
-    discr.flux = std::unique_ptr<CompressedDataStorage<double>>(flux);
-    discr.bound_flux = std::unique_ptr<CompressedDataStorage<double>>(bound_flux);
-    discr.vector_source = std::unique_ptr<CompressedDataStorage<double>>(vector_source_storage);
-    discr.bound_pressure_vector_source =
-        std::unique_ptr<CompressedDataStorage<double>>(vector_source_bound_storage);
-    discr.bound_pressure_cell =
-        std::unique_ptr<CompressedDataStorage<double>>(bound_pressure_cell_storage);
-    discr.bound_pressure_face =
-        std::unique_ptr<CompressedDataStorage<double>>(bound_pressure_face_storage);
+    discr.flux = std::make_shared<CompressedDataStorage<double>>(grid.num_faces(), grid.num_cells(),
+                                                                 std::move(row_ptr_flux), std::move(col_idx_flux), std::move(trm));
+    discr.bound_flux = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_faces(), std::move(row_ptr_bound_flux), std::move(col_idx_bound_flux), std::move(trm_bound));
+    discr.vector_source = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_cells() * DIM, std::move(row_ptr_vector_source), std::move(col_idx_vector_source),
+        std::move(vector_source));
+    discr.bound_pressure_vector_source = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_cells() * DIM, std::move(row_ptr_vector_source_bound),
+        std::move(col_idx_vector_source_bound), std::move(vector_source_bound));
+    discr.bound_pressure_cell = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_cells(), std::move(row_ptr_bound_pressure_cell),
+        std::move(col_idx_bound_pressure_cell), std::move(bound_pressure_cell));
+    discr.bound_pressure_face = std::make_shared<CompressedDataStorage<double>>(
+        grid.num_faces(), grid.num_faces(), std::move(row_ptr_bound_pressure_face),
+        std::move(col_idx_bound_pressure_face), std::move(bound_pressure_face));
     return discr;
 }

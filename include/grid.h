@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <memory>
 #include <vector>
+#include <span>
 
 #include "../include/compressed_storage.h"
 
@@ -33,9 +34,9 @@ class Grid
     // int num_boundary_faces();
 
     // Direct access to the compressed data storage
-    const std::vector<int> faces_of_node(const int node) const;
+    const std::span<const int> faces_of_node(const int node) const;
     const std::vector<int> nodes_of_face(const int face) const;
-    const std::vector<int> cells_of_face(const int face) const;
+    const std::span<const int> cells_of_face(const int face) const;
     const std::vector<int> faces_of_cell(const int cell) const;
     const int sign_of_face_cell(const int face, const int cell) const;
     const int num_nodes_of_face(const int face) const;

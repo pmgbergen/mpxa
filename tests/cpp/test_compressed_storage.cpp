@@ -13,7 +13,8 @@ class CompressedDataStorageTest : public ::testing::Test
 
     void SetUp() override
     {
-        storage = new CompressedDataStorage<double>(3, 3, row_ptr, col_idx, values);
+        storage = new CompressedDataStorage<double>(3, 3, std::move(row_ptr), std::move(col_idx),
+                                                    std::move(values));
     }
 
     void TearDown() override
@@ -36,7 +37,7 @@ TEST_F(CompressedDataStorageTest, ConstructorWithValues)
 // Test the cols_in_row method
 TEST_F(CompressedDataStorageTest, ColsInRow)
 {
-    std::vector<int> cols = storage->cols_in_row(1);
+    auto cols = storage->cols_in_row(1);
     EXPECT_EQ(cols[0], 1);
     EXPECT_EQ(cols[1], 2);
 }

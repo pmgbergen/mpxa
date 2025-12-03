@@ -2,6 +2,7 @@
 #define TENSOR_H
 
 #include <memory>
+#include <span>
 #include <vector>
 
 class SecondOrderTensor
@@ -25,13 +26,21 @@ class SecondOrderTensor
     const int dim() const;
 
     // Return the isotropic value for a given cell
-    double isotropic_data(int cell) const;
+    inline double isotropic_data(int cell) const noexcept
+    {
+        return m_k_full[cell * DATA_PER_CELL];
+    }
     // Return the diagonal values for a given cell (size = dim)
-    std::vector<double> diagonal_data(
-        int cell) const;  // returns size 3: [xx, yy, zz], zero-padded for 2D
+    inline std::span<const double, 3> diagonal_data(int cell) const noexcept
+    {
+        return std::span<const double, 3>(&m_k_full[cell * DATA_PER_CELL], 3);
+    }
+
     // Return the full tensor values for a given cell (size = dim*dim)
-    std::vector<double> full_data(
-        int cell) const;  // returns size 6: [xx, yy, zz, xy, xz, yz], zero-padded for 2D
+    inline std::span<const double, 6> full_data(int cell) const noexcept
+    {
+        return std::span<const double, 6>(&m_k_full[cell * DATA_PER_CELL], DATA_PER_CELL);
+    }
 
    private:
     int m_dim;
@@ -40,13 +49,15 @@ class SecondOrderTensor
     bool m_is_isotropic;
     bool m_is_diagonal;
 
-    std::vector<double> m_k_xx;
-    std::vector<double> m_k_yy;
-    std::vector<double> m_k_xy;
-    std::vector<double> m_k_zz;
-    std::vector<double> m_k_xz;
-    std::vector<double> m_k_yz;
-    std::vector<double> m_zeros;
+    std::vector<double> m_k_full;
+
+    static constexpr size_t K_XX_OFFSET = 0;
+    static constexpr size_t K_YY_OFFSET = 1;
+    static constexpr size_t K_ZZ_OFFSET = 2;
+    static constexpr size_t K_XY_OFFSET = 3;
+    static constexpr size_t K_XZ_OFFSET = 4;
+    static constexpr size_t K_YZ_OFFSET = 5;
+    static constexpr size_t DATA_PER_CELL = 6;
 };
 
 #endif  // TENSOR_H

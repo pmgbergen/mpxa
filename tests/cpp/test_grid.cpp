@@ -98,7 +98,8 @@ TEST_F(GridTest, FacesOfNodeCartGrid2d)
     // expected values.
     for (auto const& [node, expected_faces] : expected_faces_of_node)
     {
-        std::vector<int> face_nodes = grid_2d->faces_of_node(node);
+        auto face_nodes_span = grid_2d->faces_of_node(node);
+        std::vector<int> face_nodes(face_nodes_span.begin(), face_nodes_span.end());
         std::sort(face_nodes.begin(), face_nodes.end());
         EXPECT_EQ(face_nodes.size(), expected_faces.size());
         for (size_t i = 0; i < expected_faces.size(); ++i)
@@ -146,7 +147,8 @@ TEST_F(GridTest, CellsOfFaceCartGrid2d)
     // expected values.
     for (auto const& [face, expected_cells] : expected_cells_of_face)
     {
-        std::vector<int> cells = grid_2d->cells_of_face(face);
+        auto cells_span = grid_2d->cells_of_face(face);
+        std::vector<int> cells(cells_span.begin(), cells_span.end());
         std::sort(cells.begin(), cells.end());
         EXPECT_EQ(cells.size(), expected_cells.size());
         for (size_t i = 0; i < expected_cells.size(); ++i)
@@ -284,7 +286,8 @@ TEST_F(GridTest, FacesOfNodeCartGrid3d)
     // Loop over the keys of the map and compare with the expected values.
     for (auto const& [node, expected_faces] : expected_faces_of_node)
     {
-        std::vector<int> face_nodes = grid_3d->faces_of_node(node);
+        auto face_nodes_span = grid_3d->faces_of_node(node);
+        std::vector<int> face_nodes(face_nodes_span.begin(), face_nodes_span.end());
         std::sort(face_nodes.begin(), face_nodes.end());
         EXPECT_EQ(face_nodes.size(), expected_faces.size());
         for (size_t i = 0; i < expected_faces.size(); ++i)
@@ -315,7 +318,8 @@ TEST_F(GridTest, CellsOfFaceCartGrid3d)
     // Loop over the keys of the map and compare with the expected values.
     for (auto const& [face, expected_cells] : expected_cells_of_face)
     {
-        std::vector<int> cells = grid_3d->cells_of_face(face);
+        auto cells_span = grid_3d->cells_of_face(face);
+        std::vector<int> cells(cells_span.begin(), cells_span.end());
         std::sort(cells.begin(), cells.end());
         EXPECT_EQ(cells.size(), expected_cells.size());
         for (size_t i = 0; i < expected_cells.size(); ++i)
