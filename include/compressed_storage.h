@@ -23,9 +23,9 @@ class CompressedDataStorage
     const int num_rows();
     const int num_cols();
 
-    const std::vector<int>& row_ptr();
+    const std::vector<int>& row_ptr() const;
     const std::vector<int>& col_idx() const;
-    const std::vector<T>& data();
+    const std::vector<T>& data() const;
 
     // Getters for the compressed data storage.
     
