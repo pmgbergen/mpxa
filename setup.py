@@ -23,14 +23,15 @@ class CustomInstall(install):
 
         # Copy the built .so file to the package directory
         for file in os.listdir(bindings_dir):
-            if file.endswith(".so"):
+            if file.endswith(".so") and file.startswith("_mpxa"):
                 shutil.copy(os.path.join(bindings_dir, file), target_dir)
 
 
 setup(
-    packages=find_packages(),  # Specify the package containing the bindings
-    package_data={"mpxa": ["*.so"]},  # Include the prebuilt grid.so file
-    install_requires=["pybind11>=2.6.0"],  # Ensure pybind11 is installed
+    packages=find_packages(where="src"),  # Find packages in src directory
+    package_dir={"": "src"},  # Tell setuptools packages are under src/
+    package_data={"mpxa": ["*.so", "*.py"]},  # Include .so files and Python files
+    install_requires=["numpy", "pybind11>=2.6.0", "scipy", "porepy"],  # Match pyproject.toml
     cmdclass={
         "install": CustomInstall,
     },

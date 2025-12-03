@@ -7,7 +7,7 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(mpxa, m)
+PYBIND11_MODULE(_mpxa, m)
 {
     // m.doc() = "MPXA Python module";  // Optional module docstring
 
