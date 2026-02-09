@@ -74,7 +74,9 @@ def convert_grid(source_grid):
 def convert_tensor(T: pp.SecondOrderTensor, dim: int):
     """Convert a SecondOrderTensor to the mpxa format."""
 
-    if dim == 2:
+    if dim == 1:
+        return mpxa.SecondOrderTensor(1, T.values[0, 0].size, T.values[0, 0])
+    elif dim == 2:
         if not np.allclose(T.values[0, 1], 0):
             # This is a full tensor in 2d.
             return mpxa.SecondOrderTensor(
