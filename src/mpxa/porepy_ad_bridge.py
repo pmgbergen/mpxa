@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Callable
 import porepy as pp
-from porepy.numerics.ad._ad_utils import MergedOperator, wrap_discretization
+from porepy.numerics.ad.ad_utils import MergedOperator, wrap_discretization
+from porepy.numerics.ad.discretizations import Discretization
 import mpxa
 
 class Tpfa(pp.Tpfa):
@@ -66,7 +67,7 @@ class Mpfa(pp.Mpfa):
             data[pp.DISCRETIZATION_MATRICES][self.keyword][attribute] = mpxa.convert_matrix(getattr(mpfa_cpp, attribute))
 
 
-class TpfaAd(pp.Discretization):
+class TpfaAd(Discretization):
 
     def __init__(self, keyword: str, subdomains: list[pp.Grid]) -> None:
         self.subdomains = subdomains
@@ -84,7 +85,7 @@ class TpfaAd(pp.Discretization):
 
         wrap_discretization(self, self._discretization, subdomains=subdomains)
 
-class MpfaAd(pp.Discretization):
+class MpfaAd(Discretization):
 
     def __init__(self, keyword: str, subdomains: list[pp.Grid]) -> None:
         self.subdomains = subdomains
