@@ -6,7 +6,7 @@ Only a 2x2 grid is tested here for simplicity.
 import numpy as np
 import scipy.sparse as sps
 
-import mpxa
+from mpxa import _mpxa
 
 
 def test_grid_bindings():
@@ -18,7 +18,7 @@ def test_grid_bindings():
         (np.ones(24), (fn_nodes, fn_faces)), shape=(9, 12)
     ).tocsr()
 
-    fn_cpp = mpxa.CompressedDataStorageInt(
+    fn_cpp = _mpxa.CompressedDataStorageInt(
         9, 12, face_nodes.indptr, face_nodes.indices, face_nodes.data, False
     )
 
@@ -29,7 +29,7 @@ def test_grid_bindings():
     cf_cells = np.repeat(np.arange(4), 4)
     cf_sgn = np.array([-1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1])
     cf_sps = sps.coo_matrix((cf_sgn, (cf_faces, cf_cells)), shape=(12, 4)).tocsr()
-    cf_cpp = mpxa.CompressedDataStorageInt(
+    cf_cpp = _mpxa.CompressedDataStorageInt(
         12, 4, cf_sps.indptr, cf_sps.indices, cf_sps.data, False
     )
 
@@ -37,7 +37,7 @@ def test_grid_bindings():
         [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]]
     ).astype(float)
 
-    grid = mpxa.Grid(2, nodes, fn_cpp, cf_cpp)
+    grid = _mpxa.Grid(2, nodes, fn_cpp, cf_cpp)
 
     cell_volumes = np.ones(4, dtype=float)
     face_areas = np.ones(12, dtype=float)

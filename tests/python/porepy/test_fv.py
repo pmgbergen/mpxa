@@ -11,6 +11,7 @@ latter should remain.
 import porepy as pp
 import numpy as np
 import pytest
+from mpxa import _mpxa
 import mpxa
 
 import scipy.sparse as sps
@@ -44,7 +45,7 @@ def full_tensor(g):
     return pp.SecondOrderTensor(e, 2 * e, 3 * e, 0.1 * e, 0.2 * e, 0.3 * e)
 
 
-def _compare_matrices(m_0: mpxa.CompressedDataStorageDouble, m_1: sps.spmatrix):
+def _compare_matrices(m_0: _mpxa.CompressedDataStorageDouble, m_1: sps.spmatrix):
     """Compare two matrices for equality."""
 
     assert m_0.shape == m_1.shape, f"Shape mismatch: {m_0.shape} vs {m_1.shape}"
@@ -69,9 +70,9 @@ def test_tpfa(g_pp, tensor_func, discr_type):
     bc_pp.is_dir[0] = True
     bc_pp.is_neu[0] = False
 
-    K = mpxa.convert_tensor(K_pp, g_pp.dim)
-    bc = mpxa.convert_bc(bc_pp)
-    g = mpxa.convert_grid(g_pp)
+    K = mpxa.convert_tensor_to_mpxa(K_pp, g_pp.dim)
+    bc = mpxa.convert_bc_to_mpxa(bc_pp)
+    g = mpxa.convert_grid_to_mpxa(g_pp)
 
     key = "flow"
 
@@ -93,9 +94,9 @@ def test_tpfa(g_pp, tensor_func, discr_type):
     discr_pp.discretize(g_pp, data)
 
     if discr_type == "tpfa":
-        discr_cpp = mpxa.tpfa(g, K, bc)
+        discr_cpp = _mpxa.tpfa(g, K, bc)
     elif discr_type == "mpfa":
-        discr_cpp = mpxa.mpfa(g, K, bc)
+        discr_cpp = _mpxa.mpfa(g, K, bc)
 
     for attribute in [
         "vector_source",
@@ -107,7 +108,7 @@ def test_tpfa(g_pp, tensor_func, discr_type):
     ]:
         m_0 = getattr(discr_cpp, attribute)
         m_1 = data[pp.DISCRETIZATION_MATRICES][key][attribute]
-        m_0 = mpxa.convert_matrix(m_0)
+        m_0 = mpxa.convert_matrix_mpxa_to_scipy(m_0)
 
         # The mpxa implementation does not provide reconstruction of the flux on internal
         # faces, so we set the internal face values to zero also in the PorePy

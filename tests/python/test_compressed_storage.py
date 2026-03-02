@@ -4,7 +4,7 @@ import scipy.sparse as sps
 import numpy as np
 import pytest
 
-import mpxa
+from mpxa import _mpxa
 
 
 @pytest.mark.parametrize("fmt", [int, float])
@@ -15,9 +15,9 @@ def test_storage(fmt):
     data = np.array([1, 2, 3, 4], dtype=fmt)
 
     if fmt is int:
-        storage_class = mpxa.CompressedDataStorageInt
+        storage_class = _mpxa.CompressedDataStorageInt
     else:
-        storage_class = mpxa.CompressedDataStorageDouble
+        storage_class = _mpxa.CompressedDataStorageDouble
 
     num_rows = 4
     num_cols = 3
