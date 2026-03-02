@@ -1,6 +1,11 @@
 """Tests for the finite volume discretizations in PorePy against the mpxa bindings.
 
 The test assumes that PorePy is installed.
+
+Two tests in this file (test_fv and test_fv_discretization) are almost the same, but one
+calls c++ code directly, and the other through the mpxa.Tpfa class. Probably, only the
+latter should remain.
+
 """
 
 import porepy as pp

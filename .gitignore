@@ -54,3 +54,6 @@ Testing/Temporary
 
 # External libraries
 external/eigen/*
+
+# Simulation output
+visualization/

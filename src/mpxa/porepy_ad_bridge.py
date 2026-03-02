@@ -6,13 +6,12 @@ from porepy.numerics.ad.ad_utils import MergedOperator, wrap_discretization
 from porepy.numerics.ad.discretizations import Discretization
 import mpxa
 
-class Tpfa(pp.Tpfa):
 
+class Tpfa(pp.Tpfa):
     def __init__(self, keyword: str) -> None:
         super(Tpfa, self).__init__(keyword)
 
     def discretize(self, sd: pp.Grid, data: dict) -> None:
-
         K_pp = data[pp.PARAMETERS][self.keyword]["second_order_tensor"]
         bc_pp = data[pp.PARAMETERS][self.keyword]["bc"]
         g_pp = sd
@@ -21,28 +20,27 @@ class Tpfa(pp.Tpfa):
         bc_cpp = mpxa.convert_bc(bc_pp)
         g_cpp = mpxa.convert_grid(g_pp)
 
-        # Import _mpxa directly to avoid circular import
-        #from _mpxa import tpfa
         tpfa_cpp = mpxa.tpfa(g_cpp, K_cpp, bc_cpp)
 
-        # Prepare the cpp discretization
-        for attribute in [
-            "vector_source",
-            "flux",
-            "bound_flux",
-            "bound_pressure_face",
-            "bound_pressure_cell",
-            "bound_pressure_vector_source",
-        ]:
-            data[pp.DISCRETIZATION_MATRICES][self.keyword][attribute] = mpxa.convert_matrix(getattr(tpfa_cpp, attribute))
+        # Convert the discretization matrices to scipy format.
+        data[pp.DISCRETIZATION_MATRICES][self.keyword] = {
+            key: mpxa.convert_matrix(value)
+            for key, value in {
+                "flux": tpfa_cpp.flux,
+                "bound_flux": tpfa_cpp.bound_flux,
+                "bound_pressure_face": tpfa_cpp.bound_pressure_face,
+                "bound_pressure_cell": tpfa_cpp.bound_pressure_cell,
+                "vector_source": tpfa_cpp.vector_source,
+                "bound_pressure_vector_source": tpfa_cpp.bound_pressure_vector_source,
+            }.items()
+        }
+
 
 class Mpfa(pp.Mpfa):
-
     def __init__(self, keyword: str) -> None:
         super(Mpfa, self).__init__(keyword)
 
     def discretize(self, sd: pp.Grid, data: dict) -> None:
-        
         K_pp = data[pp.PARAMETERS][self.keyword]["second_order_tensor"]
         bc_pp = data[pp.PARAMETERS][self.keyword]["bc"]
         g_pp = sd
@@ -51,24 +49,23 @@ class Mpfa(pp.Mpfa):
         bc_cpp = mpxa.convert_bc(bc_pp)
         g_cpp = mpxa.convert_grid(g_pp)
 
-        # Import _mpxa directly to avoid circular import
-        #from _mpxa import mpfa
         mpfa_cpp = mpxa.mpfa(g_cpp, K_cpp, bc_cpp)
 
-        # Prepare the cpp discretization
-        for attribute in [
-            "vector_source",
-            "flux",
-            "bound_flux",
-            "bound_pressure_face",
-            "bound_pressure_cell",
-            "bound_pressure_vector_source",
-        ]:
-            data[pp.DISCRETIZATION_MATRICES][self.keyword][attribute] = mpxa.convert_matrix(getattr(mpfa_cpp, attribute))
+        # Convert the discretization matrices to scipy format.
+        data[pp.DISCRETIZATION_MATRICES][self.keyword] = {
+            key: mpxa.convert_matrix(value)
+            for key, value in {
+                "flux": mpfa_cpp.flux,
+                "bound_flux": mpfa_cpp.bound_flux,
+                "bound_pressure_face": mpfa_cpp.bound_pressure_face,
+                "bound_pressure_cell": mpfa_cpp.bound_pressure_cell,
+                "vector_source": mpfa_cpp.vector_source,
+                "bound_pressure_vector_source": mpfa_cpp.bound_pressure_vector_source,
+            }.items()
+        }
 
 
 class TpfaAd(Discretization):
-
     def __init__(self, keyword: str, subdomains: list[pp.Grid]) -> None:
         self.subdomains = subdomains
         self._name = "Tpfa"
@@ -85,8 +82,8 @@ class TpfaAd(Discretization):
 
         wrap_discretization(self, self._discretization, subdomains=subdomains)
 
-class MpfaAd(Discretization):
 
+class MpfaAd(Discretization):
     def __init__(self, keyword: str, subdomains: list[pp.Grid]) -> None:
         self.subdomains = subdomains
         self._name = "Mpfa"

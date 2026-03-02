@@ -74,68 +74,71 @@ def convert_grid(source_grid):
 def convert_tensor(T: pp.SecondOrderTensor, dim: int):
     """Convert a SecondOrderTensor to the mpxa format."""
 
+    # The underlying array should be contiguous.
+    values = np.ascontiguousarray(T.values)
+
     if dim == 1:
-        return mpxa.SecondOrderTensor(1, T.values[0, 0].size, T.values[0, 0])
+        return mpxa.SecondOrderTensor(1, values[0, 0].size, values[0, 0])
     elif dim == 2:
-        if not np.allclose(T.values[0, 1], 0):
+        if not np.allclose(values[0, 1], 0):
             # This is a full tensor in 2d.
             return mpxa.SecondOrderTensor(
                 dim,
-                T.values[0, 0].size,
-                T.values[0, 0],
-                T.values[1, 1],
-                T.values[0, 1],
+                values[0, 0].size,
+                values[0, 0],
+                values[1, 1],
+                values[0, 1],
             )
-        elif not np.allclose(T.values[0, 0], T.values[1, 1]):
+        elif not np.allclose(values[0, 0], values[1, 1]):
             # This is an anisotropic, but diagonal tensor in 2d.
             return mpxa.SecondOrderTensor(
                 dim,
-                T.values[0, 0].size,
-                T.values[0, 0],
-                T.values[1, 1],
+                values[0, 0].size,
+                values[0, 0],
+                values[1, 1],
             )
         else:
             # This is an isotropic tensor in 2d.
             return mpxa.SecondOrderTensor(
                 dim,
-                T.values[0, 0].size,
-                T.values[0, 0],
+                values[0, 0].size,
+                values[0, 0],
             )
     elif dim == 3:
         if not (
-            np.allclose(T.values[0, 1], 0)
-            | np.allclose(T.values[0, 2], 0)
-            | np.allclose(T.values[1, 2], 0)
+            np.allclose(values[0, 1], 0)
+            | np.allclose(values[0, 2], 0)
+            | np.allclose(values[1, 2], 0)
         ):
             # This is a full tensor in 3d.
             return mpxa.SecondOrderTensor(
                 dim,
-                T.values[0, 0].size,
-                T.values[0, 0],
-                T.values[1, 1],
-                T.values[2, 2],
-                T.values[0, 1],
-                T.values[0, 2],
-                T.values[1, 2],
+                values[0, 0].size,
+                values[0, 0],
+                values[1, 1],
+                values[2, 2],
+                values[0, 1],
+                values[0, 2],
+                values[1, 2],
             )
         elif not (
-            np.allclose(T.values[0, 0], T.values[1, 1])
-            | np.allclose(T.values[0, 0], T.values[2, 2])
+            np.allclose(values[0, 0], values[1, 1])
+            | np.allclose(values[0, 0], values[2, 2])
         ):
             # This is an anisotropic, but diagonal tensor in 3d.
             return mpxa.SecondOrderTensor(
                 dim,
-                T.values[0, 0].size,
-                T.values[0, 0],
-                T.values[1, 1],
-                T.values[2, 2],
+                values[0, 0].size,
+                values[0, 0],
+                values[1, 1],
+                values[2, 2],
             )
         else:
             # This is an isotropic tensor in 3d.
             return mpxa.SecondOrderTensor(
                 dim,
-                T.values[0, 0].size,
-                T.values[0, 0],
+                values[0, 0].size,
+                values[0, 0],
             )
     else:
         raise ValueError(
