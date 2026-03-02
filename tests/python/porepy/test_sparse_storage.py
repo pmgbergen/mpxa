@@ -1,7 +1,7 @@
 import porepy as pp
 import numpy as np
 import scipy.sparse as sps
-
+import mpxa
 
 
 def test_sparse_matrix_conversion():
