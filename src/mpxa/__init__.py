@@ -1,6 +1,6 @@
 # Import all C++ bindings from the compiled module
 try:
-    from _mpxa import *
+    from ._mpxa import *
 except ImportError as e:
     raise ImportError(f"Could not import _mpxa C++ bindings. Make sure the package is properly installed: {e}")
 
