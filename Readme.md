@@ -17,3 +17,7 @@ the file `test_fv.py`.
 
 # Licence
 See [Licence](https://github.com/keileg/mpxa/blob/main/LICENSE).
+
+# Installation
+`pip install .` or `pip install -e .` builds the c++ library and makes it accessible
+from python. Use `pip uninstall mpxa` and install again to rebuild the c++ library.
