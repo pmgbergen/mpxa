@@ -13,8 +13,9 @@ class Tpfa(pp.FVElliptic):
         super().__init__(keyword)
 
     def discretize(self, sd: pp.Grid, data: dict) -> None:
-        K_pp = data[pp.PARAMETERS][self.keyword]["second_order_tensor"]
-        bc_pp = data[pp.PARAMETERS][self.keyword]["bc"]
+        parameter_dictionary = data[pp.PARAMETERS][self.keyword]
+        K_pp = parameter_dictionary["second_order_tensor"]
+        bc_pp = parameter_dictionary["bc"]
         g_pp = sd
 
         K_cpp = mpxa.convert_tensor_to_mpxa(K_pp, g_pp.dim)
@@ -24,6 +25,7 @@ class Tpfa(pp.FVElliptic):
         tpfa_cpp = _mpxa.tpfa(g_cpp, K_cpp, bc_cpp)
 
         # Convert the discretization matrices to scipy format.
+        ambient_dim = parameter_dictionary.get("ambient_dimension", sd.dim)
         data[pp.DISCRETIZATION_MATRICES][self.keyword] = {
             key: mpxa.convert_matrix_mpxa_to_scipy(value)
             for key, value in {
@@ -31,6 +33,12 @@ class Tpfa(pp.FVElliptic):
                 "bound_flux": tpfa_cpp.bound_flux,
                 "bound_pressure_face": tpfa_cpp.bound_pressure_face,
                 "bound_pressure_cell": tpfa_cpp.bound_pressure_cell,
+            }.items()
+        } | {
+            key: mpxa.convert_vector_source_mpxa_to_scipy(
+                value, ambient_dim=ambient_dim
+            )
+            for key, value in {
                 "vector_source": tpfa_cpp.vector_source,
                 "bound_pressure_vector_source": tpfa_cpp.bound_pressure_vector_source,
             }.items()
@@ -42,8 +50,9 @@ class Mpfa(pp.Mpfa):
         super(Mpfa, self).__init__(keyword)
 
     def discretize(self, sd: pp.Grid, data: dict) -> None:
-        K_pp = data[pp.PARAMETERS][self.keyword]["second_order_tensor"]
-        bc_pp = data[pp.PARAMETERS][self.keyword]["bc"]
+        parameter_dictionary = data[pp.PARAMETERS][self.keyword]
+        K_pp = parameter_dictionary["second_order_tensor"]
+        bc_pp = parameter_dictionary["bc"]
         g_pp = sd
 
         K_cpp = mpxa.convert_tensor_to_mpxa(K_pp, g_pp.dim)
@@ -53,6 +62,7 @@ class Mpfa(pp.Mpfa):
         mpfa_cpp = _mpxa.mpfa(g_cpp, K_cpp, bc_cpp)
 
         # Convert the discretization matrices to scipy format.
+        ambient_dim = parameter_dictionary.get("ambient_dimension", sd.dim)
         data[pp.DISCRETIZATION_MATRICES][self.keyword] = {
             key: mpxa.convert_matrix_mpxa_to_scipy(value)
             for key, value in {
@@ -60,6 +70,12 @@ class Mpfa(pp.Mpfa):
                 "bound_flux": mpfa_cpp.bound_flux,
                 "bound_pressure_face": mpfa_cpp.bound_pressure_face,
                 "bound_pressure_cell": mpfa_cpp.bound_pressure_cell,
+            }.items()
+        } | {
+            key: mpxa.convert_vector_source_mpxa_to_scipy(
+                value, ambient_dim=ambient_dim
+            )
+            for key, value in {
                 "vector_source": mpfa_cpp.vector_source,
                 "bound_pressure_vector_source": mpfa_cpp.bound_pressure_vector_source,
             }.items()
