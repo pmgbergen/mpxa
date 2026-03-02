@@ -1,29 +1,24 @@
 import porepy as pp
-import mpxa
+from mpxa import _mpxa
 import numpy as np
 import scipy.sparse as sps
 
 
-def convert_matrix(sparse_matrix, csc: bool = False):
-    """Convert a sparse matrix to the mpxa format."""
+def convert_matrix_scipy_to_mpxa(
+    sparse_matrix: sps.csr_matrix | sps.csr_array, csc: bool = False
+) -> _mpxa.CompressedDataStorageDouble | _mpxa.CompressedDataStorageInt:
+    """
+    Parameters:
+        sparse_matrix: Input matrix in the csr format.
+        csc: Flag to indicate that the underlying c++ storage should store both the csc
+            and csr formats. The input matrix must still be passed in the csr format.
 
-    if isinstance(sparse_matrix, (sps.spmatrix, sps.sparray)):
-        return _convert_matrix_to_mpxa(sparse_matrix, csc)
-    elif isinstance(
-        sparse_matrix, (mpxa.CompressedDataStorageInt, mpxa.CompressedDataStorageDouble)
-    ):
-        return _convert_matrix_to_scipy(sparse_matrix)
-    else:
-        raise ValueError(
-            f"Unsupported sparse matrix type {type(sparse_matrix)} for conversion."
-        )
-
-
-def _convert_matrix_to_mpxa(sparse_matrix, csc: bool = False):
+    """
+    assert sparse_matrix.format == "csr"
     if sparse_matrix.data.dtype == int:
-        matrix_class = mpxa.CompressedDataStorageInt
+        matrix_class = _mpxa.CompressedDataStorageInt
     elif sparse_matrix.data.dtype == float:
-        matrix_class = mpxa.CompressedDataStorageDouble
+        matrix_class = _mpxa.CompressedDataStorageDouble
     else:
         raise ValueError(
             f"Unsupported data type {sparse_matrix.data.dtype} for sparse matrix."
@@ -39,11 +34,13 @@ def _convert_matrix_to_mpxa(sparse_matrix, csc: bool = False):
     )
 
 
-def _convert_matrix_to_scipy(mpxa_matrix):
+def convert_matrix_mpxa_to_scipy(
+    mpxa_matrix: _mpxa.CompressedDataStorageInt | _mpxa.CompressedDataStorageDouble,
+) -> sps.csr_matrix:
     """Convert an mpxa.CompressedDataStorage to a scipy sparse matrix."""
-    if isinstance(mpxa_matrix, mpxa.CompressedDataStorageInt):
+    if isinstance(mpxa_matrix, _mpxa.CompressedDataStorageInt):
         dtype = int
-    elif isinstance(mpxa_matrix, mpxa.CompressedDataStorageDouble):
+    elif isinstance(mpxa_matrix, _mpxa.CompressedDataStorageDouble):
         dtype = float
     else:
         raise ValueError(
@@ -57,12 +54,12 @@ def _convert_matrix_to_scipy(mpxa_matrix):
     )
 
 
-def convert_grid(source_grid):
+def convert_grid_to_mpxa(source_grid: pp.Grid) -> _mpxa.Grid:
     dim = source_grid.dim
     nodes = source_grid.nodes.T
-    cell_faces = convert_matrix(source_grid.cell_faces.tocsr(), True)
-    face_nodes = convert_matrix(source_grid.face_nodes.tocsr(), True)
-    target_grid = mpxa.Grid(dim, nodes, cell_faces, face_nodes)
+    cell_faces = convert_matrix_scipy_to_mpxa(source_grid.cell_faces.tocsr(), csc=True)
+    face_nodes = convert_matrix_scipy_to_mpxa(source_grid.face_nodes.tocsr(), csc=True)
+    target_grid = _mpxa.Grid(dim, nodes, cell_faces, face_nodes)
     target_grid.set_cell_volumes(source_grid.cell_volumes)
     target_grid.set_face_areas(source_grid.face_areas)
     target_grid.set_face_normals(source_grid.face_normals.T)
@@ -71,18 +68,18 @@ def convert_grid(source_grid):
     return target_grid
 
 
-def convert_tensor(T: pp.SecondOrderTensor, dim: int):
+def convert_tensor_to_mpxa(T: pp.SecondOrderTensor, dim: int) -> _mpxa.SecondOrderTensor:
     """Convert a SecondOrderTensor to the mpxa format."""
 
     # The underlying array should be contiguous.
     values = np.ascontiguousarray(T.values)
 
     if dim == 1:
-        return mpxa.SecondOrderTensor(1, values[0, 0].size, values[0, 0])
+        return _mpxa.SecondOrderTensor(1, values[0, 0].size, values[0, 0])
     elif dim == 2:
         if not np.allclose(values[0, 1], 0):
             # This is a full tensor in 2d.
-            return mpxa.SecondOrderTensor(
+            return _mpxa.SecondOrderTensor(
                 dim,
                 values[0, 0].size,
                 values[0, 0],
@@ -91,7 +88,7 @@ def convert_tensor(T: pp.SecondOrderTensor, dim: int):
             )
         elif not np.allclose(values[0, 0], values[1, 1]):
             # This is an anisotropic, but diagonal tensor in 2d.
-            return mpxa.SecondOrderTensor(
+            return _mpxa.SecondOrderTensor(
                 dim,
                 values[0, 0].size,
                 values[0, 0],
@@ -99,7 +96,7 @@ def convert_tensor(T: pp.SecondOrderTensor, dim: int):
             )
         else:
             # This is an isotropic tensor in 2d.
-            return mpxa.SecondOrderTensor(
+            return _mpxa.SecondOrderTensor(
                 dim,
                 values[0, 0].size,
                 values[0, 0],
@@ -111,7 +108,7 @@ def convert_tensor(T: pp.SecondOrderTensor, dim: int):
             | np.allclose(values[1, 2], 0)
         ):
             # This is a full tensor in 3d.
-            return mpxa.SecondOrderTensor(
+            return _mpxa.SecondOrderTensor(
                 dim,
                 values[0, 0].size,
                 values[0, 0],
@@ -126,7 +123,7 @@ def convert_tensor(T: pp.SecondOrderTensor, dim: int):
             | np.allclose(values[0, 0], values[2, 2])
         ):
             # This is an anisotropic, but diagonal tensor in 3d.
-            return mpxa.SecondOrderTensor(
+            return _mpxa.SecondOrderTensor(
                 dim,
                 values[0, 0].size,
                 values[0, 0],
@@ -135,7 +132,7 @@ def convert_tensor(T: pp.SecondOrderTensor, dim: int):
             )
         else:
             # This is an isotropic tensor in 3d.
-            return mpxa.SecondOrderTensor(
+            return _mpxa.SecondOrderTensor(
                 dim,
                 values[0, 0].size,
                 values[0, 0],
@@ -146,17 +143,17 @@ def convert_tensor(T: pp.SecondOrderTensor, dim: int):
         )
 
 
-def convert_bc(bc: pp.BoundaryCondition):
+def convert_bc_to_mpxa(bc: pp.BoundaryCondition) -> dict[int, _mpxa.BoundaryCondition]:
     """Convert a BoundaryCondition to the mpxa format."""
-    bc_map: dict[int, mpxa.BoundaryCondition] = {}
+    bc_map: dict[int, _mpxa.BoundaryCondition] = {}
 
     for fi in range(bc.num_faces):
         if bc.is_dir[fi]:
-            bc_map[fi] = mpxa.BoundaryCondition.Dirichlet
+            bc_map[fi] = _mpxa.BoundaryCondition.Dirichlet
         elif bc.is_neu[fi]:
-            bc_map[fi] = mpxa.BoundaryCondition.Neumann
+            bc_map[fi] = _mpxa.BoundaryCondition.Neumann
         elif bc.is_rob[fi]:
-            bc_map[fi] = mpxa.BoundaryCondition.Robin
+            bc_map[fi] = _mpxa.BoundaryCondition.Robin
         else:
             # This should be an internal face.
             pass

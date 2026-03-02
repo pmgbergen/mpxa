@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-import mpxa
+from mpxa import _mpxa
 
 
 @pytest.mark.parametrize("num_components", [1, 3, 6])
@@ -12,11 +12,11 @@ def test_tensor_bindings(num_components, num_cells, dim):
     data = 1 + np.arange(num_cells)
 
     if num_components == 1:
-        tensor = mpxa.SecondOrderTensor(dim, num_cells, data)
+        tensor = _mpxa.SecondOrderTensor(dim, num_cells, data)
     elif num_components == 3:
-        tensor = mpxa.SecondOrderTensor(dim, num_cells, data, data, data)
+        tensor = _mpxa.SecondOrderTensor(dim, num_cells, data, data, data)
     else:
         if dim == 3:
-            tensor = mpxa.SecondOrderTensor(
+            tensor = _mpxa.SecondOrderTensor(
                 dim, num_cells, data, data, data, data, data, data
             )

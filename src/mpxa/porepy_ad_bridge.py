@@ -4,27 +4,28 @@ from typing import Callable
 import porepy as pp
 from porepy.numerics.ad.ad_utils import MergedOperator, wrap_discretization
 from porepy.numerics.ad.discretizations import Discretization
+from mpxa import _mpxa
 import mpxa
 
 
-class Tpfa(pp.Tpfa):
+class Tpfa(pp.FVElliptic):
     def __init__(self, keyword: str) -> None:
-        super(Tpfa, self).__init__(keyword)
+        super().__init__(keyword)
 
     def discretize(self, sd: pp.Grid, data: dict) -> None:
         K_pp = data[pp.PARAMETERS][self.keyword]["second_order_tensor"]
         bc_pp = data[pp.PARAMETERS][self.keyword]["bc"]
         g_pp = sd
 
-        K_cpp = mpxa.convert_tensor(K_pp, g_pp.dim)
-        bc_cpp = mpxa.convert_bc(bc_pp)
-        g_cpp = mpxa.convert_grid(g_pp)
+        K_cpp = mpxa.convert_tensor_to_mpxa(K_pp, g_pp.dim)
+        bc_cpp = mpxa.convert_bc_to_mpxa(bc_pp)
+        g_cpp = mpxa.convert_grid_to_mpxa(g_pp)
 
-        tpfa_cpp = mpxa.tpfa(g_cpp, K_cpp, bc_cpp)
+        tpfa_cpp = _mpxa.tpfa(g_cpp, K_cpp, bc_cpp)
 
         # Convert the discretization matrices to scipy format.
         data[pp.DISCRETIZATION_MATRICES][self.keyword] = {
-            key: mpxa.convert_matrix(value)
+            key: mpxa.convert_matrix_mpxa_to_scipy(value)
             for key, value in {
                 "flux": tpfa_cpp.flux,
                 "bound_flux": tpfa_cpp.bound_flux,
@@ -45,15 +46,15 @@ class Mpfa(pp.Mpfa):
         bc_pp = data[pp.PARAMETERS][self.keyword]["bc"]
         g_pp = sd
 
-        K_cpp = mpxa.convert_tensor(K_pp, g_pp.dim)
-        bc_cpp = mpxa.convert_bc(bc_pp)
-        g_cpp = mpxa.convert_grid(g_pp)
+        K_cpp = mpxa.convert_tensor_to_mpxa(K_pp, g_pp.dim)
+        bc_cpp = mpxa.convert_bc_to_mpxa(bc_pp)
+        g_cpp = mpxa.convert_grid_to_mpxa(g_pp)
 
-        mpfa_cpp = mpxa.mpfa(g_cpp, K_cpp, bc_cpp)
+        mpfa_cpp = _mpxa.mpfa(g_cpp, K_cpp, bc_cpp)
 
         # Convert the discretization matrices to scipy format.
         data[pp.DISCRETIZATION_MATRICES][self.keyword] = {
-            key: mpxa.convert_matrix(value)
+            key: mpxa.convert_matrix_mpxa_to_scipy(value)
             for key, value in {
                 "flux": mpfa_cpp.flux,
                 "bound_flux": mpfa_cpp.bound_flux,
