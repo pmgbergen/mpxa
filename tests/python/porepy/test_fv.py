@@ -3,10 +3,12 @@
 The test assumes that PorePy is installed.
 
 Two tests in this file (test_fv and test_fv_discretization) are almost the same, but one
-calls c++ code directly, and the other through the mpxa.Tpfa class. Probably, only the
-latter should remain.
+calls c++ code directly, and the other does through the mpxa.Tpfa class.Probably, only
+the latter should remain.
 
 """
+
+from typing import Callable
 
 import porepy as pp
 import numpy as np
@@ -27,19 +29,19 @@ for g in grid_list:
     g.compute_geometry()
 
 
-def isotropic_tensor(g):
+def isotropic_tensor(g: pp.Grid):
     num_cells = g.num_cells
     e = np.ones(num_cells)
     return pp.SecondOrderTensor(e)
 
 
-def anisotropic_tensor(g):
+def anisotropic_tensor(g: pp.Grid):
     num_cells = g.num_cells
     e = np.ones(num_cells)
     return pp.SecondOrderTensor(e, 2 * e, 3 * e)
 
 
-def full_tensor(g):
+def full_tensor(g: pp.Grid):
     num_cells = g.num_cells
     e = np.ones(num_cells)
     return pp.SecondOrderTensor(e, 2 * e, 3 * e, 0.1 * e, 0.2 * e, 0.3 * e)
@@ -65,6 +67,9 @@ def _compare_matrices(m_0: _mpxa.CompressedDataStorageDouble, m_1: sps.spmatrix)
 )
 @pytest.mark.parametrize("discr_type", ["tpfa", "mpfa"])
 def test_tpfa(g_pp, tensor_func, discr_type):
+    """This test is almost the same as test_tpfa_discretization below, but calls c++
+    binding directly and not through mpxa.Tpfa etc. I would remove this one and keep the
+    latter one."""
     K_pp = tensor_func(g_pp)
     bc_pp = pp.BoundaryCondition(g_pp)
     bc_pp.is_dir[0] = True
@@ -123,6 +128,7 @@ def test_tpfa(g_pp, tensor_func, discr_type):
 
         _compare_matrices(m_0, m_1)
 
+
 @pytest.mark.parametrize("g_pp", grid_list)
 @pytest.mark.parametrize(
     "tensor_func",
@@ -133,7 +139,13 @@ def test_tpfa(g_pp, tensor_func, discr_type):
     ],
 )
 @pytest.mark.parametrize("discr_type", ["tpfa", "mpfa"])
-def test_tpfa_discretization(g_pp, tensor_func, discr_type):
+@pytest.mark.parametrize("specify_ambient_dimension", [True, False])
+def test_tpfa_discretization(
+    g_pp: pp.Grid,
+    tensor_func: Callable[[pp.Grid], pp.SecondOrderTensor],
+    discr_type: str,
+    specify_ambient_dimension: bool,
+):
     K_pp = tensor_func(g_pp)
     bc_pp = pp.BoundaryCondition(g_pp)
     bc_pp.is_dir[0] = True
@@ -146,16 +158,16 @@ def test_tpfa_discretization(g_pp, tensor_func, discr_type):
     elif discr_type == "mpfa":
         discr_pp = pp.Mpfa(key)
 
-    # Set the parameters for the discretization. Note that the ambient dimension for the
-    # vector source discretization is always set to 3. This follows the C++ code, but
-    # breaks with the standard PorePy implementation in the case where the computational
-    # domain is 2D. Todo, I guess.
+    # Set the parameters for the discretization.
     data_pp = {
-        pp.PARAMETERS: {
-            key: {"second_order_tensor": K_pp, "bc": bc_pp, "ambient_dimension": 3}
-        },
+        pp.PARAMETERS: {key: {"second_order_tensor": K_pp, "bc": bc_pp}},
         pp.DISCRETIZATION_MATRICES: {key: {}},
     }
+    # Note that the C++ code always treats the ambient dimension as 3 (even for a 2D
+    # problem). We test that the code works consistently if the ambient dimension is
+    # specified or not.
+    if specify_ambient_dimension:
+        data_pp[pp.PARAMETERS][key]["ambient_dimension"] = 3
     discr_pp.discretize(g_pp, data_pp)
 
     if discr_type == "tpfa":
@@ -163,11 +175,12 @@ def test_tpfa_discretization(g_pp, tensor_func, discr_type):
     elif discr_type == "mpfa":
         discr_cpp = mpxa.Mpfa(key)
     data_cpp = {
-        pp.PARAMETERS: {
-            key: {"second_order_tensor": K_pp, "bc": bc_pp, "ambient_dimension": 3}
-        },
+        pp.PARAMETERS: {key: {"second_order_tensor": K_pp, "bc": bc_pp}},
         pp.DISCRETIZATION_MATRICES: {key: {}},
     }
+    # Testing with and without passed ambient dimension.
+    if specify_ambient_dimension:
+        data_cpp[pp.PARAMETERS][key]["ambient_dimension"] = 3
     discr_cpp.discretize(g_pp, data_cpp)
 
     for attribute in [

@@ -54,6 +54,28 @@ def convert_matrix_mpxa_to_scipy(
     )
 
 
+def convert_vector_source_mpxa_to_scipy(
+    mpxa_matrix: _mpxa.CompressedDataStorageDouble, ambient_dim: int
+) -> sps.csr_matrix:
+    """Special treatment of the `vector_source` matrix. In mpxa (C++ code), the ambient
+    dimension for the vector source discretization is always set to 3. It breaks with
+    the standard PorePy implementation in the case where the computational domain is 2D.
+
+    This function trims the extra dimension to stay consistent with PorePy.
+    """
+    result_mat = convert_matrix_mpxa_to_scipy(mpxa_matrix=mpxa_matrix)
+    if ambient_dim == 3:
+        return result_mat
+    elif ambient_dim == 2:
+        mask = np.ones(result_mat.shape[1], dtype=bool)
+        # Skipping each 3rd element (z-axis). 
+        mask[2::3] = False
+        return result_mat[:, mask]
+    else:
+        raise NotImplementedError(f'{ambient_dim = }')
+    
+
+
 def convert_grid_to_mpxa(source_grid: pp.Grid) -> _mpxa.Grid:
     dim = source_grid.dim
     nodes = source_grid.nodes.T
@@ -68,7 +90,9 @@ def convert_grid_to_mpxa(source_grid: pp.Grid) -> _mpxa.Grid:
     return target_grid
 
 
-def convert_tensor_to_mpxa(T: pp.SecondOrderTensor, dim: int) -> _mpxa.SecondOrderTensor:
+def convert_tensor_to_mpxa(
+    T: pp.SecondOrderTensor, dim: int
+) -> _mpxa.SecondOrderTensor:
     """Convert a SecondOrderTensor to the mpxa format."""
 
     # The underlying array should be contiguous.
