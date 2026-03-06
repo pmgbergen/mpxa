@@ -27,8 +27,8 @@ def convert_matrix_scipy_to_mpxa(
     return matrix_class(
         sparse_matrix.shape[0],
         sparse_matrix.shape[1],
-        sparse_matrix.indptr,
-        sparse_matrix.indices,
+        np.ascontiguousarray(sparse_matrix.indptr),
+        np.ascontiguousarray(sparse_matrix.indices),
         np.ascontiguousarray(sparse_matrix.data),
         csc,
     )
@@ -82,11 +82,11 @@ def convert_grid_to_mpxa(source_grid: pp.Grid) -> _mpxa.Grid:
     cell_faces = convert_matrix_scipy_to_mpxa(source_grid.cell_faces.tocsr(), csc=True)
     face_nodes = convert_matrix_scipy_to_mpxa(source_grid.face_nodes.tocsr(), csc=True)
     target_grid = _mpxa.Grid(dim, nodes, cell_faces, face_nodes)
-    target_grid.set_cell_volumes(source_grid.cell_volumes)
-    target_grid.set_face_areas(source_grid.face_areas)
-    target_grid.set_face_normals(source_grid.face_normals.T)
-    target_grid.set_cell_centers(source_grid.cell_centers.T)
-    target_grid.set_face_centers(source_grid.face_centers.T)
+    target_grid.set_cell_volumes(np.ascontiguousarray(source_grid.cell_volumes))
+    target_grid.set_face_areas(np.ascontiguousarray(source_grid.face_areas))
+    target_grid.set_face_normals(np.ascontiguousarray(source_grid.face_normals.T))
+    target_grid.set_cell_centers(np.ascontiguousarray(source_grid.cell_centers.T))
+    target_grid.set_face_centers(np.ascontiguousarray(source_grid.face_centers.T))
     return target_grid
 
 
@@ -98,7 +98,9 @@ def convert_tensor_to_mpxa(
     # The underlying array should be contiguous.
     values = np.ascontiguousarray(T.values)
 
-    if dim == 1:
+    if dim == 0:
+        return _mpxa.SecondOrderTensor(0, values[0, 0].size, values[0, 0])
+    elif dim == 1:
         return _mpxa.SecondOrderTensor(1, values[0, 0].size, values[0, 0])
     elif dim == 2:
         if not np.allclose(values[0, 1], 0):

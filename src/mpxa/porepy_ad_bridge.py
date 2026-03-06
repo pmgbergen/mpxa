@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from typing import Callable
+
+import numpy as np
 import porepy as pp
 from porepy.numerics.ad.ad_utils import MergedOperator, wrap_discretization
 from porepy.numerics.ad.discretizations import Discretization
-from mpxa import _mpxa
+
 import mpxa
+from mpxa import _mpxa
 
 
 class Tpfa(pp.FVElliptic):
@@ -25,7 +28,13 @@ class Tpfa(pp.FVElliptic):
         tpfa_cpp = _mpxa.tpfa(g_cpp, K_cpp, bc_cpp)
 
         # Convert the discretization matrices to scipy format.
-        ambient_dim = parameter_dictionary.get("ambient_dimension", sd.dim)
+        try:
+            ambient_dim = parameter_dictionary["ambient_dimension"]
+        except KeyError as e:
+            raise ValueError(
+                "ambient_dimension must be provided in parameter dictionary for the "
+                f"Tpfa C++ discretization with keyword = {self.keyword}."
+            ) from e
         data[pp.DISCRETIZATION_MATRICES][self.keyword] = {
             key: mpxa.convert_matrix_mpxa_to_scipy(value)
             for key, value in {
@@ -43,9 +52,15 @@ class Tpfa(pp.FVElliptic):
                 "bound_pressure_vector_source": tpfa_cpp.bound_pressure_vector_source,
             }.items()
         }
+        # YZ: I used the lines below to debug tests. These should be deleted when the
+        # all tests pass.
+        for k, v in data[pp.DISCRETIZATION_MATRICES][self.keyword].items():
+            if np.any(np.isnan(v.data)):
+                print(k, v.data)
+                assert False
 
 
-class Mpfa(pp.Mpfa):
+class Mpfa(pp.FVElliptic):
     def __init__(self, keyword: str) -> None:
         super(Mpfa, self).__init__(keyword)
 
@@ -62,7 +77,13 @@ class Mpfa(pp.Mpfa):
         mpfa_cpp = _mpxa.mpfa(g_cpp, K_cpp, bc_cpp)
 
         # Convert the discretization matrices to scipy format.
-        ambient_dim = parameter_dictionary.get("ambient_dimension", sd.dim)
+        try:
+            ambient_dim = parameter_dictionary["ambient_dimension"]
+        except KeyError as e:
+            raise ValueError(
+                "ambient_dimension must be provided in parameter dictionary for the "
+                f"Mpfa C++ discretization with keyword = {self.keyword}."
+            ) from e
         data[pp.DISCRETIZATION_MATRICES][self.keyword] = {
             key: mpxa.convert_matrix_mpxa_to_scipy(value)
             for key, value in {
@@ -80,6 +101,12 @@ class Mpfa(pp.Mpfa):
                 "bound_pressure_vector_source": mpfa_cpp.bound_pressure_vector_source,
             }.items()
         }
+        # YZ: I used the lines below to debug tests. These should be deleted when the
+        # all tests pass.
+        for k, v in data[pp.DISCRETIZATION_MATRICES][self.keyword].items():
+            if np.any(np.isnan(v.data)):
+                print(k, v.data)
+                assert False
 
 
 class TpfaAd(Discretization):
