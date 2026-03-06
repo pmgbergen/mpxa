@@ -22,6 +22,10 @@ const double nKproj(const std::vector<double>& face_normal, const SecondOrderTen
     {
         dist += cell_face_vec[i] * cell_face_vec[i];
     }
+    if (std::abs(dist) < 1e-20) {
+        // The threshold is arbitrary small.
+        throw std::runtime_error("Division by zero in nKproj");
+    }
 
     if (tensor.is_isotropic())
     {

@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <numeric>
 #include <vector>
 
 Grid::Grid(const int dim, std::vector<std::vector<double>> nodes,
@@ -348,15 +349,80 @@ void Grid::compute_geometry()
 }
 
 // Cartesian grid creation
+
+static std::unique_ptr<Grid> construct_grid_1d(const int num_cells, const double length)
+{
+    // NOTE: This function is not tested, so should be used with caution.
+    const int num_nodes = num_cells + 1;
+    const int dim = 1;
+    const double dx = length / num_cells;
+    std::vector<std::vector<double>> nodes(num_nodes, std::vector<double>(dim));
+
+    // Filling in nodes.
+    for (int i = 0; i < num_nodes; ++i)
+    {
+        nodes[i][0] = dx * i;
+    }
+
+    // Constructing face - cells mapping. shape=(num_faces, num_cells)
+    std::vector<int> face_cells_row_ptr(num_nodes + 1);
+    std::vector<int> face_cells_col_idx;
+    std::vector<int> face_cells_sign_vector;
+    face_cells_col_idx.reserve((num_nodes - 1) * 2);
+    face_cells_sign_vector.reserve((num_nodes - 1) * 2);
+    for (int i = 0; i < num_nodes; ++i)
+    {
+        face_cells_row_ptr[i + 1] = face_cells_row_ptr[i];
+        // Add left cell
+        if (i != 0)
+        {
+            face_cells_col_idx.push_back(i - 1);
+            face_cells_row_ptr[i + 1] += 1;
+            face_cells_sign_vector.push_back(1);
+        }
+        // Add right cell
+        if (i != (num_nodes - 1))
+        {
+            face_cells_col_idx.push_back(i);
+            face_cells_row_ptr[i + 1] += 1;
+            face_cells_sign_vector.push_back(-1);
+        }
+    }
+
+    auto face_cells = std::make_shared<CompressedDataStorage<int>>(
+        num_nodes, num_cells, std::move(face_cells_row_ptr), std::move(face_cells_col_idx),
+        std::move(face_cells_sign_vector));
+
+    // Constructing face - nodes mapping (identity). shape=(num_nodes, num_faces)
+    std::vector<int> face_nodes_row_ptr(num_nodes + 1);
+    std::vector<int> face_nodes_col_idx(num_nodes);
+    std::vector<int> face_nodes_values(num_nodes, 1);
+    std::iota(face_nodes_row_ptr.begin(), face_nodes_row_ptr.end(), 0);
+    std::iota(face_nodes_col_idx.begin(), face_nodes_col_idx.end(), 0);
+    auto face_nodes = std::make_shared<CompressedDataStorage<int>>(
+        num_nodes, num_nodes, std::move(face_nodes_row_ptr), std::move(face_nodes_col_idx),
+        std::move(face_nodes_values));
+
+    return std::make_unique<Grid>(1, std::move(nodes), face_cells, face_nodes);
+}
+
 std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vector<int> num_cells,
                                                   const std::vector<double> lengths)
 {
+    if (dim == 1)
+    {
+        return construct_grid_1d(num_cells[0], lengths[0]);
+    }
+
     // Dim should be 2 or 3
     if (dim < 2 || dim > 3)
     {
         throw std::invalid_argument("Invalid dimension: dim must be 2 or 3.");
     }
-
+    if (dim != num_cells.size())
+    {
+        throw std::invalid_argument("num_cells dimensions must correspond to 'dim'.");
+    }
     // Create node coordinates along each dimension
     std::vector<double> x(num_cells[0] + 1);
     std::vector<double> y(num_cells[1] + 1);
