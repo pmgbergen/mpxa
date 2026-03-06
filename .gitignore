@@ -57,3 +57,5 @@ external/eigen/*
 
 # Simulation output
 visualization/
+*.msh
+*.geo_unrolled
