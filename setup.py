@@ -8,9 +8,7 @@ import site
 
 class CustomInstall(build_ext):
     def run(self):
-        # Run the default install command
-        super().run()
-        # Ensure the CMake build is triggered
+        # Triggering CMake build.
         build_dir = "build"
         bindings_dir = os.path.join(build_dir, "bindings/python")
 
