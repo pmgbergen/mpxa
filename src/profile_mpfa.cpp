@@ -65,15 +65,23 @@ int main()
     int grid_case = 2;
     if (grid_case == 0)  // Replace with actual condition to choose between 2D and 3D
     {
+        // 2D grid
         grid = Grid::create_cartesian_grid(2, num_cells_2d, lengths_2d);
     }
     else if (grid_case == 1)
     {
+        // 3D grid
         grid = Grid::create_cartesian_grid(3, num_cells_3d, {2.0, 2.0, 2.0});
     }
     else if (grid_case == 2)
     {
+        // 2D grid tilted in 3D domain
         grid = construct_bad_grid();
+    }
+    else if (grid_case == 3)
+    {
+        // 1D grid
+        grid = Grid::create_cartesian_grid(1, {30}, {2.0});
     }
     grid->compute_geometry();
 
