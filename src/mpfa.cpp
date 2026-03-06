@@ -503,6 +503,11 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
 ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                           const std::unordered_map<int, BoundaryCondition>& bc_map)
 {
+    // MPFA reduces to TPFA in 1D or 0D. We do it explicitly here, and further code
+    // assumes a 2D or 3D grid.
+    if (grid.dim() < 2) {
+        return tpfa(grid, tensor, bc_map);
+    }
     constexpr int SPATIAL_DIM = 3;  // Assuming 3D for now, can be generalized later.
 
     BasisConstructor basis_constructor(grid.dim());

@@ -26,13 +26,26 @@ compute_basis_functions(
     const std::vector<std::array<double, 3>>& coords)
 {
     double inv[4][4];  // To store the inverse matrix.
-    if (m_dim == 2)
+    if (m_dim == 0)
+    {
+        throw std::runtime_error("MPFA basis function computation not implemented for dim=0.");
+    }
+    else if (m_dim == 1)
+    {
+        throw std::runtime_error("MPFA basis function computation not implemented for dim=1.");
+    }
+    else if (m_dim == 2)
     {
         double x_avg = 0.0, y_avg = 0.0;
         for (int i = 0; i < 3; ++i)
         {
             x_avg += coords[i][0];
             y_avg += coords[i][1];
+            if (std::abs(coords[i][2]) > 1e-20)
+            {
+                // This will throw for 2D grids tilted in a 3D domain, not implemented.
+                throw std::logic_error("Assumed z coordinate equals zero.");
+            }
         }
         x_avg /= 3.0;
         y_avg /= 3.0;
@@ -61,6 +74,11 @@ compute_basis_functions(
         // Compute determinant
         double det = a11 * (a22 * a33 - a23 * a32) - a12 * (a21 * a33 - a23 * a31) +
                      a13 * (a21 * a32 - a22 * a31);
+        if (std::abs(det) < 1e-20)
+        {
+            // This will throw for 2D grids tilted in a 3D domain, not implemented.
+            throw std::logic_error("compute_basis_functions det = 0.");
+        }
         const double inv_det = 1.0 / det;
 
         // Compute inverse (assuming det != 0)
@@ -75,7 +93,7 @@ compute_basis_functions(
         inv[2][1] = (a12 * a31 - a11 * a32) * inv_det * inv_sy;
         inv[2][2] = (a11 * a22 - a12 * a21) * inv_det * inv_sy;
     }
-    else
+    else if (m_dim == 3)
     {
         double x_avg = 0.0, y_avg = 0.0, z_avg = 0.0;
         for (int i = 0; i < 4; ++i)
@@ -164,6 +182,10 @@ compute_basis_functions(
             // inv[i][j] = adj[j][i] * inv_detA;
         }
         // }
+    }
+    else
+    {
+        throw std::runtime_error("MPFA basis function computation not implemented for dim > 3.");
     }
 
     // for (int i = 0; i <= m_dim; ++i)
