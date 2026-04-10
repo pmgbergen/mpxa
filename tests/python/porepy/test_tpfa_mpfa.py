@@ -84,6 +84,9 @@ def test_tpfa_mpfa_discretization(
     if ambient_dimension == 2 and grid_pp.dim == 3:
         # ambient_dimension == 2 and grid dimension == 3 does not make sense.
         pytest.skip("Unrealistic combination of parameters")
+    elif ambient_dimension == 2 and np.any(grid_pp.nodes[2] > 1e-3):
+        pytest.skip("The grid is embedded in 3d, so the ambient dimension cannot be 2.")
+
     K_pp = tensor_func(grid_pp)
     bc_pp = pp.BoundaryCondition(grid_pp)
     # Setting non-trivial boundary conditions for grids with dim > 0.
