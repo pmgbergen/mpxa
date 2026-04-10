@@ -64,11 +64,43 @@ class Mpfa(pp.FVElliptic):
     def __init__(self, keyword: str) -> None:
         super(Mpfa, self).__init__(keyword)
 
+    def _rotate_2d_grid_to_xy_plane(
+        self, g: pp.Grid, k: pp.SecondOrderTensor
+    ) -> pp.Grid:
+        # Rotate the grid into the xy plane and delete third dimension. First make a
+        # copy to avoid alterations to the input grid
+        g = g.copy()
+        (
+            cell_centers,
+            face_normals,
+            face_centers,
+            R,
+            _,
+            nodes,
+        ) = pp.map_geometry.map_grid(g)
+        g.cell_centers[:2] = cell_centers
+        g.face_normals[:2] = face_normals
+        g.face_centers[:2] = face_centers
+        g.nodes[:2] = nodes
+        g.cell_centers[2] = 0
+        g.face_normals[2] = 0
+        g.face_centers[2] = 0
+        g.nodes[2] = 0
+
+        # Rotate the permeability tensor and delete last dimension
+        k = k.copy()
+        k.values = np.tensordot(R.T, np.tensordot(R, k.values, (1, 0)), (0, 1))
+        k.values = np.delete(k.values, (2), axis=0)
+        k.values = np.delete(k.values, (2), axis=1)
+        return g, k
+
     def discretize(self, sd: pp.Grid, data: dict) -> None:
         parameter_dictionary = data[pp.PARAMETERS][self.keyword]
         K_pp = parameter_dictionary["second_order_tensor"]
         bc_pp = parameter_dictionary["bc"]
         g_pp = sd
+        if g_pp.dim == 2:
+            g_pp, K_pp = self._rotate_2d_grid_to_xy_plane(g_pp, K_pp)
 
         K_cpp = mpxa.convert_tensor_to_mpxa(K_pp, g_pp.dim)
         bc_cpp = mpxa.convert_bc_to_mpxa(bc_pp)
