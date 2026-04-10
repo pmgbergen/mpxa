@@ -14,6 +14,15 @@ import mpxa
 import scipy.sparse as sps
 
 
+g_1d_along_y_axis = pp.CartGrid([2])
+g_1d_along_y_axis.nodes[0] = 0
+g_1d_along_y_axis.nodes[1] = np.arange(3)
+
+g_1d_along_xyz_diagonal = pp.CartGrid([2])
+g_1d_along_xyz_diagonal.nodes[1] = np.arange(3)
+g_1d_along_xyz_diagonal.nodes[2] = 2 * np.arange(3)
+
+
 g_2d_in_yz_plane = pp.CartGrid([2, 2])
 g_2d_in_yz_plane.nodes[2] = g_2d_in_yz_plane.nodes[0].copy()
 g_2d_in_yz_plane.nodes[0] = 0
@@ -29,6 +38,8 @@ g_2d_in_yz_plane.nodes[0] = 0
         pp.TensorGrid(x=np.linspace(0, 3, num=10, endpoint=True)),  # 1D line grid.
         pp.PointGrid(pt=np.array([0.5, 0.5, 0.5])),  # 0D point grid.
         g_2d_in_yz_plane,
+        g_1d_along_y_axis,
+        g_1d_along_xyz_diagonal,
     ],
 )
 def grid_pp(request) -> pp.Grid:
@@ -137,11 +148,11 @@ def test_tpfa_mpfa_discretization(
     discr_cpp.discretize(grid_pp, data_cpp)
 
     for attribute in [
-        "vector_source",
         "flux",
         "bound_flux",
         "bound_pressure_face",
         "bound_pressure_cell",
+        "vector_source",
         "bound_pressure_vector_source",
     ]:
         m_pp = data_pp[pp.DISCRETIZATION_MATRICES][key][attribute]
