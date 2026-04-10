@@ -13,144 +13,10 @@ import mpxa
 
 import scipy.sparse as sps
 
-# The lines below generate a 2D grid, tilted in a 3D domain. MPFA and TPFA tests fail
-# with this grid. It probably should be stored differently, in a less ugly way (TODO).
-nodes = np.array(
-    [
-        [
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-        ],
-        [
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            1.0,
-            1.0,
-            1.0,
-            1.0,
-        ],
-        [
-            1.0,
-            0.5,
-            0.5,
-            0.0,
-            1.0,
-            1.0,
-            0.5,
-            0.5,
-            0.5,
-            0.5,
-            0.0,
-            0.0,
-            1.0,
-            0.5,
-            0.5,
-            0.0,
-        ],
-    ]
-)
-face_nodes_data = np.array(
-    [
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-    ]
-)
-faces_nodes_col_idx = np.array(
-    [
-        0,
-        4,
-        2,
-        7,
-        3,
-        10,
-        5,
-        12,
-        9,
-        14,
-        11,
-        15,
-        1,
-        0,
-        3,
-        2,
-        8,
-        5,
-        11,
-        9,
-        13,
-        12,
-        15,
-        14,
-        6,
-        4,
-        1,
-        6,
-        10,
-        7,
-        8,
-        13,
-    ]
-)
-faces_nodes_row_ptr = np.array(
-    [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32]
-)
-cell_faces_data = np.array([-1, -1, 1, 1, -1, 1, -1, 1, -1, -1, 1, 1, -1, 1, -1, 1])
-cell_faces_col_idx = np.array([0, 6, 12, 13, 1, 2, 7, 14, 3, 8, 10, 15, 4, 5, 9, 11])
-cell_faces_row_ptr = np.array([0, 4, 8, 12, 16])
+
+g_2d_in_yz_plane = pp.CartGrid([2, 2])
+g_2d_in_yz_plane.nodes[2] = g_2d_in_yz_plane.nodes[0].copy()
+g_2d_in_yz_plane.nodes[0] = 0
 
 
 @pytest.fixture(
@@ -162,18 +28,7 @@ cell_faces_row_ptr = np.array([0, 4, 8, 12, 16])
         pp.StructuredTetrahedralGrid(np.array([3, 3, 3])),  # 3D simplex grid.
         pp.TensorGrid(x=np.linspace(0, 3, num=10, endpoint=True)),  # 1D line grid.
         pp.PointGrid(pt=np.array([0.5, 0.5, 0.5])),  # 0D point grid.
-        #
-        pp.Grid(
-            dim=2,
-            nodes=nodes,
-            face_nodes=sps.csc_matrix(
-                (face_nodes_data, faces_nodes_col_idx, faces_nodes_row_ptr)
-            ),
-            cell_faces=sps.csc_matrix(
-                (cell_faces_data, cell_faces_col_idx, cell_faces_row_ptr)
-            ),
-            name="2d in 3d",
-        ),
+        g_2d_in_yz_plane,
     ],
 )
 def grid_pp(request) -> pp.Grid:
