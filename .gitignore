@@ -59,3 +59,4 @@ external/eigen/*
 visualization/
 *.msh
 *.geo_unrolled
+*.xao
