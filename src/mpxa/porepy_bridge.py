@@ -1,5 +1,5 @@
 import porepy as pp
-from mpxa import _mpxa
+from . import _mpxa
 import numpy as np
 import scipy.sparse as sps
 
@@ -14,15 +14,18 @@ def convert_matrix_scipy_to_mpxa(
             and csr formats. The input matrix must still be passed in the csr format.
 
     """
-    assert sparse_matrix.format == "csr"
-    if sparse_matrix.data.dtype == int:
+    if sparse_matrix.format != "csr":
+        raise ValueError(
+            "Expected sparse_matrix to be in CSR format, "
+            f"got format {sparse_matrix.format!r}."
+        )
+    dtype = sparse_matrix.data.dtype
+    if np.issubdtype(dtype, np.integer):
         matrix_class = _mpxa.CompressedDataStorageInt
-    elif sparse_matrix.data.dtype == float:
+    elif np.issubdtype(dtype, np.floating):
         matrix_class = _mpxa.CompressedDataStorageDouble
     else:
-        raise ValueError(
-            f"Unsupported data type {sparse_matrix.data.dtype} for sparse matrix."
-        )
+        raise ValueError(f"Unsupported data type {dtype} for sparse matrix.")
 
     return matrix_class(
         sparse_matrix.shape[0],

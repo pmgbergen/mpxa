@@ -9,7 +9,7 @@
 
 static std::unique_ptr<Grid> construct_bad_grid()
 {
-    // This constructs a 2D grid, tilted in a 3D domain. MPXA throws errows with it.
+    // This constructs a 2D grid, tilted in a 3D domain. MPXA throws errors with it.
     // The grid is taken from a porepy integration test.
     return std::make_unique<Grid>(
         // dim
