@@ -80,7 +80,9 @@ def test_fluid_mass_balance_model_integration(
         "grid_type": grid_type,
         "meshing_arguments": {"cell_size": 0.5},
         "time_manager": pp.TimeManager(schedule=[0, 5], dt_init=1, constant_dt=True),
-        "fracture_indices": [0, 1] if dim == 2 else [0, 1, 2],  # Enabling intersecting fractures.
+        "fracture_indices": [0, 1]
+        if dim == 2
+        else [0, 1, 2],  # Enabling intersecting fractures.
         "material_constants": {
             "fluid": pp.FluidComponent(viscosity=0.1, density=0.2),
             "solid": pp.SolidConstants(permeability=0.5, porosity=0.25),
