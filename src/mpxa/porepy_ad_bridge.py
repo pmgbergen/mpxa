@@ -43,6 +43,7 @@ def _rotate_2d_grid_to_xy_plane(g: pp.Grid, k: pp.SecondOrderTensor) -> pp.Grid:
 
 def _rotate_1d_grid_to_x_axis(g: pp.Grid, k: pp.SecondOrderTensor) -> pp.Grid:
     # Unit vector along the grid. This breaks if the grid is not a straight line.
+    g = g.copy()
     v = g.nodes[:, 1] - g.nodes[:, 0]
     v /= np.linalg.norm(v)
 
@@ -220,14 +221,13 @@ def _store_discretization_matrices(sd, data, keyword, discr_cpp, rot_info):
 def _extract_data_for_discretization(sd, parameter_dictionary):
     K_pp = parameter_dictionary["second_order_tensor"]
     bc_pp = parameter_dictionary["bc"]
-    g_pp = sd.copy()
-
     # Rotate the grid and permeability tensor.
-    if g_pp.dim == 2:
-        g_pp, K_pp, rot_info = _rotate_2d_grid_to_xy_plane(g_pp, K_pp)
-    elif g_pp.dim == 1:
-        g_pp, K_pp, rot_info = _rotate_1d_grid_to_x_axis(g_pp, K_pp)
+    if sd.dim == 2:
+        g_pp, K_pp, rot_info = _rotate_2d_grid_to_xy_plane(sd, K_pp)
+    elif sd.dim == 1:
+        g_pp, K_pp, rot_info = _rotate_1d_grid_to_x_axis(sd, K_pp)
     else:
+        g_pp = sd
         rot_info = None
 
     K_cpp = mpxa.convert_tensor_to_mpxa(K_pp, g_pp.dim)
