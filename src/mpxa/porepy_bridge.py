@@ -59,21 +59,23 @@ def convert_vector_source_mpxa_to_scipy(
 ) -> sps.csr_matrix:
     """Special treatment of the `vector_source` matrix. In mpxa (C++ code), the ambient
     dimension for the vector source discretization is always set to 3. It breaks with
-    the standard PorePy implementation in the case where the computational domain is 2D.
+    the standard PorePy implementation in the case where the computational domain is 1D
+    or 2D.
 
     This function trims the extra dimension to stay consistent with PorePy.
     """
     result_mat = convert_matrix_mpxa_to_scipy(mpxa_matrix=mpxa_matrix)
     if ambient_dim == 3:
         return result_mat
-    elif ambient_dim == 2:
-        mask = np.ones(result_mat.shape[1], dtype=bool)
-        # Skipping each 3rd element (z-axis). 
+    mask = np.ones(result_mat.shape[1], dtype=bool)
+    if ambient_dim <= 2:
+        # Skipping each 3rd element (z-axis).
         mask[2::3] = False
-        return result_mat[:, mask]
-    else:
-        raise NotImplementedError(f'{ambient_dim = }')
-    
+    if ambient_dim <= 1:
+        # Skipping each 2nd element (y-axis).
+        mask[1::3] = False
+
+    return result_mat[:, mask]
 
 
 def convert_grid_to_mpxa(source_grid: pp.Grid) -> _mpxa.Grid:
