@@ -37,7 +37,7 @@ def test_grid_bindings():
         [[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [2, 2]]
     ).astype(float)
 
-    grid = _mpxa.Grid(2, nodes, fn_cpp, cf_cpp)
+    grid = _mpxa.Grid(2, nodes, cf_cpp, fn_cpp)
 
     cell_volumes = np.ones(4, dtype=float)
     face_areas = np.ones(12, dtype=float)

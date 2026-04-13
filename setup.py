@@ -33,8 +33,8 @@ class CustomInstall(build_ext):
 setup(
     packages=find_packages(where="src"),  # Find packages in src directory
     package_dir={"": "src"},  # Tell setuptools packages are under src/
-    package_data={"mpxa": ["*.so", "*.py"]},  # Include .so files and Python files
-    install_requires=["numpy", "pybind11>=2.6.0", "scipy", "porepy"],  # Match pyproject.toml
+    package_data={"mpxa": ["*.so", "*.py", "*.pyi"]},  # Include .so files, Python files, and type stubs
+    install_requires=["numpy", "pybind11>=2.6.0", "scipy"],  # Keep required deps in sync with optional extras in pyproject.toml
     ext_modules=[Extension("_mpxa", sources=[])],  # Dummy to trigger build_ext
     cmdclass={
         "build_ext": CustomInstall,
