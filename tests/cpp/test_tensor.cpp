@@ -158,3 +158,31 @@ TEST(TensorTest, NonDiagonalSecondOrderTensor3d)
         EXPECT_EQ(full_data[5], data_yz[i]);
     }
 }
+
+TEST(TensorTest, Dim)
+{
+    const std::vector<double> data = {1.0};
+    EXPECT_EQ(SecondOrderTensor(2, 1, data).dim(), 2);
+    EXPECT_EQ(SecondOrderTensor(3, 1, data).dim(), 3);
+}
+
+TEST(TensorTest, ConstructorSizeMismatchThrows)
+{
+    EXPECT_THROW(SecondOrderTensor(2, 3, {1.0, 2.0}), std::invalid_argument);
+}
+
+TEST(TensorTest, SetterSizeMismatchThrows)
+{
+    SecondOrderTensor t(2, 2, {1.0, 2.0});
+    EXPECT_THROW(t.with_kyy({1.0}), std::invalid_argument);
+    EXPECT_THROW(t.with_kxy({1.0}), std::invalid_argument);
+}
+
+TEST(TensorTest, Set3DComponentOn2DTensorThrows)
+{
+    SecondOrderTensor t(2, 2, {1.0, 2.0});
+    const std::vector<double> v = {1.0, 2.0};
+    EXPECT_THROW(t.with_kzz(v), std::runtime_error);
+    EXPECT_THROW(t.with_kxz(v), std::runtime_error);
+    EXPECT_THROW(t.with_kyz(v), std::runtime_error);
+}
