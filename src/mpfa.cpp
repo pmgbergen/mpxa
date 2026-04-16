@@ -62,6 +62,18 @@ const std::array<double, 3> nK(const std::array<double, 3>& face_normal,
 }
 
 // Helper function to get cell center coordinates for all cells in an interaction region
+// Convert a std::vector<double> to a 3-element array, padding with zeros.
+std::array<double, 3> to_array3(const std::vector<double>& v)
+{
+    std::array<double, 3> arr{0.0, 0.0, 0.0};
+    for (size_t i = 0; i < std::min(v.size(), arr.size()); ++i)
+    {
+        arr[i] = v[i];
+    }
+    return arr;
+}
+
+// Helper function to get cell center coordinates for all cells in an interaction region
 void cell_centers_of_interaction_region(const InteractionRegion& interaction_region,
                                         const Grid& grid,
                                         std::vector<std::array<double, 3>>& centers)
@@ -69,13 +81,7 @@ void cell_centers_of_interaction_region(const InteractionRegion& interaction_reg
     centers.clear();
     for (const int cell_ind : interaction_region.cells())
     {
-        const std::vector<double>& center_vec = grid.cell_center(cell_ind);
-        std::array<double, 3> center_arr = {0.0, 0.0, 0.0};
-        for (size_t i = 0; i < std::min(center_vec.size(), center_arr.size()); ++i)
-        {
-            center_arr[i] = center_vec[i];
-        }
-        centers.push_back(center_arr);
+        centers.push_back(to_array3(grid.cell_center(cell_ind)));
     }
 }
 
@@ -87,13 +93,7 @@ void face_centers_of_interaction_region(const InteractionRegion& interaction_reg
     centers.clear();
     for (const auto& pair : interaction_region.faces())
     {
-        const std::vector<double>& face_center = grid.face_center(pair.first);
-        std::array<double, 3> center_arr = {0.0, 0.0, 0.0};
-        for (size_t i = 0; i < std::min(face_center.size(), center_arr.size()); ++i)
-        {
-            center_arr[i] = face_center[i];
-        }
-        centers.push_back(center_arr);
+        centers.push_back(to_array3(grid.face_center(pair.first)));
     }
 }
 
@@ -105,13 +105,7 @@ void face_normals_of_interaction_region(const InteractionRegion& interaction_reg
     normals.clear();
     for (const auto& pair : interaction_region.faces())
     {
-        const std::vector<double>& face_normal = grid.face_normal(pair.first);
-        std::array<double, 3> normal_arr = {0.0, 0.0, 0.0};
-        for (size_t i = 0; i < std::min(face_normal.size(), normal_arr.size()); ++i)
-        {
-            normal_arr[i] = face_normal[i];
-        }
-        normals.push_back(normal_arr);
+        normals.push_back(to_array3(grid.face_normal(pair.first)));
     }
 }
 
@@ -160,9 +154,9 @@ std::vector<int> count_nodes_of_faces(const Grid& grid)
 
     const auto& col_idx = face_nodes.col_idx();
 
-    for (int i{0}; i < col_idx.size(); ++i)
+    for (const int face_ind : col_idx)
     {
-        ++num_nodes_of_face[col_idx[i]];
+        ++num_nodes_of_face[face_ind];
     }
 
     return num_nodes_of_face;
@@ -174,9 +168,9 @@ std::vector<int> count_faces_of_cells(const Grid& grid)
     std::vector<int> num_faces_of_cell(grid.num_cells(), 0);
     const auto& cell_faces = grid.cell_faces();
     const auto& col_idx = cell_faces.col_idx();
-    for (int i{0}; i < col_idx.size(); ++i)
+    for (const int face_ind : col_idx)
     {
-        num_faces_of_cell[col_idx[i]]++;
+        num_faces_of_cell[face_ind]++;
     }
     return num_faces_of_cell;
 }
@@ -228,7 +222,7 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
     std::vector<double> this_row_data;
 
     int current_ind = 0;
-    for (int row_ind = 0; row_ind < num_row_occurrences.size(); ++row_ind)
+    for (int row_ind = 0; row_ind < static_cast<int>(num_row_occurrences.size()); ++row_ind)
     {
         if (num_row_occurrences[row_ind] == 0)
         {
@@ -391,7 +385,7 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
     // iteration.
     int current_ind = 0;
 
-    for (int row_ind = 0; row_ind < num_row_occurrences.size(); ++row_ind)
+    for (int row_ind = 0; row_ind < static_cast<int>(num_row_occurrences.size()); ++row_ind)
     {
         int num_data_this_row = 0;
         for (int i = 0; i < num_row_occurrences[row_ind]; ++i)
@@ -414,7 +408,7 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
                 throw std::logic_error("The sizes of the passed vectors do not match.");
             }
 
-            for (int i{0}; i < loc_data_flux.size(); ++i)
+            for (int i{0}; i < static_cast<int>(loc_data_flux.size()); ++i)
             {
                 row_entries.emplace_back();
                 RowEntry& re = row_entries.back();
@@ -720,7 +714,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             }
             basis_functions = basis_constructor.compute_basis_functions(continuity_points);
 
-            for (int outer_face_counter{0}; outer_face_counter < loc_faces_of_cell.size();
+            for (int outer_face_counter{0};
+                 outer_face_counter < static_cast<int>(loc_faces_of_cell.size());
                  ++outer_face_counter)
             {
                 // Global and local face indices.
@@ -838,7 +833,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
                     // Add to the one-sided nK values, unless this is a Dirichlet
                     // boundary.
-                    if (~(is_boundary_face && (bc == BoundaryCondition::Dirichlet)))
+                    if (!(is_boundary_face && (bc == BoundaryCondition::Dirichlet)))
                     {
                         for (int k = 0; k < SPATIAL_DIM; ++k)
                         {
@@ -892,7 +887,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             // clear when applying this to a grid that is not K-orthogonal.
             Eigen::VectorXd mask = Eigen::VectorXd::Ones(num_faces);
 
-            for (int face{0}; face < loc_boundary_faces_type.size(); ++face)
+            for (int face{0}; face < static_cast<int>(loc_boundary_faces_type.size()); ++face)
             {
                 const auto bc = loc_boundary_faces_type[face];
                 if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
@@ -1081,7 +1076,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                         bound_vector_source_matrix.row(face_local_index).data() +
                             bound_vector_source_matrix.row(face_local_index).size());
 
-                    for (int loc_cell_ind{0}; loc_cell_ind < interaction_region.cells().size();
+                    for (int loc_cell_ind{0};
+                         loc_cell_ind < static_cast<int>(interaction_region.cells().size());
                          ++loc_cell_ind)
                     {
                         // If the cell is not the main cell for the face, we need to
