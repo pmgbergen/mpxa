@@ -82,8 +82,6 @@ class Grid
     std::vector<std::vector<double>> m_face_normals;
     std::vector<std::vector<double>> m_face_centers;
     std::vector<std::vector<double>> m_cell_centers;
-
-    int* m_boundary_faces;
 };
 
 #endif  // GRID_GRID_H
