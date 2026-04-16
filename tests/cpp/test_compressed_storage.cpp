@@ -58,6 +58,14 @@ TEST_F(CompressedDataStorageTest, ValuesInRow)
     EXPECT_EQ(storage->value(1, 2), 4.0);
 }
 
+// Test that num_rows() and num_cols() are callable on a const reference
+TEST_F(CompressedDataStorageTest, ConstAccessors)
+{
+    const CompressedDataStorage<double>& cstorage = *storage;
+    EXPECT_EQ(cstorage.num_rows(), 3);
+    EXPECT_EQ(cstorage.num_cols(), 3);
+}
+
 // Main function to run all tests
 int main(int argc, char** argv)
 {

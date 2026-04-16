@@ -58,6 +58,10 @@ class SecondOrderTensor
     static constexpr size_t K_XZ_OFFSET = 4;
     static constexpr size_t K_YZ_OFFSET = 5;
     static constexpr size_t DATA_PER_CELL = 6;
+
+    // Validate size, fill one component for every cell, and update flags.
+    // Pass affects_diagonal=true for off-diagonal components (xy, xz, yz).
+    void set_component(size_t offset, const std::vector<double>& values, bool affects_diagonal);
 };
 
 #endif  // TENSOR_H
