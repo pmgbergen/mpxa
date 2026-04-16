@@ -73,40 +73,31 @@ std::array<double, 3> to_array3(const std::vector<double>& v)
     return arr;
 }
 
-// Helper function to get cell center coordinates for all cells in an interaction region
-void cell_centers_of_interaction_region(const InteractionRegion& interaction_region,
-                                        const Grid& grid,
-                                        std::vector<std::array<double, 3>>& centers)
+// Cell centers, face centers, and face normals for all cells/faces in an interaction region.
+struct InteractionRegionGeometry
 {
-    centers.clear();
-    for (const int cell_ind : interaction_region.cells())
-    {
-        centers.push_back(to_array3(grid.cell_center(cell_ind)));
-    }
-}
+    std::vector<std::array<double, 3>> cell_centers;
+    std::vector<std::array<double, 3>> face_centers;
+    std::vector<std::array<double, 3>> face_normals;
+};
 
-// Helper function to get face center coordinates for all faces in an interaction region
-void face_centers_of_interaction_region(const InteractionRegion& interaction_region,
-                                        const Grid& grid,
-                                        std::vector<std::array<double, 3>>& centers)
+InteractionRegionGeometry compute_interaction_region_geometry(
+    const InteractionRegion& region, const Grid& grid)
 {
-    centers.clear();
-    for (const auto& pair : interaction_region.faces())
+    InteractionRegionGeometry geom;
+    geom.cell_centers.reserve(region.cells().size());
+    for (const int cell_ind : region.cells())
     {
-        centers.push_back(to_array3(grid.face_center(pair.first)));
+        geom.cell_centers.push_back(to_array3(grid.cell_center(cell_ind)));
     }
-}
-
-// Helper function to get face normals for all faces in an interaction region
-void face_normals_of_interaction_region(const InteractionRegion& interaction_region,
-                                        const Grid& grid,
-                                        std::vector<std::array<double, 3>>& normals)
-{
-    normals.clear();
-    for (const auto& pair : interaction_region.faces())
+    geom.face_centers.reserve(region.faces().size());
+    geom.face_normals.reserve(region.faces().size());
+    for (const auto& pair : region.faces())
     {
-        normals.push_back(to_array3(grid.face_normal(pair.first)));
+        geom.face_centers.push_back(to_array3(grid.face_center(pair.first)));
+        geom.face_normals.push_back(to_array3(grid.face_normal(pair.first)));
     }
+    return geom;
 }
 
 std::vector<double> nKgrad(const std::array<double, 3>& nK,
@@ -531,8 +522,7 @@ BoundaryFaceClassification classify_boundary_faces(
 std::vector<std::array<double, 3>> compute_continuity_points_for_cell(
     int loc_cell_ind,
     const InteractionRegion& region,
-    const std::vector<std::array<double, 3>>& loc_cell_centers,
-    const std::vector<std::array<double, 3>>& loc_face_centers,
+    const InteractionRegionGeometry& geom,
     const std::array<double, 3>& node_coord,
     const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type,
     bool is_simplex,
@@ -542,7 +532,7 @@ std::vector<std::array<double, 3>> compute_continuity_points_for_cell(
     const int glob_cell_ind = region.cells()[loc_cell_ind];
     std::vector<std::array<double, 3>> continuity_points(dim + 1,
                                                          std::array<double, 3>{0.0, 0.0, 0.0});
-    continuity_points[0] = loc_cell_centers[loc_cell_ind];
+    continuity_points[0] = geom.cell_centers[loc_cell_ind];
     int face_counter = 1;
     for (const int glob_face_ind : region.faces_of_cells().at(glob_cell_ind))
     {
@@ -559,7 +549,7 @@ std::vector<std::array<double, 3>> compute_continuity_points_for_cell(
             for (int i = 0; i < SPATIAL_DIM; ++i)
             {
                 continuity_points[face_counter][i] =
-                    2.0 / 3 * loc_face_centers[loc_face_index][i] +
+                    2.0 / 3 * geom.face_centers[loc_face_index][i] +
                     (1.0 / 3) * node_coord[i];
             }
         }
@@ -567,7 +557,7 @@ std::vector<std::array<double, 3>> compute_continuity_points_for_cell(
         {
             for (int k{0}; k < SPATIAL_DIM; ++k)
             {
-                continuity_points[face_counter][k] = loc_face_centers[loc_face_index][k];
+                continuity_points[face_counter][k] = geom.face_centers[loc_face_index][k];
             }
         }
         ++face_counter;
@@ -581,9 +571,7 @@ void fill_cell_contributions(
     const SecondOrderTensor& tensor,
     const Grid& grid,
     const std::vector<int>& num_nodes_of_face,
-    const std::vector<std::array<double, 3>>& loc_face_normals,
-    const std::vector<std::array<double, 3>>& loc_face_centers,
-    const std::vector<std::array<double, 3>>& loc_cell_centers,
+    const InteractionRegionGeometry& geom,
     const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type,
     const std::vector<std::array<double, 3>>& basis_functions,
     Eigen::MatrixXd& balance_cells,
@@ -613,7 +601,7 @@ void fill_cell_contributions(
         const int loc_face_index = loc_faces_of_cell[outer_face_counter];
 
         std::array<double, 3> flux_expr =
-            nK(loc_face_normals[loc_face_index], tensor, glob_cell_ind,
+            nK(geom.face_normals[loc_face_index], tensor, glob_cell_ind,
                num_nodes_of_face[glob_face_ind]);
         const int sign = grid.sign_of_face_cell(glob_face_ind, glob_cell_ind);
 
@@ -632,8 +620,8 @@ void fill_cell_contributions(
 
         if (is_boundary_face && (bc == BoundaryCondition::Dirichlet))
         {
-            dirichlet_vals = p_diff(loc_face_centers[loc_face_index],
-                                    loc_cell_centers[loc_cell_ind], basis_functions);
+            dirichlet_vals = p_diff(geom.face_centers[loc_face_index],
+                                    geom.cell_centers[loc_cell_ind], basis_functions);
             balance_cells(loc_face_index, loc_cell_ind) = -dirichlet_vals[0] - 1.0;
         }
         else
@@ -815,10 +803,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     const int DIM = grid.dim();
     int tot_num_transmissibilities = 0;
 
-    std::vector<std::array<double, SPATIAL_DIM>> loc_cell_centers;
-    std::vector<std::array<double, SPATIAL_DIM>> loc_face_centers;
-    std::vector<std::array<double, SPATIAL_DIM>> loc_face_normals;
-
     // NOTE: The node loop body is embarrassingly parallel — suitable for #pragma omp parallel for
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
@@ -827,18 +811,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         const int num_faces = interaction_region.faces().size();
         const int num_cells = interaction_region.cells().size();
-
-        // Iterate over the matrix flux (columns major), store the values in the
-        // flux_triplets.
-        std::vector<int> reg_face_glob_ind;
-        reg_face_glob_ind.reserve(num_faces);
-        std::vector<int> reg_face_loc_ind;
-        reg_face_loc_ind.reserve(num_faces);
-        for (const auto& pair : interaction_region.faces())
-        {
-            reg_face_glob_ind.push_back(pair.first);
-            reg_face_loc_ind.push_back(pair.second);
-        }
 
         // Initialize matrices for the discretization.
         MatrixXd balance_cells = MatrixXd::Zero(num_faces, num_cells);
@@ -851,13 +823,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         MatrixXd nK_matrix = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
         MatrixXd nK_one_sided = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
 
-        // TODO: Should we use vectors for the inner quantities?
-        loc_cell_centers.resize(num_cells);
-        cell_centers_of_interaction_region(interaction_region, grid, loc_cell_centers);
-        loc_face_centers.resize(num_faces);
-        face_centers_of_interaction_region(interaction_region, grid, loc_face_centers);
-        loc_face_normals.resize(num_faces);
-        face_normals_of_interaction_region(interaction_region, grid, loc_face_normals);
+        const auto geom = compute_interaction_region_geometry(interaction_region, grid);
 
         // If all cells have grid.dim() + 1 faces, this is a simplex. Use a boolean to
         // indicate whether this is a simplex or not.
@@ -884,7 +850,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
         {
             const auto continuity_pts = compute_continuity_points_for_cell(
-                loc_cell_ind, interaction_region, loc_cell_centers, loc_face_centers,
+                loc_cell_ind, interaction_region, geom,
                 node_coord_arr, loc_boundary_faces_type, is_simplex, DIM);
 
             const auto basis_fns =
@@ -892,8 +858,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
             fill_cell_contributions(
                 loc_cell_ind, interaction_region, tensor, grid, num_nodes_of_face,
-                loc_face_normals, loc_face_centers, loc_cell_centers,
-                loc_boundary_faces_type, basis_fns, balance_cells, balance_faces,
+                geom, loc_boundary_faces_type, basis_fns, balance_cells, balance_faces,
                 flux_cells, flux_faces, nK_matrix, nK_one_sided, basis_map);
         }  // End iteration of cells of the interaction region.
 
@@ -1038,7 +1003,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // Compute the pressure difference between the face center and the cell
                 // center, using the set of basis functions for this cell.
                 const std::vector<double> pressure_diff =
-                    p_diff(loc_face_centers[loc_face_pair.first], loc_cell_centers[loc_cell_ind],
+                    p_diff(geom.face_centers[loc_face_pair.first], geom.cell_centers[loc_cell_ind],
                            basis_map.at(glob_cell_ind));
 
                 // Cell contribution to pressure reconstruction.
