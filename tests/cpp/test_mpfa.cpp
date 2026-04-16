@@ -252,3 +252,41 @@ TEST_F(MPFA, RobinBoundaryThrows)
     SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
     EXPECT_THROW(mpfa(*grid_2d, k, robin_bc_map), std::exception);
 }
+
+// Verify that a 2D grid with a Dirichlet boundary face produces a nonzero bound_flux entry.
+TEST_F(MPFA, BoundaryFaceFlux2dDirichlet)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+    // Face 0 is a Dirichlet boundary; it should contribute a nonzero entry.
+    EXPECT_NE(discr_2d.bound_flux->value(0, 0), 0.0);
+}
+
+// Verify that a 2D grid with a Neumann boundary face produces a nonzero bound_flux entry.
+TEST_F(MPFA, BoundaryFaceFlux2dNeumann)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+    // Face 12 is a Neumann boundary; it should contribute a nonzero entry.
+    EXPECT_NE(discr_2d.bound_flux->value(12, 12), 0.0);
+}
+
+// Verify that with a Dirichlet boundary, bound_pressure_face has a 1/num_nodes entry.
+TEST_F(MPFA, PressureReconstructionDirichletIsUnit)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+    // For a 2D Cartesian grid, a Dirichlet boundary face has 2 nodes, so each of the two
+    // interaction regions around the face nodes contributes 0.5, summing to 1.0.
+    EXPECT_NEAR(discr_2d.bound_pressure_face->value(0, 0), 1.0, 1e-10);
+}
+
+// Verify that vector_source has SPATIAL_DIM * num_cells columns.
+TEST_F(MPFA, VectorSourceColumnCount)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+    constexpr int SPATIAL_DIM = 3;
+    EXPECT_EQ(discr_2d.vector_source->num_cols(), SPATIAL_DIM * grid_2d->num_cells());
+}
+
