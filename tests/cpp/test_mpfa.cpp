@@ -290,3 +290,197 @@ TEST_F(MPFA, VectorSourceColumnCount)
     EXPECT_EQ(discr_2d.vector_source->num_cols(), SPATIAL_DIM * grid_2d->num_cells());
 }
 
+// ---------------------------------------------------------------------------
+// Iteration 7 — new helpers: InteractionRegionGeometry, LocalBalanceMatrices,
+// RowSortingInfo / compute_row_sorting, BoundaryOutputAccumulators,
+// accumulate_boundary_data.
+//
+// These helpers live in an anonymous namespace in src/mpfa.cpp and are not
+// accessible from the test translation unit. All tests below exercise them
+// *indirectly* through the public mpfa() function. Each test targets a specific
+// behavior that would fail (wrong values, wrong dimensions, or crash) if the
+// corresponding helper were broken.
+// ---------------------------------------------------------------------------
+
+// --- bound_flux matrix dimensions ---
+// compute_row_sorting + create_csr_matrix must produce num_rows = num_faces and
+// num_cols = num_faces for bound_flux.
+TEST_F(MPFA, BoundFluxMatrix_HasCorrectDimensions)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+    EXPECT_EQ(discr_2d.bound_flux->num_rows(), grid_2d->num_faces());
+    EXPECT_EQ(discr_2d.bound_flux->num_cols(), grid_2d->num_faces());
+}
+
+// --- bound_pressure_cell matrix dimensions ---
+// accumulate_boundary_data must produce a (num_faces x num_cells) pressure-cell matrix.
+TEST_F(MPFA, BoundPressureCellMatrix_HasCorrectDimensions)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+    EXPECT_EQ(discr_2d.bound_pressure_cell->num_rows(), grid_2d->num_faces());
+    EXPECT_EQ(discr_2d.bound_pressure_cell->num_cols(), grid_2d->num_cells());
+}
+
+// --- bound_pressure_face matrix dimensions ---
+// accumulate_boundary_data must produce a (num_faces x num_faces) pressure-face matrix.
+TEST_F(MPFA, BoundPressureFaceMatrix_HasCorrectDimensions)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+    EXPECT_EQ(discr_2d.bound_pressure_face->num_rows(), grid_2d->num_faces());
+    EXPECT_EQ(discr_2d.bound_pressure_face->num_cols(), grid_2d->num_faces());
+}
+
+// --- bound_pressure_vector_source matrix dimensions ---
+// accumulate_boundary_data must produce a (num_faces x 3*num_cells) matrix.
+// SPATIAL_DIM is always 3 inside mpfa.cpp.
+TEST_F(MPFA, BoundPressureVectorSource_HasCorrectDimensions)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+    constexpr int SPATIAL_DIM = 3;
+    EXPECT_EQ(discr_2d.bound_pressure_vector_source->num_rows(), grid_2d->num_faces());
+    EXPECT_EQ(discr_2d.bound_pressure_vector_source->num_cols(),
+              SPATIAL_DIM * grid_2d->num_cells());
+}
+
+// --- Dirichlet path skips cell-pressure contribution ---
+// In accumulate_boundary_data the Dirichlet branch hits `continue` before
+// adding to pressure_reconstruction_cell_values.  Consequently the
+// bound_pressure_cell matrix must have no entry for any Dirichlet face.
+//
+// Face 0 in bc_map_2d is Dirichlet; cell 0 is adjacent to it.
+TEST_F(MPFA, BoundPressureCell_DirichletFaceHasZeroContribution)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+    // bound_pressure_cell.value returns 0 for any cell because the Dirichlet
+    // branch never writes into pressure_reconstruction_cell_values.
+    for (int c = 0; c < grid_2d->num_cells(); ++c)
+    {
+        EXPECT_EQ(discr_2d.bound_pressure_cell->value(0, c), 0.0);
+    }
+}
+
+// --- Neumann path adds cell-pressure contribution ---
+// For a Neumann boundary face accumulate_boundary_data does NOT hit `continue`
+// and therefore writes into pressure_reconstruction_cell_values for the
+// adjacent cell.
+//
+// Face 12 in bc_map_2d is Neumann; it sits at the bottom-left corner of the
+// 3×3 grid so cell 0 is adjacent.
+TEST_F(MPFA, BoundPressureCell_NeumannFaceHasNonzeroContribution)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+    // At least one cell must contribute to the pressure reconstruction of the
+    // Neumann face.
+    bool any_nonzero = false;
+    for (int c = 0; c < grid_2d->num_cells(); ++c)
+    {
+        if (discr_2d.bound_pressure_cell->value(12, c) != 0.0)
+        {
+            any_nonzero = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(any_nonzero);
+}
+
+// --- Neumann face-pressure reconstruction is nonzero ---
+// For a Neumann boundary face accumulate_boundary_data computes a face
+// contribution via balance_faces_inv; the result must be nonzero.
+//
+// Face 13 is an interior Neumann face on the bottom boundary of the 3×3 grid.
+TEST_F(MPFA, BoundPressureFace_NeumannFaceHasNonzeroEntries)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+    bool any_nonzero = false;
+    for (int f = 0; f < grid_2d->num_faces(); ++f)
+    {
+        if (discr_2d.bound_pressure_face->value(13, f) != 0.0)
+        {
+            any_nonzero = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(any_nonzero);
+}
+
+// --- make_local_balance_matrices with non-square interaction regions ---
+// On a 2×3 grid each interaction region has a different number of local faces
+// vs local cells.  make_local_balance_matrices(num_faces, num_cells) must
+// produce correctly-dimensioned zero matrices; if it does not, the Eigen
+// operations inside fill_cell_contributions / compute_local_flux will either
+// crash (dimension mismatch) or produce wrong results.
+//
+// This standalone test also exercises compute_interaction_region_geometry and
+// compute_row_sorting on a grid that is not used anywhere else.
+TEST(MpfaStandalone, On2x3GridCompletesWithCorrectDimensions)
+{
+    auto g = Grid::create_cartesian_grid(2, {2, 3}, {2.0, 3.0});
+    g->compute_geometry();
+
+    SecondOrderTensor k(2, g->num_cells(), std::vector<double>(g->num_cells(), 1.0));
+
+    // Programmatically mark all boundary faces as Dirichlet.
+    std::unordered_map<int, BoundaryCondition> bc;
+    for (const int f : g->boundary_faces())
+    {
+        bc[f] = BoundaryCondition::Dirichlet;
+    }
+
+    auto d = mpfa(*g, k, bc);
+
+    // flux : num_faces × num_cells
+    EXPECT_EQ(d.flux->num_rows(), g->num_faces());
+    EXPECT_EQ(d.flux->num_cols(), g->num_cells());
+
+    // bound_flux : num_faces × num_faces
+    EXPECT_EQ(d.bound_flux->num_rows(), g->num_faces());
+    EXPECT_EQ(d.bound_flux->num_cols(), g->num_faces());
+
+    // bound_pressure_cell : num_faces × num_cells
+    EXPECT_EQ(d.bound_pressure_cell->num_rows(), g->num_faces());
+    EXPECT_EQ(d.bound_pressure_cell->num_cols(), g->num_cells());
+
+    // bound_pressure_face : num_faces × num_faces
+    EXPECT_EQ(d.bound_pressure_face->num_rows(), g->num_faces());
+    EXPECT_EQ(d.bound_pressure_face->num_cols(), g->num_faces());
+}
+
+// --- RowSortingInfo: accumulated flux value for a face shared by multiple regions ---
+// compute_row_sorting sorts contributions from all interaction regions that
+// include a given face and accumulate them into a single CSR row.  For an
+// interior face in the centre of a 3×3 isotropic unit-K grid the MPFA stencil
+// equals the TPFA result (pure two-point), so the dominant entries are
+// T = area / (dist_left + dist_right).  If compute_row_sorting mis-counted
+// occurrences or sorted incorrectly, the accumulated row would contain
+// duplicates or have the wrong value.
+//
+// Face 5 is the vertical internal face between cells 3 and 4 in the 3×3 grid.
+// dx = 1 m, dy = 2 m, K_left = 4, K_right = 5 (from iota 1..9).
+TEST_F(MPFA, RowSortingInfo_AccumulatedFluxIsCorrectForInternalFace)
+{
+    std::vector<double> k_xx(grid_2d->num_cells());
+    std::iota(k_xx.begin(), k_xx.end(), 1.0);  // 1, 2, …, 9
+
+    SecondOrderTensor K(2, grid_2d->num_cells(), k_xx);
+    discr_2d = mpfa(*grid_2d, K, bc_map_2d);
+
+    // Expected transmissibility for face 5 (vertical, dx=1, dy=2, K3=4, K4=5)
+    const double dx = 1.0;
+    const double dy = 2.0;
+    const double t_5 = dy / (0.5 * dx / 4.0 + 0.5 * dx / 5.0);
+
+    // Cell 3 and cell 4 are on opposite sides; signs must be opposite.
+    EXPECT_NEAR(discr_2d.flux->value(5, 3), t_5, 1e-6);
+    EXPECT_NEAR(discr_2d.flux->value(5, 4), -t_5, 1e-6);
+    // The sum must be zero (flux is antisymmetric across an internal face for
+    // these two dominant entries when the grid is isotropic diagonal).
+    EXPECT_NEAR(discr_2d.flux->value(5, 3) + discr_2d.flux->value(5, 4), 0.0, 1e-10);
+}
+
