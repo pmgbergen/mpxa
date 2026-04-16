@@ -43,6 +43,71 @@ class TPFA : public ::testing::Test
     }
 };
 
+// Test that a Robin boundary condition throws std::logic_error.
+TEST_F(TPFA, RobinBoundaryThrows)
+{
+    std::unordered_map<int, BoundaryCondition> robin_bc_map;
+    for (int f{0}; f < grid->num_faces(); ++f)
+    {
+        robin_bc_map[f] = BoundaryCondition::Robin;
+    }
+    EXPECT_THROW(tpfa(*grid, tensor, robin_bc_map), std::logic_error);
+}
+
+// Test that a 1-cell 2D grid with all-Dirichlet BCs produces nonzero transmissibilities
+// for each boundary face and matching bound_flux entries.
+TEST(TpfaStandalone, SingleCell2dAllDirichlet)
+{
+    // 2D grid: 1 cell, unit square. All 4 faces are boundary faces.
+    auto g = Grid::create_cartesian_grid(2, {1, 1}, {1.0, 1.0});
+    g->compute_geometry();
+
+    // Isotropic tensor, k=3, one cell.
+    SecondOrderTensor k(2, 1, {3.0});
+
+    std::unordered_map<int, BoundaryCondition> bc;
+    for (int f{0}; f < g->num_faces(); ++f)
+    {
+        bc[f] = BoundaryCondition::Dirichlet;
+    }
+
+    auto d = tpfa(*g, k, bc);
+
+    // For each boundary face the flux entry for cell 0 must be nonzero, and the
+    // corresponding bound_flux entry (same face index) must have the opposite sign.
+    for (int f{0}; f < g->num_faces(); ++f)
+    {
+        const double t = d.flux->value(f, 0);
+        EXPECT_NE(t, 0.0) << "face " << f << " has zero flux transmissibility";
+        EXPECT_NEAR(d.bound_flux->value(f, f), -t, 1e-10)
+            << "face " << f << " bound_flux sign mismatch";
+    }
+}
+
+// Test that Neumann BCs on all faces of a 2-cell 1D grid produce zero flux-matrix
+// transmissibilities and unit bound-flux transmissibilities.
+TEST(TpfaStandalone, NeumannBoundaryFlux)
+{
+    auto g = Grid::create_cartesian_grid(1, {2}, {1.0});
+    g->compute_geometry();
+
+    SecondOrderTensor k(1, 2, {1.0, 1.0});
+
+    std::unordered_map<int, BoundaryCondition> bc;
+    bc[0] = BoundaryCondition::Neumann;
+    bc[2] = BoundaryCondition::Neumann;
+
+    auto d = tpfa(*g, k, bc);
+
+    // Boundary Neumann faces contribute nothing to the cell-pressure flux matrix.
+    EXPECT_NEAR(d.flux->value(0, 0), 0.0, 1e-10);
+    EXPECT_NEAR(d.flux->value(2, 1), 0.0, 1e-10);
+
+    // bound_flux should have magnitude 1 for each Neumann face.
+    EXPECT_NEAR(std::abs(d.bound_flux->value(0, 0)), 1.0, 1e-10);
+    EXPECT_NEAR(std::abs(d.bound_flux->value(2, 2)), 1.0, 1e-10);
+}
+
 // Test the flux values on a Cartesian 2d grid.
 TEST_F(TPFA, FluxValuesCart2d)
 {

@@ -1,5 +1,4 @@
 #include <array>
-#include <iostream>
 #include <unordered_map>
 #include <vector>
 
@@ -68,6 +67,97 @@ const double nKproj(const std::vector<double>& face_normal, const SecondOrderTen
         return prod / dist;
     }
 }
+
+// Bundles all output accumulation vectors for a tpfa() call.
+struct TpfaAccumulator
+{
+    std::vector<double>& trm;
+    std::vector<int>& col_idx_flux;
+    std::vector<double>& trm_bound;
+    std::vector<int>& col_idx_bound_flux;
+    std::vector<double>& vector_source;
+    std::vector<int>& col_idx_vector_source;
+    std::vector<double>& vector_source_bound;
+    std::vector<int>& col_idx_vector_source_bound;
+    std::vector<double>& bound_pressure_cell;
+    std::vector<int>& col_idx_bound_pressure_cell;
+    std::vector<double>& bound_pressure_face;
+    std::vector<int>& col_idx_bound_pressure_face;
+};
+
+// Accumulates transmissibility and vector-source contributions for an internal face.
+void accumulate_internal_face(TpfaAccumulator& acc, const int cell_a, const int cell_b,
+                               const int sign_a, const int sign_b, const double trm_a,
+                               const double trm_b,
+                               const std::array<double, 3>& face_cell_a_vec,
+                               const std::array<double, 3>& face_cell_b_vec, const int dim)
+{
+    const double harmonic_mean = trm_a * trm_b / (trm_a + trm_b);
+    acc.trm.push_back(harmonic_mean * sign_a);
+    acc.trm.push_back(harmonic_mean * sign_b);
+    acc.col_idx_flux.push_back(cell_a);
+    acc.col_idx_flux.push_back(cell_b);
+
+    for (int i{0}; i < dim; ++i)
+    {
+        acc.vector_source.push_back(harmonic_mean * sign_a * face_cell_a_vec[i]);
+        acc.col_idx_vector_source.push_back(cell_a * dim + i);
+    }
+    for (int i{0}; i < dim; ++i)
+    {
+        acc.vector_source.push_back(harmonic_mean * sign_b * face_cell_b_vec[i]);
+        acc.col_idx_vector_source.push_back(cell_b * dim + i);
+    }
+}
+
+// Accumulates transmissibility contributions for a boundary face.
+void accumulate_boundary_face(TpfaAccumulator& acc, const int cell_a, const int sign_a,
+                               const double trm_a, const int face_ind,
+                               const std::array<double, 3>& face_cell_a_vec, const int dim,
+                               const BoundaryCondition bc)
+{
+    switch (bc)
+    {
+        case BoundaryCondition::Dirichlet:
+            acc.trm.push_back(trm_a * sign_a);
+            acc.col_idx_flux.push_back(cell_a);
+            acc.trm_bound.push_back(-trm_a * sign_a);
+            acc.col_idx_bound_flux.push_back(face_ind);
+
+            acc.bound_pressure_face.push_back(1.0);
+            acc.col_idx_bound_pressure_face.push_back(face_ind);
+
+            for (int i{0}; i < dim; ++i)
+            {
+                acc.vector_source.push_back(trm_a * sign_a * face_cell_a_vec[i]);
+                acc.col_idx_vector_source.push_back(cell_a * dim + i);
+            }
+            break;
+
+        case BoundaryCondition::Neumann:
+            acc.trm_bound.push_back(1.0 * sign_a);
+            acc.col_idx_bound_flux.push_back(face_ind);
+
+            acc.bound_pressure_cell.push_back(1.0);
+            acc.col_idx_bound_pressure_cell.push_back(cell_a);
+            acc.bound_pressure_face.push_back(-1.0 / trm_a);
+            acc.col_idx_bound_pressure_face.push_back(face_ind);
+
+            for (int i{0}; i < dim; ++i)
+            {
+                acc.vector_source_bound.push_back(face_cell_a_vec[i]);
+                acc.col_idx_vector_source_bound.push_back(cell_a * dim + i);
+            }
+            break;
+
+        case BoundaryCondition::Robin:
+            throw std::logic_error("Robin boundary condition not implemented");
+
+        default:
+            throw std::runtime_error("Unknown boundary condition type");
+    }
+}
+
 }  // namespace
 
 ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
@@ -146,9 +236,21 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<double> face_center(DIM);
     std::vector<double> normal(DIM);
 
+    TpfaAccumulator acc{trm,
+                         col_idx_flux,
+                         trm_bound,
+                         col_idx_bound_flux,
+                         vector_source,
+                         col_idx_vector_source,
+                         vector_source_bound,
+                         col_idx_vector_source_bound,
+                         bound_pressure_cell,
+                         col_idx_bound_pressure_cell,
+                         bound_pressure_face,
+                         col_idx_bound_pressure_face};
+
     for (int face_ind{0}; face_ind < grid.num_faces(); ++face_ind)
     {
-        // Get various properties of the face and its first neighboring cell.
         auto cells = grid.cells_of_face(face_ind);
         face_center = grid.face_center(face_ind);
         normal = grid.face_normal(face_ind);
@@ -163,7 +265,6 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         if (cells.size() == 2)  // Internal face.
         {
-            // Get the second neighboring cell and its properties.
             const int cell_b = cells[1];
             const int sign_b = grid.sign_of_face_cell(face_ind, cell_b);
 
@@ -171,98 +272,17 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
             {
                 face_cell_b_vec[i] = face_center[i] - grid.cell_center(cell_b)[i];
             }
-
             const double trm_b = nKproj(normal, tensor, face_cell_b_vec, sign_b, cell_b);
-            const double harmonic_mean = trm_a * trm_b / (trm_a + trm_b);
-            trm.push_back(harmonic_mean * sign_a);
-            trm.push_back(harmonic_mean * sign_b);
-            col_idx_flux.push_back(cell_a);
-            col_idx_flux.push_back(cell_b);
 
-            // Also compute the vector source term for the face, for both cells.
-            for (int i{0}; i < DIM; ++i)
-            {
-                // Compute the vector source term for the face.
-                vector_source.push_back(harmonic_mean * sign_a * face_cell_a_vec[i]);
-                col_idx_vector_source.push_back(cell_a * DIM + i);
-            }
-            for (int i{0}; i < DIM; ++i)
-            {
-                // Compute the vector source term for the face.
-                vector_source.push_back(harmonic_mean * sign_b * face_cell_b_vec[i]);
-                col_idx_vector_source.push_back(cell_b * DIM + i);
-            }
+            accumulate_internal_face(acc, cell_a, cell_b, sign_a, sign_b, trm_a, trm_b,
+                                     face_cell_a_vec, face_cell_b_vec, DIM);
         }
         else  // Boundary face.
         {
-            const BoundaryCondition bc = bc_map.at(face_ind);
-
-            switch (bc)  // Corrected to use the scoped enum directly.
-            {
-                case BoundaryCondition::Dirichlet:
-                    // The transmissibility for Dirichlet conditions is the same as the
-                    // (half) transmissibility for the internal face.
-                    trm.push_back(trm_a * sign_a);
-                    col_idx_flux.push_back(cell_a);
-                    // The transmissibility for the boundary face is the negative of
-                    // the transmissibility for the internal face.
-                    trm_bound.push_back(-trm_a * sign_a);
-                    col_idx_bound_flux.push_back(face_ind);
-
-                    // Boundary face pressure reconstruction. There is no contribution
-                    // from the cell, while the face contributes a unit value.
-                    bound_pressure_face.push_back(1.0);
-                    col_idx_bound_pressure_face.push_back(face_ind);
-
-                    // The vector source term for the Dirichlet condition is half the
-                    // calculation for the internal face. There is no contribution to
-                    // the boundary discretization for the vector source term.
-                    for (int i{0}; i < DIM; ++i)
-                    {
-                        // Compute the vector source term for the face.
-                        vector_source.push_back(trm_a * sign_a * face_cell_a_vec[i]);
-                        col_idx_vector_source.push_back(cell_a * DIM + i);
-                    }
-
-                    break;
-
-                case BoundaryCondition::Neumann:
-                    // Neumann conditions have no transmissibility for the flux matrix.
-                    // The bounday flux is set to unity, as this will transmit the
-                    // Neumann condition to the cell.
-                    trm_bound.push_back(1.0 * sign_a);
-                    col_idx_bound_flux.push_back(face_ind);
-
-                    // Boundary face pressure reconstruction. The cell contributes a
-                    // unit value.
-                    bound_pressure_cell.push_back(1.0);
-                    col_idx_bound_pressure_cell.push_back(cell_a);
-                    // The face contribution equals to the offset from the cell value
-                    // due to the imposed Neumann condition. This is the negative
-                    // inverse of the transmissibility.
-                    bound_pressure_face.push_back(-1.0 / trm_a);
-                    col_idx_bound_pressure_face.push_back(face_ind);
-
-                    // There is no vector source term for the Neumann condition, no need
-                    // to add anything.
-                    for (int i{0}; i < DIM; ++i)
-                    {
-                        // Compute the vector source term for the face.
-                        vector_source_bound.push_back(face_cell_a_vec[i]);
-                        col_idx_vector_source_bound.push_back(cell_a * DIM + i);
-                    }
-
-                    break;
-
-                case BoundaryCondition::Robin:
-                    // Handle Robin boundary condition.
-                    throw std::logic_error("Robin boundary condition not implemented");
-
-                default:
-                    throw std::runtime_error("Unknown boundary condition type");
-            }
+            accumulate_boundary_face(acc, cell_a, sign_a, trm_a, face_ind, face_cell_a_vec,
+                                     DIM, bc_map.at(face_ind));
         }
-        // Move the row pointers to the next face. Apply to both flux and bound_flux.
+
         row_ptr_flux.push_back(col_idx_flux.size());
         row_ptr_bound_flux.push_back(col_idx_bound_flux.size());
         row_ptr_vector_source.push_back(vector_source.size());
