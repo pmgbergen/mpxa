@@ -1,192 +1,175 @@
 #include "../include/multipoint_common.h"
 
 #include <cmath>
+#include <stdexcept>
 #include <unordered_set>
 
 // region BasisConstructor
 
-BasisConstructor::BasisConstructor(const int dim)
-    : m_dim(dim), m_coord_matrix(), m_basis_matrix(), m_rhs_matrix()
-{
-    // Initialize the matrices with appropriate sizes
-    m_coord_matrix = MatrixXd::Zero(dim + 1, dim + 1);
-    // The first column of the coord matrix will be ones.
-    for (int i = 0; i <= dim; ++i)
-    {
-        m_coord_matrix(i, 0) = 1.0;
-    }
+BasisConstructor::BasisConstructor(const int dim) : m_dim(dim) {}
 
-    m_basis_matrix = MatrixXd::Zero(dim + 1, dim + 1);
-    m_rhs_matrix = MatrixXd::Identity(dim + 1, dim + 1);
-}
-
-std::vector<std::array<double, 3>> BasisConstructor::
-compute_basis_functions(
+std::vector<std::array<double, 3>> BasisConstructor::compute_basis_functions(
     const std::vector<std::array<double, 3>>& coords)
 {
-    double inv[4][4];  // To store the inverse matrix.
-    if (m_dim == 0)
+    if (m_dim == 2)
     {
-        throw std::runtime_error("MPFA basis function computation not implemented for dim=0.");
-    }
-    else if (m_dim == 1)
-    {
-        throw std::runtime_error("MPFA basis function computation not implemented for dim=1.");
-    }
-    else if (m_dim == 2)
-    {
-        double x_avg = 0.0, y_avg = 0.0;
-        for (int i = 0; i < 3; ++i)
-        {
-            x_avg += coords[i][0];
-            y_avg += coords[i][1];
-            if (std::abs(coords[i][2]) > 1e-20)
-            {
-                // This will throw for 2D grids tilted in a 3D domain, not implemented.
-                throw std::logic_error("Assumed z coordinate equals zero.");
-            }
-        }
-        x_avg /= 3.0;
-        y_avg /= 3.0;
-
-        double sx = 0.0, sy = 0.0;
-        for (int i = 0; i < 3; ++i)
-        {
-            sx = std::max(sx, std::abs(coords[i][0] - x_avg));
-            sy = std::max(sy, std::abs(coords[i][1] - y_avg));
-        }
-
-        // Avoid division by zero (degenerate triangle)
-        if (sx == 0.0) sx = 1.0;
-        if (sy == 0.0) sy = 1.0;
-
-        const double inv_sx = 1.0 / sx;
-        const double inv_sy = 1.0 / sy;
-
-        // Extract elements of the matrix.
-        constexpr double a11 = 1.0, a21 = 1.0, a31 = 1.0;
-        // Scale the coordinates to improve numerical stability.
-        double a12 = (coords[0][0] - x_avg) * inv_sx, a13 = (coords[0][1] - y_avg) * inv_sy;
-        double a22 = (coords[1][0] - x_avg) * inv_sx, a23 = (coords[1][1] - y_avg) * inv_sy;
-        double a32 = (coords[2][0] - x_avg) * inv_sx, a33 = (coords[2][1] - y_avg) * inv_sy;
-
-        // Compute determinant
-        double det = a11 * (a22 * a33 - a23 * a32) - a12 * (a21 * a33 - a23 * a31) +
-                     a13 * (a21 * a32 - a22 * a31);
-        if (std::abs(det) < 1e-20)
-        {
-            // This will throw for 2D grids tilted in a 3D domain, not implemented.
-            throw std::logic_error("compute_basis_functions det = 0.");
-        }
-        const double inv_det = 1.0 / det;
-
-        // Compute gradient rows of the inverse (rows 1 and 2 correspond to x and y partials).
-        inv[1][0] = (a23 * a31 - a21 * a33) * inv_det * inv_sx;
-        inv[1][1] = (a11 * a33 - a13 * a31) * inv_det * inv_sx;
-        inv[1][2] = (a13 * a21 - a11 * a23) * inv_det * inv_sx;
-        inv[2][0] = (a21 * a32 - a22 * a31) * inv_det * inv_sy;
-        inv[2][1] = (a12 * a31 - a11 * a32) * inv_det * inv_sy;
-        inv[2][2] = (a11 * a22 - a12 * a21) * inv_det * inv_sy;
+        return compute_basis_functions_2d(coords);
     }
     else if (m_dim == 3)
     {
-        double x_avg = 0.0, y_avg = 0.0, z_avg = 0.0;
-        for (int i = 0; i < 4; ++i)
+        return compute_basis_functions_3d(coords);
+    }
+    throw std::runtime_error("MPFA basis function computation not implemented for dim != 2, 3.");
+}
+
+std::vector<std::array<double, 3>> BasisConstructor::compute_basis_functions_2d(
+    const std::vector<std::array<double, 3>>& coords)
+{
+    double x_avg = 0.0, y_avg = 0.0;
+    for (int i = 0; i < 3; ++i)
+    {
+        x_avg += coords[i][0];
+        y_avg += coords[i][1];
+        if (std::abs(coords[i][2]) > 1e-20)
         {
-            x_avg += coords[i][0];
-            y_avg += coords[i][1];
-            z_avg += coords[i][2];
-        }
-        x_avg /= 4.0;
-        y_avg /= 4.0;
-        z_avg /= 4.0;
-
-        double sx = 0.0, sy = 0.0, sz = 0.0;
-        for (int i = 0; i < 4; ++i)
-        {
-            sx = std::max(sx, std::abs(coords[i][0] - x_avg));
-            sy = std::max(sy, std::abs(coords[i][1] - y_avg));
-            sz = std::max(sz, std::abs(coords[i][2] - z_avg));
-        }
-
-        // Avoid division by zero (degenerate tetrahedron)
-        if (sx == 0.0) sx = 1.0;
-        if (sy == 0.0) sy = 1.0;
-        if (sz == 0.0) sz = 1.0;
-
-        const double inv_sx = 1.0 / sx;
-        const double inv_sy = 1.0 / sy;
-        const double inv_sz = 1.0 / sz;
-
-        constexpr double a11 = 1.0, a21 = 1.0, a31 = 1.0, a41 = 1.0;
-        double a12 = (coords[0][0] - x_avg) * inv_sx, a13 = (coords[0][1] - y_avg) * inv_sy,
-               a14 = (coords[0][2] - z_avg) * inv_sz;
-        double a22 = (coords[1][0] - x_avg) * inv_sx, a23 = (coords[1][1] - y_avg) * inv_sy,
-               a24 = (coords[1][2] - z_avg) * inv_sz;
-        double a32 = (coords[2][0] - x_avg) * inv_sx, a33 = (coords[2][1] - y_avg) * inv_sy,
-               a34 = (coords[2][2] - z_avg) * inv_sz;
-        double a42 = (coords[3][0] - x_avg) * inv_sx, a43 = (coords[3][1] - y_avg) * inv_sy,
-               a44 = (coords[3][2] - z_avg) * inv_sz;
-
-        // Compute 3x3 minors for determinant
-        auto det3x3 = [](double b11, double b12, double b13, double b21, double b22, double b23,
-                         double b31, double b32, double b33)
-        {
-            return b11 * (b22 * b33 - b23 * b32) - b12 * (b21 * b33 - b23 * b31) +
-                   b13 * (b21 * b32 - b22 * b31);
-        };
-
-        const double detA = a11 * det3x3(a22, a23, a24, a32, a33, a34, a42, a43, a44) -
-                            a12 * det3x3(a21, a23, a24, a31, a33, a34, a41, a43, a44) +
-                            a13 * det3x3(a21, a22, a24, a31, a32, a34, a41, a42, a44) -
-                            a14 * det3x3(a21, a22, a23, a31, a32, a33, a41, a42, a43);
-        const double inv_detA = 1.0 / detA;
-
-        // Compute adjugate matrix (transpose of cofactor matrix)
-        double adj[4][4];
-        adj[0][0] = det3x3(a22, a23, a24, a32, a33, a34, a42, a43, a44);
-        adj[0][1] = -det3x3(a21, a23, a24, a31, a33, a34, a41, a43, a44);
-        adj[0][2] = det3x3(a21, a22, a24, a31, a32, a34, a41, a42, a44);
-        adj[0][3] = -det3x3(a21, a22, a23, a31, a32, a33, a41, a42, a43);
-
-        adj[1][0] = -det3x3(a12, a13, a14, a32, a33, a34, a42, a43, a44);
-        adj[1][1] = det3x3(a11, a13, a14, a31, a33, a34, a41, a43, a44);
-        adj[1][2] = -det3x3(a11, a12, a14, a31, a32, a34, a41, a42, a44);
-        adj[1][3] = det3x3(a11, a12, a13, a31, a32, a33, a41, a42, a43);
-
-        adj[2][0] = det3x3(a12, a13, a14, a22, a23, a24, a42, a43, a44);
-        adj[2][1] = -det3x3(a11, a13, a14, a21, a23, a24, a41, a43, a44);
-        adj[2][2] = det3x3(a11, a12, a14, a21, a22, a24, a41, a42, a44);
-        adj[2][3] = -det3x3(a11, a12, a13, a21, a22, a23, a41, a42, a43);
-
-        adj[3][0] = -det3x3(a12, a13, a14, a22, a23, a24, a32, a33, a34);
-        adj[3][1] = det3x3(a11, a13, a14, a21, a23, a24, a31, a33, a34);
-        adj[3][2] = -det3x3(a11, a12, a14, a21, a22, a24, a31, a32, a34);
-        adj[3][3] = det3x3(a11, a12, a13, a21, a22, a23, a31, a32, a33);
-
-        // Compute gradient rows of the inverse (rows 1-3 correspond to x, y, z partials).
-        for (int j = 0; j < 4; ++j)
-        {
-            inv[1][j] = adj[j][1] * inv_detA * inv_sx;
-            inv[2][j] = adj[j][2] * inv_detA * inv_sy;
-            inv[3][j] = adj[j][3] * inv_detA * inv_sz;
+            throw std::logic_error("Assumed z coordinate equals zero.");
         }
     }
-    else
+    x_avg /= 3.0;
+    y_avg /= 3.0;
+
+    double sx = 0.0, sy = 0.0;
+    for (int i = 0; i < 3; ++i)
     {
-        throw std::runtime_error("MPFA basis function computation not implemented for dim > 3.");
+        sx = std::max(sx, std::abs(coords[i][0] - x_avg));
+        sy = std::max(sy, std::abs(coords[i][1] - y_avg));
+    }
+    if (sx == 0.0) sx = 1.0;
+    if (sy == 0.0) sy = 1.0;
+
+    const double inv_sx = 1.0 / sx;
+    const double inv_sy = 1.0 / sy;
+
+    constexpr double a11 = 1.0, a21 = 1.0, a31 = 1.0;
+    const double a12 = (coords[0][0] - x_avg) * inv_sx, a13 = (coords[0][1] - y_avg) * inv_sy;
+    const double a22 = (coords[1][0] - x_avg) * inv_sx, a23 = (coords[1][1] - y_avg) * inv_sy;
+    const double a32 = (coords[2][0] - x_avg) * inv_sx, a33 = (coords[2][1] - y_avg) * inv_sy;
+
+    const double det = a11 * (a22 * a33 - a23 * a32) - a12 * (a21 * a33 - a23 * a31) +
+                       a13 * (a21 * a32 - a22 * a31);
+    if (std::abs(det) < 1e-20)
+    {
+        throw std::logic_error("compute_basis_functions det = 0.");
+    }
+    const double inv_det = 1.0 / det;
+
+    // Gradient rows of the inverse (rows 1 and 2 correspond to x and y partials).
+    double inv[3][3];
+    inv[1][0] = (a23 * a31 - a21 * a33) * inv_det * inv_sx;
+    inv[1][1] = (a11 * a33 - a13 * a31) * inv_det * inv_sx;
+    inv[1][2] = (a13 * a21 - a11 * a23) * inv_det * inv_sx;
+    inv[2][0] = (a21 * a32 - a22 * a31) * inv_det * inv_sy;
+    inv[2][1] = (a12 * a31 - a11 * a32) * inv_det * inv_sy;
+    inv[2][2] = (a11 * a22 - a12 * a21) * inv_det * inv_sy;
+
+    std::vector<std::array<double, 3>> basis_functions(3);
+    for (int j = 0; j < 3; ++j)
+    {
+        basis_functions[j][0] = inv[1][j];
+        basis_functions[j][1] = inv[2][j];
+        basis_functions[j][2] = 0.0;
+    }
+    return basis_functions;
+}
+
+std::vector<std::array<double, 3>> BasisConstructor::compute_basis_functions_3d(
+    const std::vector<std::array<double, 3>>& coords)
+{
+    double x_avg = 0.0, y_avg = 0.0, z_avg = 0.0;
+    for (int i = 0; i < 4; ++i)
+    {
+        x_avg += coords[i][0];
+        y_avg += coords[i][1];
+        z_avg += coords[i][2];
+    }
+    x_avg /= 4.0;
+    y_avg /= 4.0;
+    z_avg /= 4.0;
+
+    double sx = 0.0, sy = 0.0, sz = 0.0;
+    for (int i = 0; i < 4; ++i)
+    {
+        sx = std::max(sx, std::abs(coords[i][0] - x_avg));
+        sy = std::max(sy, std::abs(coords[i][1] - y_avg));
+        sz = std::max(sz, std::abs(coords[i][2] - z_avg));
+    }
+    if (sx == 0.0) sx = 1.0;
+    if (sy == 0.0) sy = 1.0;
+    if (sz == 0.0) sz = 1.0;
+
+    const double inv_sx = 1.0 / sx;
+    const double inv_sy = 1.0 / sy;
+    const double inv_sz = 1.0 / sz;
+
+    constexpr double a11 = 1.0, a21 = 1.0, a31 = 1.0, a41 = 1.0;
+    const double a12 = (coords[0][0] - x_avg) * inv_sx, a13 = (coords[0][1] - y_avg) * inv_sy,
+                 a14 = (coords[0][2] - z_avg) * inv_sz;
+    const double a22 = (coords[1][0] - x_avg) * inv_sx, a23 = (coords[1][1] - y_avg) * inv_sy,
+                 a24 = (coords[1][2] - z_avg) * inv_sz;
+    const double a32 = (coords[2][0] - x_avg) * inv_sx, a33 = (coords[2][1] - y_avg) * inv_sy,
+                 a34 = (coords[2][2] - z_avg) * inv_sz;
+    const double a42 = (coords[3][0] - x_avg) * inv_sx, a43 = (coords[3][1] - y_avg) * inv_sy,
+                 a44 = (coords[3][2] - z_avg) * inv_sz;
+
+    auto det3x3 = [](double b11, double b12, double b13, double b21, double b22, double b23,
+                     double b31, double b32, double b33)
+    {
+        return b11 * (b22 * b33 - b23 * b32) - b12 * (b21 * b33 - b23 * b31) +
+               b13 * (b21 * b32 - b22 * b31);
+    };
+
+    const double detA = a11 * det3x3(a22, a23, a24, a32, a33, a34, a42, a43, a44) -
+                        a12 * det3x3(a21, a23, a24, a31, a33, a34, a41, a43, a44) +
+                        a13 * det3x3(a21, a22, a24, a31, a32, a34, a41, a42, a44) -
+                        a14 * det3x3(a21, a22, a23, a31, a32, a33, a41, a42, a43);
+    const double inv_detA = 1.0 / detA;
+
+    double adj[4][4];
+    adj[0][0] = det3x3(a22, a23, a24, a32, a33, a34, a42, a43, a44);
+    adj[0][1] = -det3x3(a21, a23, a24, a31, a33, a34, a41, a43, a44);
+    adj[0][2] = det3x3(a21, a22, a24, a31, a32, a34, a41, a42, a44);
+    adj[0][3] = -det3x3(a21, a22, a23, a31, a32, a33, a41, a42, a43);
+
+    adj[1][0] = -det3x3(a12, a13, a14, a32, a33, a34, a42, a43, a44);
+    adj[1][1] = det3x3(a11, a13, a14, a31, a33, a34, a41, a43, a44);
+    adj[1][2] = -det3x3(a11, a12, a14, a31, a32, a34, a41, a42, a44);
+    adj[1][3] = det3x3(a11, a12, a13, a31, a32, a33, a41, a42, a43);
+
+    adj[2][0] = det3x3(a12, a13, a14, a22, a23, a24, a42, a43, a44);
+    adj[2][1] = -det3x3(a11, a13, a14, a21, a23, a24, a41, a43, a44);
+    adj[2][2] = det3x3(a11, a12, a14, a21, a22, a24, a41, a42, a44);
+    adj[2][3] = -det3x3(a11, a12, a13, a21, a22, a23, a41, a42, a43);
+
+    adj[3][0] = -det3x3(a12, a13, a14, a22, a23, a24, a32, a33, a34);
+    adj[3][1] = det3x3(a11, a13, a14, a21, a23, a24, a31, a33, a34);
+    adj[3][2] = -det3x3(a11, a12, a14, a21, a22, a24, a31, a32, a34);
+    adj[3][3] = det3x3(a11, a12, a13, a21, a22, a23, a31, a32, a33);
+
+    // Gradient rows of the inverse (rows 1-3 correspond to x, y, z partials).
+    double inv[4][4];
+    for (int j = 0; j < 4; ++j)
+    {
+        inv[1][j] = adj[j][1] * inv_detA * inv_sx;
+        inv[2][j] = adj[j][2] * inv_detA * inv_sy;
+        inv[3][j] = adj[j][3] * inv_detA * inv_sz;
     }
 
-    std::vector<std::array<double, 3>> basis_functions(m_dim + 1);
-
-    // The gradient rows of inv (rows 1..m_dim) give the basis-function gradients,
-    // stored column-wise; transpose here to row-wise output.
-    for (int j = 0; j <= m_dim; ++j)
+    std::vector<std::array<double, 3>> basis_functions(4);
+    for (int j = 0; j < 4; ++j)
     {
-        for (int i = 1; i <= m_dim; ++i)
-        {
-            basis_functions[j][i - 1] = inv[i][j];
-        }
+        basis_functions[j][0] = inv[1][j];
+        basis_functions[j][1] = inv[2][j];
+        basis_functions[j][2] = inv[3][j];
     }
     return basis_functions;
 }
