@@ -489,6 +489,39 @@ struct BoundaryFaceClassification
     std::vector<std::pair<int, int>> boundary_face_map;
 };
 
+// Read-only inputs from the discretisation context, bundled to reduce parameter counts.
+struct DiscrContext
+{
+    const Grid& grid;
+    const SecondOrderTensor& tensor;
+    const std::vector<int>& num_nodes_of_face;
+};
+
+// Local Eigen matrices for one interaction region, bundled to reduce parameter counts.
+struct LocalBalanceMatrices
+{
+    Eigen::MatrixXd balance_cells;
+    Eigen::MatrixXd balance_faces;
+    Eigen::MatrixXd flux_cells;
+    Eigen::MatrixXd flux_faces;
+    Eigen::MatrixXd nK_matrix;
+    Eigen::MatrixXd nK_one_sided;
+    std::map<int, std::vector<std::array<double, 3>>> basis_map;
+};
+
+LocalBalanceMatrices make_local_balance_matrices(int num_faces, int num_cells)
+{
+    constexpr int SPATIAL_DIM = 3;
+    LocalBalanceMatrices m;
+    m.balance_cells = Eigen::MatrixXd::Zero(num_faces, num_cells);
+    m.balance_faces = Eigen::MatrixXd::Zero(num_faces, num_faces);
+    m.flux_cells = Eigen::MatrixXd::Zero(num_faces, num_cells);
+    m.flux_faces = Eigen::MatrixXd::Zero(num_faces, num_faces);
+    m.nK_matrix = Eigen::MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
+    m.nK_one_sided = Eigen::MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
+    return m;
+}
+
 BoundaryFaceClassification classify_boundary_faces(
     const InteractionRegion& region,
     const std::unordered_map<int, BoundaryCondition>& bc_map)
@@ -568,19 +601,11 @@ std::vector<std::array<double, 3>> compute_continuity_points_for_cell(
 void fill_cell_contributions(
     int loc_cell_ind,
     const InteractionRegion& region,
-    const SecondOrderTensor& tensor,
-    const Grid& grid,
-    const std::vector<int>& num_nodes_of_face,
+    const DiscrContext& ctx,
     const InteractionRegionGeometry& geom,
     const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type,
     const std::vector<std::array<double, 3>>& basis_functions,
-    Eigen::MatrixXd& balance_cells,
-    Eigen::MatrixXd& balance_faces,
-    Eigen::MatrixXd& flux_cells,
-    Eigen::MatrixXd& flux_faces,
-    Eigen::MatrixXd& nK_matrix,
-    Eigen::MatrixXd& nK_one_sided,
-    std::map<int, std::vector<std::array<double, 3>>>& basis_map)
+    LocalBalanceMatrices& matrices)
 {
     constexpr int SPATIAL_DIM = 3;
     const int glob_cell_ind = region.cells()[loc_cell_ind];
@@ -601,9 +626,9 @@ void fill_cell_contributions(
         const int loc_face_index = loc_faces_of_cell[outer_face_counter];
 
         std::array<double, 3> flux_expr =
-            nK(geom.face_normals[loc_face_index], tensor, glob_cell_ind,
-               num_nodes_of_face[glob_face_ind]);
-        const int sign = grid.sign_of_face_cell(glob_face_ind, glob_cell_ind);
+            nK(geom.face_normals[loc_face_index], ctx.tensor, glob_cell_ind,
+               ctx.num_nodes_of_face[glob_face_ind]);
+        const int sign = ctx.grid.sign_of_face_cell(glob_face_ind, glob_cell_ind);
 
         std::vector<double> flux_vals = nKgrad(flux_expr, basis_functions);
 
@@ -622,15 +647,15 @@ void fill_cell_contributions(
         {
             dirichlet_vals = p_diff(geom.face_centers[loc_face_index],
                                     geom.cell_centers[loc_cell_ind], basis_functions);
-            balance_cells(loc_face_index, loc_cell_ind) = -dirichlet_vals[0] - 1.0;
+            matrices.balance_cells(loc_face_index, loc_cell_ind) = -dirichlet_vals[0] - 1.0;
         }
         else
         {
-            balance_cells(loc_face_index, loc_cell_ind) = -sign * flux_vals[0];
+            matrices.balance_cells(loc_face_index, loc_cell_ind) = -sign * flux_vals[0];
             for (int i = 0; i < SPATIAL_DIM; ++i)
             {
                 const int col = i + SPATIAL_DIM * loc_cell_ind;
-                nK_matrix(loc_face_index, col) = sign * flux_expr[i];
+                matrices.nK_matrix(loc_face_index, col) = sign * flux_expr[i];
             }
         }
 
@@ -639,31 +664,32 @@ void fill_cell_contributions(
             const int loc_face_index_secondary = loc_faces_of_cell[i - 1];
             if (is_boundary_face && (bc == BoundaryCondition::Dirichlet))
             {
-                balance_faces(loc_face_index, loc_face_index_secondary) += dirichlet_vals[i];
+                matrices.balance_faces(loc_face_index, loc_face_index_secondary) +=
+                    dirichlet_vals[i];
             }
             else
             {
-                balance_faces(loc_face_index, loc_face_index_secondary) +=
+                matrices.balance_faces(loc_face_index, loc_face_index_secondary) +=
                     sign * flux_vals[i];
             }
         }
 
         if (glob_cell_ind == region.main_cell_of_faces().at(loc_face_index))
         {
-            flux_cells(loc_face_index, loc_cell_ind) = flux_vals[0];
+            matrices.flux_cells(loc_face_index, loc_cell_ind) = flux_vals[0];
             for (int i = 1; i < dim + 1; ++i)
             {
                 const int glob_face_index_secondary =
                     region.faces_of_cells().at(glob_cell_ind)[i - 1];
                 const int loc_face_index_secondary =
                     region.faces().at(glob_face_index_secondary);
-                flux_faces(loc_face_index, loc_face_index_secondary) = flux_vals[i];
+                matrices.flux_faces(loc_face_index, loc_face_index_secondary) = flux_vals[i];
             }
             if (!(is_boundary_face && (bc == BoundaryCondition::Dirichlet)))
             {
                 for (int k = 0; k < SPATIAL_DIM; ++k)
                 {
-                    nK_one_sided(loc_face_index, k + loc_cell_ind * SPATIAL_DIM) =
+                    matrices.nK_one_sided(loc_face_index, k + loc_cell_ind * SPATIAL_DIM) =
                         -flux_expr[k];
                 }
             }
@@ -671,7 +697,7 @@ void fill_cell_contributions(
 
         if (is_boundary_face)
         {
-            basis_map[glob_cell_ind] = basis_functions;
+            matrices.basis_map[glob_cell_ind] = basis_functions;
         }
     }
 }
@@ -685,18 +711,13 @@ struct LocalFluxMatrices
 };
 
 LocalFluxMatrices compute_local_flux(
-    const Eigen::MatrixXd& balance_faces,
-    const Eigen::MatrixXd& balance_cells,
-    const Eigen::MatrixXd& flux_faces,
-    const Eigen::MatrixXd& flux_cells,
-    const Eigen::MatrixXd& nK_matrix,
-    const Eigen::MatrixXd& nK_one_sided,
+    const LocalBalanceMatrices& matrices,
     const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type)
 {
     LocalFluxMatrices result;
 
-    result.balance_faces_inv = balance_faces.inverse();
-    result.bound_flux.noalias() = flux_faces * result.balance_faces_inv;
+    result.balance_faces_inv = matrices.balance_faces.inverse();
+    result.bound_flux.noalias() = matrices.flux_faces * result.balance_faces_inv;
 
     bool has_dirichlet = false;
     for (const auto& bc : loc_boundary_faces_type)
@@ -710,7 +731,7 @@ LocalFluxMatrices compute_local_flux(
 
     if (!has_dirichlet)
     {
-        result.flux.noalias() = result.bound_flux * balance_cells + flux_cells;
+        result.flux.noalias() = result.bound_flux * matrices.balance_cells + matrices.flux_cells;
     }
     else
     {
@@ -725,10 +746,11 @@ LocalFluxMatrices compute_local_flux(
             }
         }
         result.flux.noalias() =
-            result.bound_flux * mask.asDiagonal() * balance_cells + flux_cells;
+            result.bound_flux * mask.asDiagonal() * matrices.balance_cells + matrices.flux_cells;
     }
 
-    result.vector_source_cell.noalias() = result.bound_flux * nK_matrix + nK_one_sided;
+    result.vector_source_cell.noalias() =
+        result.bound_flux * matrices.nK_matrix + matrices.nK_one_sided;
     return result;
 }
 
@@ -803,6 +825,8 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     const int DIM = grid.dim();
     int tot_num_transmissibilities = 0;
 
+    const DiscrContext ctx{grid, tensor, num_nodes_of_face};
+
     // NOTE: The node loop body is embarrassingly parallel — suitable for #pragma omp parallel for
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
@@ -812,16 +836,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         const int num_faces = interaction_region.faces().size();
         const int num_cells = interaction_region.cells().size();
 
-        // Initialize matrices for the discretization.
-        MatrixXd balance_cells = MatrixXd::Zero(num_faces, num_cells);
-        MatrixXd balance_faces = MatrixXd::Zero(num_faces, num_faces);
-
-        MatrixXd flux_cells = MatrixXd::Zero(num_faces, num_cells);
-        MatrixXd flux_faces = MatrixXd::Zero(num_faces, num_faces);
-
-        // Initialize the matrices used for the nK (vector source) terms.
-        MatrixXd nK_matrix = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
-        MatrixXd nK_one_sided = MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
+        auto matrices = make_local_balance_matrices(num_faces, num_cells);
 
         const auto geom = compute_interaction_region_geometry(interaction_region, grid);
 
@@ -842,8 +857,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         auto& loc_boundary_faces_type = bc_classification.types;
         auto& loc_boundary_face_map = bc_classification.boundary_face_map;
 
-        std::map<int, std::vector<std::array<double, 3>>> basis_map;
-
         const std::array<double, 3> node_coord_arr = to_array3(grid.nodes()[node_ind]);
 
         // For each cell: compute continuity points, basis functions, and fill contributions.
@@ -857,15 +870,12 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 basis_constructor.compute_basis_functions(continuity_pts);
 
             fill_cell_contributions(
-                loc_cell_ind, interaction_region, tensor, grid, num_nodes_of_face,
-                geom, loc_boundary_faces_type, basis_fns, balance_cells, balance_faces,
-                flux_cells, flux_faces, nK_matrix, nK_one_sided, basis_map);
+                loc_cell_ind, interaction_region, ctx, geom,
+                loc_boundary_faces_type, basis_fns, matrices);
         }  // End iteration of cells of the interaction region.
 
         // Compute the local flux matrices (inversion + mask logic).
-        const auto local_flux = compute_local_flux(balance_faces, balance_cells,
-                                                   flux_faces, flux_cells, nK_matrix,
-                                                   nK_one_sided, loc_boundary_faces_type);
+        const auto local_flux = compute_local_flux(matrices, loc_boundary_faces_type);
         const auto& balance_faces_inv = local_flux.balance_faces_inv;
         const auto& bound_flux = local_flux.bound_flux;
         const auto& flux = local_flux.flux;
@@ -913,7 +923,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 bound_vector_source_matrix;
             Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
                 face_pressure_from_cells;
-            bound_vector_source_matrix.noalias() = balance_faces_inv * nK_matrix;
+            bound_vector_source_matrix.noalias() = balance_faces_inv * matrices.nK_matrix;
 
             // Loop over all faces in the interaction region (internal and boundary).
             // Pick out the flux discretization associated with boundary faces (this can
@@ -953,7 +963,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             }
 
             // Mapping from cell center pressure to face pressures.
-            face_pressure_from_cells.noalias() = balance_faces_inv * balance_cells;
+            face_pressure_from_cells.noalias() = balance_faces_inv * matrices.balance_cells;
 
             // Vector of the global indices of the interaction region faces.
             std::vector<int> glob_indices_iareg_faces;
@@ -1004,7 +1014,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 // center, using the set of basis functions for this cell.
                 const std::vector<double> pressure_diff =
                     p_diff(geom.face_centers[loc_face_pair.first], geom.cell_centers[loc_cell_ind],
-                           basis_map.at(glob_cell_ind));
+                           matrices.basis_map.at(glob_cell_ind));
 
                 // Cell contribution to pressure reconstruction.
                 std::vector<double> cell_contribution(interaction_region.cells().size(), 0.0);
