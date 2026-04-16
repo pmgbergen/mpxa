@@ -492,6 +492,258 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
     return {flux_matrix, vector_source_matrix};
 }
 
+struct BoundaryFaceClassification
+{
+    std::vector<std::optional<BoundaryCondition>> types;
+    std::vector<std::pair<int, int>> boundary_face_map;
+};
+
+BoundaryFaceClassification classify_boundary_faces(
+    const InteractionRegion& region,
+    const std::unordered_map<int, BoundaryCondition>& bc_map)
+{
+    BoundaryFaceClassification result;
+    result.types.resize(region.faces().size(), std::nullopt);
+    for (const auto& pair : region.faces())
+    {
+        auto it = bc_map.find(pair.first);
+        if (it != bc_map.end())
+        {
+            BoundaryCondition bc = it->second;
+            if (bc == BoundaryCondition::Dirichlet || bc == BoundaryCondition::Neumann)
+            {
+                result.boundary_face_map.push_back({pair.second, pair.first});
+                result.types.at(pair.second) = bc;
+            }
+            else if (bc == BoundaryCondition::Robin)
+            {
+                throw std::logic_error("Robin boundary condition not implemented");
+            }
+            else
+            {
+                throw std::logic_error("Unknown boundary condition");
+            }
+        }
+    }
+    return result;
+}
+
+std::vector<std::array<double, 3>> compute_continuity_points_for_cell(
+    int loc_cell_ind,
+    const InteractionRegion& region,
+    const std::vector<std::array<double, 3>>& loc_cell_centers,
+    const std::vector<std::array<double, 3>>& loc_face_centers,
+    const std::array<double, 3>& node_coord,
+    const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type,
+    bool is_simplex,
+    int dim)
+{
+    constexpr int SPATIAL_DIM = 3;
+    const int glob_cell_ind = region.cells()[loc_cell_ind];
+    std::vector<std::array<double, 3>> continuity_points(dim + 1,
+                                                         std::array<double, 3>{0.0, 0.0, 0.0});
+    continuity_points[0] = loc_cell_centers[loc_cell_ind];
+    int face_counter = 1;
+    for (const int glob_face_ind : region.faces_of_cells().at(glob_cell_ind))
+    {
+        const int loc_face_index = region.faces().at(glob_face_ind);
+        bool in_dir = false;
+        bool in_neu = false;
+        if (const auto bc = loc_boundary_faces_type[loc_face_index]; bc.has_value())
+        {
+            in_dir = *bc == BoundaryCondition::Dirichlet;
+            in_neu = *bc == BoundaryCondition::Neumann;
+        }
+        if (is_simplex && (!in_dir) && (!in_neu))
+        {
+            for (int i = 0; i < SPATIAL_DIM; ++i)
+            {
+                continuity_points[face_counter][i] =
+                    2.0 / 3 * loc_face_centers[loc_face_index][i] +
+                    (1.0 / 3) * node_coord[i];
+            }
+        }
+        else
+        {
+            for (int k{0}; k < SPATIAL_DIM; ++k)
+            {
+                continuity_points[face_counter][k] = loc_face_centers[loc_face_index][k];
+            }
+        }
+        ++face_counter;
+    }
+    return continuity_points;
+}
+
+void fill_cell_contributions(
+    int loc_cell_ind,
+    const InteractionRegion& region,
+    const SecondOrderTensor& tensor,
+    const Grid& grid,
+    const std::vector<int>& num_nodes_of_face,
+    const std::vector<std::array<double, 3>>& loc_face_normals,
+    const std::vector<std::array<double, 3>>& loc_face_centers,
+    const std::vector<std::array<double, 3>>& loc_cell_centers,
+    const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type,
+    const std::vector<std::array<double, 3>>& basis_functions,
+    Eigen::MatrixXd& balance_cells,
+    Eigen::MatrixXd& balance_faces,
+    Eigen::MatrixXd& flux_cells,
+    Eigen::MatrixXd& flux_faces,
+    Eigen::MatrixXd& nK_matrix,
+    Eigen::MatrixXd& nK_one_sided,
+    std::map<int, std::vector<std::array<double, 3>>>& basis_map)
+{
+    constexpr int SPATIAL_DIM = 3;
+    const int glob_cell_ind = region.cells()[loc_cell_ind];
+
+    // Build face index vectors for this cell (declared within to allow OpenMP later).
+    std::vector<int> loc_faces_of_cell;
+    std::vector<int> glob_faces_of_cell;
+    for (const int glob_face_ind : region.faces_of_cells().at(glob_cell_ind))
+    {
+        glob_faces_of_cell.push_back(glob_face_ind);
+        loc_faces_of_cell.push_back(region.faces().at(glob_face_ind));
+    }
+    const int dim = static_cast<int>(loc_faces_of_cell.size());
+
+    for (int outer_face_counter{0}; outer_face_counter < dim; ++outer_face_counter)
+    {
+        const int glob_face_ind = glob_faces_of_cell[outer_face_counter];
+        const int loc_face_index = loc_faces_of_cell[outer_face_counter];
+
+        std::array<double, 3> flux_expr =
+            nK(loc_face_normals[loc_face_index], tensor, glob_cell_ind,
+               num_nodes_of_face[glob_face_ind]);
+        const int sign = grid.sign_of_face_cell(glob_face_ind, glob_cell_ind);
+
+        std::vector<double> flux_vals = nKgrad(flux_expr, basis_functions);
+
+        std::vector<double> dirichlet_vals;
+
+        bool is_boundary_face = false;
+        BoundaryCondition bc{};
+        if (const auto optional_bc = loc_boundary_faces_type[loc_face_index];
+            optional_bc.has_value())
+        {
+            is_boundary_face = true;
+            bc = *optional_bc;
+        }
+
+        if (is_boundary_face && (bc == BoundaryCondition::Dirichlet))
+        {
+            dirichlet_vals = p_diff(loc_face_centers[loc_face_index],
+                                    loc_cell_centers[loc_cell_ind], basis_functions);
+            balance_cells(loc_face_index, loc_cell_ind) = -dirichlet_vals[0] - 1.0;
+        }
+        else
+        {
+            balance_cells(loc_face_index, loc_cell_ind) = -sign * flux_vals[0];
+            for (int i = 0; i < SPATIAL_DIM; ++i)
+            {
+                const int col = i + SPATIAL_DIM * loc_cell_ind;
+                nK_matrix(loc_face_index, col) = sign * flux_expr[i];
+            }
+        }
+
+        for (int i = 1; i < dim + 1; ++i)
+        {
+            const int loc_face_index_secondary = loc_faces_of_cell[i - 1];
+            if (is_boundary_face && (bc == BoundaryCondition::Dirichlet))
+            {
+                balance_faces(loc_face_index, loc_face_index_secondary) += dirichlet_vals[i];
+            }
+            else
+            {
+                balance_faces(loc_face_index, loc_face_index_secondary) +=
+                    sign * flux_vals[i];
+            }
+        }
+
+        if (glob_cell_ind == region.main_cell_of_faces().at(loc_face_index))
+        {
+            flux_cells(loc_face_index, loc_cell_ind) = flux_vals[0];
+            for (int i = 1; i < dim + 1; ++i)
+            {
+                const int glob_face_index_secondary =
+                    region.faces_of_cells().at(glob_cell_ind)[i - 1];
+                const int loc_face_index_secondary =
+                    region.faces().at(glob_face_index_secondary);
+                flux_faces(loc_face_index, loc_face_index_secondary) = flux_vals[i];
+            }
+            if (!(is_boundary_face && (bc == BoundaryCondition::Dirichlet)))
+            {
+                for (int k = 0; k < SPATIAL_DIM; ++k)
+                {
+                    nK_one_sided(loc_face_index, k + loc_cell_ind * SPATIAL_DIM) =
+                        -flux_expr[k];
+                }
+            }
+        }
+
+        if (is_boundary_face)
+        {
+            basis_map[glob_cell_ind] = basis_functions;
+        }
+    }
+}
+
+struct LocalFluxMatrices
+{
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> balance_faces_inv;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> bound_flux;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> flux;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> vector_source_cell;
+};
+
+LocalFluxMatrices compute_local_flux(
+    const Eigen::MatrixXd& balance_faces,
+    const Eigen::MatrixXd& balance_cells,
+    const Eigen::MatrixXd& flux_faces,
+    const Eigen::MatrixXd& flux_cells,
+    const Eigen::MatrixXd& nK_matrix,
+    const Eigen::MatrixXd& nK_one_sided,
+    const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type)
+{
+    LocalFluxMatrices result;
+
+    result.balance_faces_inv = balance_faces.inverse();
+    result.bound_flux.noalias() = flux_faces * result.balance_faces_inv;
+
+    bool has_dirichlet = false;
+    for (const auto& bc : loc_boundary_faces_type)
+    {
+        if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
+        {
+            has_dirichlet = true;
+            break;
+        }
+    }
+
+    if (!has_dirichlet)
+    {
+        result.flux.noalias() = result.bound_flux * balance_cells + flux_cells;
+    }
+    else
+    {
+        const int num_faces = static_cast<int>(loc_boundary_faces_type.size());
+        Eigen::VectorXd mask = Eigen::VectorXd::Ones(num_faces);
+        for (int face{0}; face < num_faces; ++face)
+        {
+            const auto bc = loc_boundary_faces_type[face];
+            if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
+            {
+                mask(face) = 0.0;
+            }
+        }
+        result.flux.noalias() =
+            result.bound_flux * mask.asDiagonal() * balance_cells + flux_cells;
+    }
+
+    result.vector_source_cell.noalias() = result.bound_flux * nK_matrix + nK_one_sided;
+    return result;
+}
+
 }  // namespace
 
 ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
@@ -505,13 +757,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     constexpr int SPATIAL_DIM = 3;  // Assuming 3D for now, can be generalized later.
 
     BasisConstructor basis_constructor(grid.dim());
-    // Data structures for the discretization process. There will be grid.dim() continuity points
-    // (outer vector).
-    std::vector<std::array<double, 3>> continuity_points(grid.dim() + 1,
-                                                         std::array<double, 3>{0.0, 0.0, 0.0});
-
-    std::vector<std::array<double, 3>> basis_functions(grid.dim() + 1,
-                                                       std::array<double, 3>{0.0, 0.0, 0.0});
 
     std::vector<int> num_nodes_of_face = count_nodes_of_faces(grid);
     std::vector<int> num_faces_of_cell = count_faces_of_cells(grid);
@@ -574,10 +819,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<std::array<double, SPATIAL_DIM>> loc_face_centers;
     std::vector<std::array<double, SPATIAL_DIM>> loc_face_normals;
 
-    // Storage for local (to interaction region) and global face indices of a cell.
-    std::vector<int> loc_faces_of_cell(DIM, -1);
-    std::vector<int> glob_faces_of_cell(DIM, -1);
-
+    // NOTE: The node loop body is embarrassingly parallel — suitable for #pragma omp parallel for
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
         // Get the interaction region for the node.
@@ -588,7 +830,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         // Iterate over the matrix flux (columns major), store the values in the
         // flux_triplets.
-        const auto& reg_cell_ind = interaction_region.cells();
         std::vector<int> reg_face_glob_ind;
         reg_face_glob_ind.reserve(num_faces);
         std::vector<int> reg_face_loc_ind;
@@ -598,8 +839,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             reg_face_glob_ind.push_back(pair.first);
             reg_face_loc_ind.push_back(pair.second);
         }
-
-        const std::vector<double> node_coord = grid.nodes()[node_ind];
 
         // Initialize matrices for the discretization.
         MatrixXd balance_cells = MatrixXd::Zero(num_faces, num_cells);
@@ -632,275 +871,40 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
             }
         }
 
-        // Data structures to store the local boundary faces and their types.
+        // Classify boundary faces within this interaction region.
+        auto bc_classification = classify_boundary_faces(interaction_region, bc_map);
+        auto& loc_boundary_faces_type = bc_classification.types;
+        auto& loc_boundary_face_map = bc_classification.boundary_face_map;
 
-        // Mapping from local face index to global face index.
-        std::vector<std::pair<int, int>> loc_boundary_face_map;
-        // Mapping from local face to an optional boundary condition type. If the face
-        // is not on a boundary, contains `std::nullopt`.
-        std::vector<std::optional<BoundaryCondition>> loc_boundary_faces_type(
-            interaction_region.faces().size(), std::nullopt);
         std::map<int, std::vector<std::array<double, 3>>> basis_map;
 
-        for (const auto& pair : interaction_region.faces())
-        {
-            // Initialize the local boundary faces with the local face index and the
-            // global face index.
-            auto it = bc_map.find(pair.first);
-            if (it != bc_map.end())
-            {
-                BoundaryCondition bc = it->second;
-                if (bc == BoundaryCondition::Dirichlet || bc == BoundaryCondition::Neumann)
-                {
-                    // Store the local face index for Neumann faces. We need to do
-                    // some scaling of this in the boundary condition
-                    // discretization.
-                    // Store the local face index for Dirichlet or Neumann faces. We
-                    // need to do some scaling of this in the boundary condition
-                    // discretization.
-                    loc_boundary_face_map.push_back({pair.second, pair.first});
-                    loc_boundary_faces_type.at(pair.second) = bc;
-                }
-                // Other cases are not implemented.
-                else if (bc == BoundaryCondition::Robin)
-                {
-                    throw std::logic_error("Robin boundary condition not implemented");
-                }
-                else
-                {
-                    throw std::logic_error("Unknown boundary condition");
-                }
-            }
-        }
+        const std::array<double, 3> node_coord_arr = to_array3(grid.nodes()[node_ind]);
 
-        // Iterate over the faces in the interaction region.
+        // For each cell: compute continuity points, basis functions, and fill contributions.
         for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
         {
-            continuity_points[0] = loc_cell_centers[loc_cell_ind];
-            const int glob_cell_ind = reg_cell_ind[loc_cell_ind];
+            const auto continuity_pts = compute_continuity_points_for_cell(
+                loc_cell_ind, interaction_region, loc_cell_centers, loc_face_centers,
+                node_coord_arr, loc_boundary_faces_type, is_simplex, DIM);
 
-            int face_counter = 1;
-            for (const int glob_face_ind : interaction_region.faces_of_cells().at(glob_cell_ind))
-            {
-                // Get the face normal and center.
-                const int loc_face_index = interaction_region.faces().at(glob_face_ind);
-                glob_faces_of_cell[face_counter - 1] = glob_face_ind;
-                loc_faces_of_cell[face_counter - 1] = loc_face_index;
+            const auto basis_fns =
+                basis_constructor.compute_basis_functions(continuity_pts);
 
-                bool in_dir = false, in_neu = false;
-                if (const auto bc = loc_boundary_faces_type[loc_face_index]; bc.has_value())
-                {
-                    in_dir = *bc == BoundaryCondition::Dirichlet;
-                    in_neu = *bc == BoundaryCondition::Neumann;
-                }
-
-                if (is_simplex && (!in_dir) && (!in_neu))
-                {
-                    for (int i = 0; i < SPATIAL_DIM; ++i)
-                    {
-                        continuity_points[face_counter][i] =
-                            2.0 / 3 * loc_face_centers[loc_face_index][i] +
-                            (1.0 / 3) * node_coord[i];
-                    }
-                }
-                else
-                {
-                    for (int k{0}; k < SPATIAL_DIM; ++k)
-                    {
-                        continuity_points[face_counter][k] = loc_face_centers[loc_face_index][k];
-                    }
-                }
-                ++face_counter;
-            }
-            basis_functions = basis_constructor.compute_basis_functions(continuity_points);
-
-            for (int outer_face_counter{0};
-                 outer_face_counter < static_cast<int>(loc_faces_of_cell.size());
-                 ++outer_face_counter)
-            {
-                // Global and local face indices.
-                const int glob_face_ind = glob_faces_of_cell[outer_face_counter];
-                const int loc_face_index = loc_faces_of_cell[outer_face_counter];
-
-                std::array<double, 3> flux_expr =
-                    nK(loc_face_normals[loc_face_index], tensor, glob_cell_ind,
-                       num_nodes_of_face[glob_face_ind]);
-                const int sign = grid.sign_of_face_cell(glob_face_ind, glob_cell_ind);
-
-                std::vector<double> flux_vals = nKgrad(flux_expr, basis_functions);
-
-                std::vector<double> dirichlet_vals;
-
-                bool is_boundary_face = false;
-                BoundaryCondition bc;
-                if (const auto optional_bc = loc_boundary_faces_type[loc_face_index];
-                    optional_bc.has_value())
-                {
-                    is_boundary_face = true;
-                    bc = *optional_bc;
-                }
-
-                // Note on the sign of the elements in the balance matrices: For
-                // internal faces, where the balance equation describes the continuity
-                // of flux expressions nKgrad p (the last factor is represented by basis
-                // functions) for the two sides of a face, it is the unimportant whether
-                // we move the cell or the face dependency to the left or right hand
-                // side (that is, which of the two is multiplied with -1). For the
-                // boundary faces, however, the balance equation consists of a one-sided
-                // flux expression (for Neumann conditions) or a pressure continuity
-                // condition (for Dirichlet), with each equated to the actual boundary
-                // condition (write this up and do some thinking, it will make sense at
-                // some point). In this case, we need to isolate the face values on one
-                // side, and the cell and boundary condition on the other side. To that
-                // end, it is convenient to let the flux values be scaled with 1, cell
-                // values with -1.
-
-                if (is_boundary_face && (bc == BoundaryCondition::Dirichlet))
-                {
-                    // For Dirichlet boundary conditions, the condition imposed for the
-                    // local balance problem is one of pressure continuity.
-                    dirichlet_vals = p_diff(loc_face_centers[loc_face_index],
-                                            loc_cell_centers[loc_cell_ind], basis_functions);
-
-                    // Note to self: There is no multiplication with sign here, since
-                    // Dirichlet condition does not see the direction of the normal
-                    // vector. The contribution to balance_cells is the pressure
-                    // difference due to the cell center basis function
-                    // (dirichlet_vals[0]) + 1, where the last term represents the
-                    // offset from the cell center pressure.
-                    balance_cells(loc_face_index, loc_cell_ind) = -dirichlet_vals[0] - 1.0;
-                }
-                else
-                {
-                    balance_cells(loc_face_index, loc_cell_ind) = -sign * flux_vals[0];
-
-                    // Store the nK values in the nK_matrix for the vector source term.
-                    // This is only necessary for Neumann and internal faces.
-                    for (int i = 0; i < SPATIAL_DIM; ++i)
-                    {
-                        const int col = i + SPATIAL_DIM * loc_cell_ind;
-                        nK_matrix(loc_face_index, col) = sign * flux_expr[i];
-                    }
-                }
-
-                for (int i = 1; i < DIM + 1; ++i)
-                {
-                    const int loc_face_index_secondary = loc_faces_of_cell[i - 1];
-
-                    // For the local balance problem, the condition imposed differs
-                    // between on the one hand Dirichlet faces and on the other hand
-                    // Neumann and internal faces.
-                    //
-                    // In both cases, the sign for the assignment to the balance_faces
-                    // matrix, must be the opposite of the sign used in balance_cells,
-                    // since we gather all contributions from faces and cells on
-                    // different sides of an equation.
-                    if (is_boundary_face && (bc == BoundaryCondition::Dirichlet))
-                    {
-                        balance_faces(loc_face_index, loc_face_index_secondary) +=
-                            dirichlet_vals[i];
-                    }
-                    else
-                    {
-                        balance_faces(loc_face_index, loc_face_index_secondary) +=
-                            sign * flux_vals[i];
-                    }
-                }
-
-                // The discretization of the flux is the same for internal and boundary
-                // faces; it is the nK product times the basis function for face and
-                // cell.
-                //
-                // EK comment to self: No scaling with sign here. This is just a
-                // computation of n * K * grad, with the gradient calculated according
-                // to the geometry of the main cell, and n having the direction it has.
-                // Interpretation/distribution of the flux as inwards or outwards is
-                // left to the discrete divergence operator (elsewhere in the code).
-                if (glob_cell_ind == interaction_region.main_cell_of_faces().at(loc_face_index))
-                {
-                    // If this is the main cell for the face, we store the flux in the
-                    // balance_faces matrix.
-                    flux_cells(loc_face_index, loc_cell_ind) = flux_vals[0];
-                    for (int i = 1; i < DIM + 1; ++i)
-                    {
-                        const int glob_face_index_secondary =
-                            interaction_region.faces_of_cells().at(glob_cell_ind)[i - 1];
-                        const int loc_face_index_secondary =
-                            interaction_region.faces().at(glob_face_index_secondary);
-
-                        flux_faces(loc_face_index, loc_face_index_secondary) = flux_vals[i];
-                    }
-
-                    // Add to the one-sided nK values, unless this is a Dirichlet
-                    // boundary.
-                    if (!(is_boundary_face && (bc == BoundaryCondition::Dirichlet)))
-                    {
-                        for (int k = 0; k < SPATIAL_DIM; ++k)
-                        {
-                            // EK note to self: Not 100% sure about the reason for the
-                            // factor -1 here, but it seems to be necessary to ensure
-                            // equivalence with the PorePy discretization.
-                            nK_one_sided(loc_face_index, k + loc_cell_ind * SPATIAL_DIM) =
-                                -flux_expr[k];
-                        }
-                    }
-                }
-
-                // If this is a boundary face, we store the basis function so that we
-                // can compute the boundary pressure reconstruction later.
-                if (is_boundary_face)
-                {
-                    basis_map[glob_cell_ind] = basis_functions;
-                }
-            }
+            fill_cell_contributions(
+                loc_cell_ind, interaction_region, tensor, grid, num_nodes_of_face,
+                loc_face_normals, loc_face_centers, loc_cell_centers,
+                loc_boundary_faces_type, basis_fns, balance_cells, balance_faces,
+                flux_cells, flux_faces, nK_matrix, nK_one_sided, basis_map);
         }  // End iteration of cells of the interaction region.
 
-        // Compute the inverse of balance_faces matrix.
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> balance_faces_inv;
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> flux;
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> bound_flux;
-        Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> vector_source_cell;
-
-        balance_faces_inv = balance_faces.inverse();
-        bound_flux.noalias() = flux_faces * balance_faces_inv;
-
-        bool has_dirichlet = false;
-        for (const auto bc : loc_boundary_faces_type)
-        {
-            if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
-            {
-                has_dirichlet = true;
-                break;
-            }
-        }
-
-        if (!has_dirichlet)
-        {
-            // If there are no Dirichlet faces, we can directly use the flux_cells matrix.
-            flux.noalias() = bound_flux * balance_cells + flux_cells;
-        }
-        else
-        {
-            // Create a mask representing a diagonal matrix which has value 0.0 for
-            // Dirichlet faces and 1.0 for all other faces.
-            // TODO: EK believes this also applies to Neumann faces. That should become
-            // clear when applying this to a grid that is not K-orthogonal.
-            Eigen::VectorXd mask = Eigen::VectorXd::Ones(num_faces);
-
-            for (int face{0}; face < static_cast<int>(loc_boundary_faces_type.size()); ++face)
-            {
-                const auto bc = loc_boundary_faces_type[face];
-                if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
-                {
-                    mask(face) = 0.0;  // Dirichlet faces
-                }
-            }
-
-            flux.noalias() = bound_flux * mask.asDiagonal() * balance_cells + flux_cells;
-        }
-
-        // Matrix needed to compute the vector source term.
-        vector_source_cell.noalias() = bound_flux * nK_matrix + nK_one_sided;
+        // Compute the local flux matrices (inversion + mask logic).
+        const auto local_flux = compute_local_flux(balance_faces, balance_cells,
+                                                   flux_faces, flux_cells, nK_matrix,
+                                                   nK_one_sided, loc_boundary_faces_type);
+        const auto& balance_faces_inv = local_flux.balance_faces_inv;
+        const auto& bound_flux = local_flux.bound_flux;
+        const auto& flux = local_flux.flux;
+        const auto& vector_source_cell = local_flux.vector_source_cell;
 
         // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
         size_t vs_cols = vector_source_cell.cols();
