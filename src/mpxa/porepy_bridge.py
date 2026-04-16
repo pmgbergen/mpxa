@@ -119,7 +119,7 @@ def convert_tensor_to_mpxa(
                 values[1, 1],
                 values[0, 1],
             )
-        elif not np.allclose(values[0, 0], values[1, 1]):
+        elif not np.allclose(values[0, 0], values[1, 1], rtol=1e-10, atol=1e-14):
             # This is an anisotropic, but diagonal tensor in 2d.
             return _mpxa.SecondOrderTensor(
                 dim,
@@ -136,9 +136,9 @@ def convert_tensor_to_mpxa(
             )
     elif dim == 3:
         if not (
-            np.allclose(values[0, 1], 0)
-            | np.allclose(values[0, 2], 0)
-            | np.allclose(values[1, 2], 0)
+            np.allclose(values[0, 1], 0, rtol=1e-10, atol=1e-14)
+            | np.allclose(values[0, 2], 0, rtol=1e-10, atol=1e-14)
+            | np.allclose(values[1, 2], 0, rtol=1e-10, atol=1e-14)
         ):
             # This is a full tensor in 3d.
             return _mpxa.SecondOrderTensor(
@@ -152,8 +152,8 @@ def convert_tensor_to_mpxa(
                 values[1, 2],
             )
         elif not (
-            np.allclose(values[0, 0], values[1, 1])
-            | np.allclose(values[0, 0], values[2, 2])
+            np.allclose(values[0, 0], values[1, 1], rtol=1e-10, atol=1e-14)
+            | np.allclose(values[0, 0], values[2, 2], rtol=1e-10, atol=1e-14)
         ):
             # This is an anisotropic, but diagonal tensor in 3d.
             return _mpxa.SecondOrderTensor(
