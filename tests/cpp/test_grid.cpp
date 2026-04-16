@@ -438,3 +438,57 @@ TEST_F(GridTest, GeometryComputation3d)
         EXPECT_DOUBLE_EQ(grid_3d->cell_volume(i), dx * dy * dz);
     }
 };
+
+// Test boundary_faces() returns faces with exactly one neighboring cell.
+TEST_F(GridTest, BoundaryFaces2d)
+{
+    auto bf = grid_2d->boundary_faces();
+    // A 2x3 grid has 2*(2+3) = 10 boundary faces out of 17 total.
+    EXPECT_EQ(static_cast<int>(bf.size()), 10);
+    // Every face in the list must border exactly one cell.
+    for (int f : bf)
+    {
+        auto cells = grid_2d->cells_of_face(f);
+        EXPECT_EQ(cells.size(), 1u);
+    }
+}
+
+TEST_F(GridTest, BoundaryFaces3d)
+{
+    auto bf = grid_3d->boundary_faces();
+    // A 2x2x2 grid has 6*4 = 24 boundary faces out of 36 total.
+    EXPECT_EQ(static_cast<int>(bf.size()), 24);
+    for (int f : bf)
+    {
+        auto cells = grid_3d->cells_of_face(f);
+        EXPECT_EQ(cells.size(), 1u);
+    }
+}
+
+// Test face areas and normals for a non-unit-cell 2D grid.
+TEST_F(GridTest, GeometryComputation2dNonUnitCells)
+{
+    const double dx = 2.0 / 2;  // lengths_2d[0] / num_cells_2d[0]
+    const double dy = 3.0 / 3;  // lengths_2d[1] / num_cells_2d[1]
+
+    const auto& face_areas = grid_2d->face_areas();
+    const auto& face_normals = grid_2d->face_normals();
+
+    const int num_x_faces = 3 * 3;  // (num_cells_x+1) * num_cells_y
+    for (int i = 0; i < num_x_faces; ++i)
+    {
+        EXPECT_DOUBLE_EQ(face_areas[i], dy);
+        EXPECT_DOUBLE_EQ(std::abs(face_normals[i][0]), dy);
+        EXPECT_DOUBLE_EQ(face_normals[i][1], 0.0);
+    }
+    for (int i = num_x_faces; i < grid_2d->num_faces(); ++i)
+    {
+        EXPECT_DOUBLE_EQ(face_areas[i], dx);
+        EXPECT_DOUBLE_EQ(face_normals[i][0], 0.0);
+        EXPECT_DOUBLE_EQ(std::abs(face_normals[i][1]), dx);
+    }
+    for (int i = 0; i < grid_2d->num_cells(); ++i)
+    {
+        EXPECT_DOUBLE_EQ(grid_2d->cell_volume(i), dx * dy);
+    }
+}

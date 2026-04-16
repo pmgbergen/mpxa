@@ -67,6 +67,11 @@ class Grid
     void set_cell_centers(const std::vector<std::vector<double>>& cell_centers);
 
    private:
+    // compute_geometry() helpers — called in order; each depends on the previous.
+    void compute_face_geometry();
+    void compute_cell_geometry();
+    void fix_normal_orientations();
+
     int m_dim;
 
     int m_num_nodes;
