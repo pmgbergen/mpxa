@@ -50,11 +50,13 @@ def convert_matrix_mpxa_to_scipy(
             f"Unsupported mpxa matrix type {type(mpxa_matrix)} for conversion."
         )
 
-    return sps.csr_matrix(
+    mat = sps.csr_matrix(
         (mpxa_matrix.data(), mpxa_matrix.col_idx(), mpxa_matrix.row_ptr()),
         shape=(mpxa_matrix.num_rows(), mpxa_matrix.num_cols()),
         dtype=dtype,
     )
+    mat.eliminate_zeros()
+    return mat
 
 
 def convert_vector_source_mpxa_to_scipy(
