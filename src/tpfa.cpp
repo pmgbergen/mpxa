@@ -8,7 +8,7 @@ namespace  // Anonymous namespace for helper functions.
 {
 // Helper function to compute the product between normal vector, tensor, and cell-face
 // vector.
-const double nKproj(const std::vector<double>& face_normal, const SecondOrderTensor& tensor,
+double nKproj(const std::vector<double>& face_normal, const SecondOrderTensor& tensor,
                     const std::array<double, 3>& cell_face_vec, const int sign, const int cell_ind)
 {
     // Compute the squared distance between the cell center and the face center. We get

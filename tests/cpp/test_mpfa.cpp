@@ -210,3 +210,45 @@ TEST_F(MPFA, FluxValuesInternalFace2dFullTensor)
     const std::vector<double> values_face_16 = {t_16_0, t_16_1, t_16_2, t_16_3, t_16_4, t_16_5};
     test_flux_values(discr_2d, 16, cell_indices_face_16, values_face_16);
 }
+
+// MPFA should fall back to TPFA for 1D grids. Verify boundary face flux matrices match.
+TEST(MpfaStandalone, FallsBackToTpfaIn1d)
+{
+    auto g = Grid::create_cartesian_grid(1, {2}, {1.0});
+    g->compute_geometry();
+
+    SecondOrderTensor k(1, 2, {1.0, 2.0});
+
+    std::unordered_map<int, BoundaryCondition> bc;
+    bc[0] = BoundaryCondition::Dirichlet;
+    bc[2] = BoundaryCondition::Dirichlet;
+
+    auto d_mpfa = mpfa(*g, k, bc);
+    auto d_tpfa = tpfa(*g, k, bc);
+
+    // Boundary face (Dirichlet) flux values should match. Face 0 → cell 0, face 2 → cell 1.
+    EXPECT_NEAR(d_mpfa.flux->value(0, 0), d_tpfa.flux->value(0, 0), 1e-10);
+    EXPECT_NEAR(d_mpfa.flux->value(2, 1), d_tpfa.flux->value(2, 1), 1e-10);
+}
+
+// Verify that the vector source matrix has the expected dimensions for a 2D grid.
+TEST_F(MPFA, VectorSourceMatrixDimensions2d)
+{
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    discr_2d = mpfa(*grid_2d, k, bc_map_2d);
+
+    EXPECT_EQ(discr_2d.vector_source->num_rows(), grid_2d->num_faces());
+    EXPECT_EQ(discr_2d.vector_source->num_cols(), grid_2d->num_cells() * 3);
+}
+
+// Robin BC on any face must throw std::logic_error.
+TEST_F(MPFA, RobinBoundaryThrows)
+{
+    std::unordered_map<int, BoundaryCondition> robin_bc_map;
+    for (int f{0}; f < grid_2d->num_faces(); ++f)
+    {
+        robin_bc_map[f] = BoundaryCondition::Robin;
+    }
+    SecondOrderTensor k(2, grid_2d->num_cells(), std::vector<double>(grid_2d->num_cells(), 1.0));
+    EXPECT_THROW(mpfa(*grid_2d, k, robin_bc_map), std::exception);
+}
