@@ -25,21 +25,20 @@ class Grid
 
     const std::vector<int> boundary_faces() const;
 
-    const int dim() const;
+    int dim() const;
 
     // Getters for topological data
-    const int num_nodes() const;
-    const int num_cells() const;
-    const int num_faces() const;
-    // int num_boundary_faces();
+    int num_nodes() const;
+    int num_cells() const;
+    int num_faces() const;
 
     // Direct access to the compressed data storage
     const std::span<const int> faces_of_node(const int node) const;
     const std::vector<int> nodes_of_face(const int face) const;
     const std::span<const int> cells_of_face(const int face) const;
     const std::vector<int> faces_of_cell(const int cell) const;
-    const int sign_of_face_cell(const int face, const int cell) const;
-    const int num_nodes_of_face(const int face) const;
+    int sign_of_face_cell(const int face, const int cell) const;
+    int num_nodes_of_face(const int face) const;
 
     const CompressedDataStorage<int>& face_nodes() const;
     const CompressedDataStorage<int>& cell_faces() const;

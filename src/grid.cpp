@@ -37,21 +37,21 @@ const std::vector<int> Grid::boundary_faces() const
     return boundary_faces_list;
 }
 
-const int Grid::dim() const
+int Grid::dim() const
 {
     return m_dim;
 }
 
 // Getters for topological data
-const int Grid::num_nodes() const
+int Grid::num_nodes() const
 {
     return m_num_nodes;
 }
-const int Grid::num_cells() const
+int Grid::num_cells() const
 {
     return m_num_cells;
 }
-const int Grid::num_faces() const
+int Grid::num_faces() const
 {
     return m_num_faces;
 }
@@ -86,12 +86,12 @@ const std::vector<int> Grid::faces_of_cell(const int cell) const
     return m_cell_faces->rows_in_col(cell);
 }
 
-const int Grid::sign_of_face_cell(const int face, const int cell) const
+int Grid::sign_of_face_cell(const int face, const int cell) const
 {
     return m_cell_faces->value(face, cell);
 }
 
-const int Grid::num_nodes_of_face(const int face) const
+int Grid::num_nodes_of_face(const int face) const
 {
     return m_face_nodes->rows_in_col(face).size();
 }

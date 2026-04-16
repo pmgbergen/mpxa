@@ -90,13 +90,13 @@ CompressedDataStorage<T>::~CompressedDataStorage()
 }
 
 template <typename T>
-const int CompressedDataStorage<T>::num_rows()
+int CompressedDataStorage<T>::num_rows() const
 {
     return m_num_rows;
 }
 
 template <typename T>
-const int CompressedDataStorage<T>::num_cols()
+int CompressedDataStorage<T>::num_cols() const
 {
     return m_num_cols;
 }
