@@ -11,8 +11,35 @@ from porepy.numerics.ad.discretizations import Discretization
 import mpxa
 from mpxa import _mpxa
 
+## Functions for pre-processing discretization data
 
-def _rotate_2d_grid_to_xy_plane(g: pp.Grid, k: pp.SecondOrderTensor) -> pp.Grid:
+
+def _extract_data_for_discretization(
+    sd: pp.Grid, parameter_dictionary: dict
+) -> tuple[
+    _mpxa.Grid, _mpxa.SecondOrderTensor, _mpxa.BoundaryCondition, np.ndarray | None
+]:
+    K_pp = parameter_dictionary["second_order_tensor"].copy()
+    bc_pp = parameter_dictionary["bc"]
+    # Rotate the grid and permeability tensor.
+    if sd.dim == 2:
+        g_pp, K_pp, rot_info = _rotate_2d_grid_to_xy_plane(sd, K_pp)
+    elif sd.dim == 1:
+        g_pp, K_pp, rot_info = _rotate_1d_grid_to_x_axis(sd, K_pp)
+    else:
+        g_pp = sd
+        rot_info = None
+
+    K_cpp = mpxa.convert_tensor_to_mpxa(K_pp, g_pp.dim)
+    bc_cpp = mpxa.convert_bc_to_mpxa(bc_pp)
+    g_cpp = mpxa.convert_grid_to_mpxa(g_pp)
+
+    return g_cpp, K_cpp, bc_cpp, rot_info
+
+
+def _rotate_2d_grid_to_xy_plane(
+    g: pp.Grid, k: pp.SecondOrderTensor
+) -> tuple[pp.Grid, pp.SecondOrderTensor, tuple[np.ndarray, np.ndarray]]:
     # Rotate the grid into the xy plane and delete third dimension. First make a
     # copy to avoid alterations to the input grid
     g = g.copy()
@@ -41,7 +68,9 @@ def _rotate_2d_grid_to_xy_plane(g: pp.Grid, k: pp.SecondOrderTensor) -> pp.Grid:
     return g, k, (R, dim)
 
 
-def _rotate_1d_grid_to_x_axis(g: pp.Grid, k: pp.SecondOrderTensor) -> pp.Grid:
+def _rotate_1d_grid_to_x_axis(
+    g: pp.Grid, k: pp.SecondOrderTensor
+) -> tuple[pp.Grid, pp.SecondOrderTensor, np.ndarray]:
     # Unit vector along the grid. This breaks if the grid is not a straight line.
     g = g.copy()
     v = g.nodes[:, 1] - g.nodes[:, 0]
@@ -62,13 +91,110 @@ def _rotate_1d_grid_to_x_axis(g: pp.Grid, k: pp.SecondOrderTensor) -> pp.Grid:
     return g, k, v
 
 
-def rotate_vector_source_from_xy_plane_to_original(
+## Functions for post-processing the discretization matrices.
+
+
+def _store_discretization_matrices(
+    sd: pp.Grid,
+    data: dict,
+    keyword: str,
+    discr_cpp: _mpxa.Discretization,
+    rot_info: np.ndarray | None,
+) -> None:
+
+    try:
+        ambient_dim = data[pp.PARAMETERS][keyword]["ambient_dimension"]
+    except KeyError as e:
+        raise ValueError(
+            "ambient_dimension must be provided in parameter dictionary for the "
+            "C++ discretization"
+        ) from e
+
+    # Special treatment for vector source terms.
+    vector_source, bound_pressure_vector_source = _extract_rotate_vector_source(
+        sd, ambient_dim, discr_cpp, rot_info
+    )
+    data[pp.DISCRETIZATION_MATRICES][keyword] = {
+        key: mpxa.convert_matrix_mpxa_to_scipy(value)
+        for key, value in {
+            "flux": discr_cpp.flux,
+            "bound_flux": discr_cpp.bound_flux,
+            "bound_pressure_face": discr_cpp.bound_pressure_face,
+            "bound_pressure_cell": discr_cpp.bound_pressure_cell,
+        }.items()
+    } | {
+        "vector_source": vector_source,
+        "bound_pressure_vector_source": bound_pressure_vector_source,
+    }
+
+
+def _extract_rotate_vector_source(
+    sd: pp.Grid,
+    ambient_dim: int,
+    discr_cpp: _mpxa.Discretization,
+    rot_info: np.ndarray | None,
+) -> tuple[sps.spmatrix, sps.spmatrix]:
+    vector_source_cpp = discr_cpp.vector_source
+    bound_pressure_vector_source_cpp = discr_cpp.bound_pressure_vector_source
+
+    if sd.dim == 3 or sd.dim == 0:
+        assert ambient_dim >= sd.dim, (
+            "The ambient dimension cannot be smaller than the grid dimension."
+        )
+        # No need for dimension reduction or rotation.
+        vector_source = mpxa.convert_vector_source_mpxa_to_scipy(
+            vector_source_cpp, ambient_dim=ambient_dim
+        )
+        bound_pressure_vector_source = mpxa.convert_vector_source_mpxa_to_scipy(
+            bound_pressure_vector_source_cpp, ambient_dim=ambient_dim
+        )
+    elif sd.dim == 2 and ambient_dim == 2:
+        # The C++ code has discretized the vector source as if it is 3d. Use a
+        # special conversion method which strips away the z-coordinate from
+        # column space of the vector source matrix and its boundary terms.
+        vector_source = mpxa.convert_vector_source_mpxa_to_scipy(
+            vector_source_cpp, ambient_dim=ambient_dim
+        )
+        bound_pressure_vector_source = mpxa.convert_vector_source_mpxa_to_scipy(
+            bound_pressure_vector_source_cpp, ambient_dim=ambient_dim
+        )
+    elif sd.dim == 2 and ambient_dim == 3:
+        # The C++ discretization have the right number of columns, but they were
+        # discretized in the xy-plane. The simplest option is to right-multiply
+        # the discretizations with a rotation to that xy-plane, as is done in the
+        # called function.
+        vector_source, bound_pressure_vector_source = (
+            _rotate_vector_source_from_xy_plane_to_original(
+                sd,
+                ambient_dim,
+                vector_source_cpp,
+                bound_pressure_vector_source_cpp,
+                rot_info,
+            )
+        )
+    else:
+        # This is a 1d grid. When we introduce a 1d grid aligned with the y-axis
+        # this will need an extension (possibly outsourcing to tpfa), but keep the
+        # code for now, to make the tests formally pass.
+        vector_source, bound_pressure_vector_source = (
+            _rotate_vector_source_from_1d_to_original(
+                sd,
+                ambient_dim,
+                vector_source_cpp,
+                bound_pressure_vector_source_cpp,
+                rot_info,
+            )
+        )
+    return vector_source, bound_pressure_vector_source
+
+
+def _rotate_vector_source_from_xy_plane_to_original(
     sd: pp.Grid,
     vector_source_dim: int,
     vector_source_glob: np.ndarray,
     bound_pressure_vector_source_glob: np.ndarray,
     rot_info,
-) -> np.ndarray:
+) -> tuple[sps.spmatrix, sps.spmatrix]:
     # Zero out non-active dimensions.
     vector_source = mpxa.convert_vector_source_mpxa_to_scipy(
         vector_source_glob, ambient_dim=sd.dim
@@ -106,13 +232,13 @@ def rotate_vector_source_from_xy_plane_to_original(
     return vector_source, bound_pressure_vector_source
 
 
-def rotate_vector_source_from_1d_to_original(
+def _rotate_vector_source_from_1d_to_original(
     sd: pp.Grid,
     vector_source_dim: int,
     vector_source_glob: np.ndarray,
     bound_pressure_vector_source_glob: np.ndarray,
     rot_info: np.ndarray,
-):
+) -> tuple[sps.spmatrix, sps.spmatrix]:
     vector_source = mpxa.convert_vector_source_mpxa_to_scipy(
         vector_source_glob, ambient_dim=sd.dim
     )
@@ -132,109 +258,6 @@ def rotate_vector_source_from_1d_to_original(
     vector_source = vector_source @ rot_mat
     bound_pressure_vector_source = bound_pressure_vector_source @ rot_mat
     return vector_source, bound_pressure_vector_source
-
-
-def _extract_rotate_vector_source(sd, ambient_dim, discr_cpp, rot_info):
-    vector_source_cpp = discr_cpp.vector_source
-    bound_pressure_vector_source_cpp = discr_cpp.bound_pressure_vector_source
-
-    if sd.dim == 3 or sd.dim == 0:
-        assert ambient_dim >= sd.dim, (
-            "The ambient dimension cannot be smaller than the grid dimension."
-        )
-        # No need for dimension reduction or rotation.
-        vector_source = mpxa.convert_vector_source_mpxa_to_scipy(
-            vector_source_cpp, ambient_dim=ambient_dim
-        )
-        bound_pressure_vector_source = mpxa.convert_vector_source_mpxa_to_scipy(
-            bound_pressure_vector_source_cpp, ambient_dim=ambient_dim
-        )
-    elif sd.dim == 2 and ambient_dim == 2:
-        # The C++ code has discretized the vector source as if it is 3d. Use a
-        # special conversion method which strips away the z-coordinate from
-        # column space of the vector source matrix and its boundary terms.
-        vector_source = mpxa.convert_vector_source_mpxa_to_scipy(
-            vector_source_cpp, ambient_dim=ambient_dim
-        )
-        bound_pressure_vector_source = mpxa.convert_vector_source_mpxa_to_scipy(
-            bound_pressure_vector_source_cpp, ambient_dim=ambient_dim
-        )
-    elif sd.dim == 2 and ambient_dim == 3:
-        # The C++ discretization have the right number of columns, but they were
-        # discretized in the xy-plane. The simplest option is to right-multiply
-        # the discretizations with a rotation to that xy-plane, as is done in the
-        # called function.
-        vector_source, bound_pressure_vector_source = (
-            rotate_vector_source_from_xy_plane_to_original(
-                sd,
-                ambient_dim,
-                vector_source_cpp,
-                bound_pressure_vector_source_cpp,
-                rot_info,
-            )
-        )
-    else:
-        # This is a 1d grid. When we introduce a 1d grid aligned with the y-axis
-        # this will need an extension (possibly outsourcing to tpfa), but keep the
-        # code for now, to make the tests formally pass.
-        vector_source, bound_pressure_vector_source = (
-            rotate_vector_source_from_1d_to_original(
-                sd,
-                ambient_dim,
-                vector_source_cpp,
-                bound_pressure_vector_source_cpp,
-                rot_info,
-            )
-        )
-    return vector_source, bound_pressure_vector_source
-
-
-def _store_discretization_matrices(sd, data, keyword, discr_cpp, rot_info):
-
-    # Convert the discretization matrices to scipy format.
-    try:
-        ambient_dim = data[pp.PARAMETERS][keyword]["ambient_dimension"]
-    except KeyError as e:
-        raise ValueError(
-            "ambient_dimension must be provided in parameter dictionary for the "
-            "C++ discretization"
-        ) from e
-
-    # Special treatment for vector source terms.
-    vector_source, bound_pressure_vector_source = _extract_rotate_vector_source(
-        sd, ambient_dim, discr_cpp, rot_info
-    )
-    data[pp.DISCRETIZATION_MATRICES][keyword] = {
-        key: mpxa.convert_matrix_mpxa_to_scipy(value)
-        for key, value in {
-            "flux": discr_cpp.flux,
-            "bound_flux": discr_cpp.bound_flux,
-            "bound_pressure_face": discr_cpp.bound_pressure_face,
-            "bound_pressure_cell": discr_cpp.bound_pressure_cell,
-        }.items()
-    } | {
-        "vector_source": vector_source,
-        "bound_pressure_vector_source": bound_pressure_vector_source,
-    }
-
-
-def _extract_data_for_discretization(sd, parameter_dictionary):
-    K_pp = parameter_dictionary["second_order_tensor"]
-    bc_pp = parameter_dictionary["bc"]
-    # Rotate the grid and permeability tensor.
-    if sd.dim == 2:
-        g_pp, K_pp, rot_info = _rotate_2d_grid_to_xy_plane(sd, K_pp)
-    elif sd.dim == 1:
-        g_pp, K_pp, rot_info = _rotate_1d_grid_to_x_axis(sd, K_pp)
-    else:
-        g_pp = sd
-        rot_info = None
-
-    K_cpp = mpxa.convert_tensor_to_mpxa(K_pp, g_pp.dim)
-    bc_cpp = mpxa.convert_bc_to_mpxa(bc_pp)
-    g_cpp = mpxa.convert_grid_to_mpxa(g_pp)
-
-    return g_cpp, K_cpp, bc_cpp, rot_info
 
 
 class Tpfa(pp.FVElliptic):
