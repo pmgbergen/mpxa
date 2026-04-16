@@ -174,16 +174,48 @@ struct PairHash
     }
 };
 
+struct RowSortingInfo
+{
+    std::vector<int> sorted_row_indices;
+    std::vector<int> num_row_occurrences;
+    std::vector<int> col_index_sizes;
+};
+
+// Compute sorted row indices, per-row occurrence counts, and per-entry column sizes.
+// This is common setup for both CSR matrix builders.
+RowSortingInfo compute_row_sorting(const std::vector<int>& row_indices,
+                                   const std::vector<std::vector<int>>& col_indices,
+                                   int num_rows)
+{
+    RowSortingInfo info;
+    info.sorted_row_indices.resize(row_indices.size());
+    std::iota(info.sorted_row_indices.begin(), info.sorted_row_indices.end(), 0);
+    std::sort(info.sorted_row_indices.begin(), info.sorted_row_indices.end(),
+              [&row_indices](int i1, int i2) { return row_indices[i1] < row_indices[i2]; });
+
+    info.num_row_occurrences.assign(num_rows, 0);
+    for (const int row_ind : row_indices)
+    {
+        ++info.num_row_occurrences[row_ind];
+    }
+    info.col_index_sizes.reserve(col_indices.size());
+    for (const auto& vec : col_indices)
+    {
+        info.col_index_sizes.push_back(static_cast<int>(vec.size()));
+    }
+    return info;
+}
+
 // Helper function to create a compressed sparse row (CSR) matrix from vectors.
 std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
     const std::vector<int>& row_indices, const std::vector<std::vector<int>>& col_indices,
     const std::vector<std::vector<double>>& data_values, const int num_rows, const int num_cols,
     const int tot_num_transmissibilities)
 {
-    std::vector<int> sorted_row_indices(row_indices.size());
-    std::iota(sorted_row_indices.begin(), sorted_row_indices.end(), 0);
-    std::sort(sorted_row_indices.begin(), sorted_row_indices.end(),
-              [&row_indices](int i1, int i2) { return row_indices[i1] < row_indices[i2]; });
+    const auto sorting = compute_row_sorting(row_indices, col_indices, num_rows);
+    const auto& sorted_row_indices = sorting.sorted_row_indices;
+    const auto& num_row_occurrences = sorting.num_row_occurrences;
+    const auto& col_index_sizes = sorting.col_index_sizes;
 
     std::vector<int> row_ptr;
     row_ptr.reserve(num_rows + 1);
@@ -192,18 +224,6 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
     col_idx.reserve(tot_num_transmissibilities);
     std::vector<double> values;
     values.reserve(tot_num_transmissibilities);
-
-    std::vector<int> num_row_occurrences(num_rows, 0);
-    for (const int row_ind : row_indices)
-    {
-        ++num_row_occurrences[row_ind];
-    }
-    std::vector<int> col_index_sizes;
-    col_index_sizes.reserve(col_indices.size());
-    for (const auto& vec : col_indices)
-    {
-        col_index_sizes.push_back(vec.size());
-    }
 
     // Local storage for the sorted column indices and data values for each row. Will be
     // erased for each iteration.
@@ -330,12 +350,10 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
                                  const int tot_num_transmissibilities)
 {
     constexpr int SPATIAL_DIM = 3;
-    // Get the sorted indices for the row indices. This is common for the flux and
-    // vector source data.
-    std::vector<int> sorted_row_indices(row_indices.size());
-    std::iota(sorted_row_indices.begin(), sorted_row_indices.end(), 0);
-    std::sort(sorted_row_indices.begin(), sorted_row_indices.end(),
-              [&row_indices](int i1, int i2) { return row_indices[i1] < row_indices[i2]; });
+    const auto sorting = compute_row_sorting(row_indices, col_indices, num_rows);
+    const auto& sorted_row_indices = sorting.sorted_row_indices;
+    const auto& num_row_occurrences = sorting.num_row_occurrences;
+    const auto& col_index_sizes = sorting.col_index_sizes;
 
     std::vector<int> row_ptr_flux, row_ptr_vector_source;
     row_ptr_flux.reserve(num_rows + 1);
@@ -348,19 +366,6 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
     std::vector<double> values_flux, values_vector_source;
     values_flux.reserve(tot_num_transmissibilities);
     values_vector_source.reserve(SPATIAL_DIM * tot_num_transmissibilities);
-
-    // Count the number of occurrences of each row index.
-    std::vector<int> num_row_occurrences(num_rows, 0);
-    for (const int row_ind : row_indices)
-    {
-        ++num_row_occurrences[row_ind];
-    }
-    std::vector<int> col_index_sizes;
-    col_index_sizes.reserve(col_indices.size());
-    for (const auto& vec : col_indices)
-    {
-        col_index_sizes.push_back(vec.size());
-    }
 
     // A helper structure to store iterated elements in the Array of Structures fashion.
     struct RowEntry
