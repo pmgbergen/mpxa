@@ -522,35 +522,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<int> num_nodes_of_face = count_nodes_of_faces(grid);
     std::vector<int> num_faces_of_cell = count_faces_of_cells(grid);
 
-    // YZ: We are not using the things below.
-    int avg_num_cells_per_node;
-    int avg_num_cell_per_bound_node;
-    if (grid.dim() == 2)
-    {
-        if (num_faces_of_cell[0] == 4)
-        {
-            avg_num_cells_per_node = 4;  // Rough estimate for structured quadrilateral grids.
-            avg_num_cell_per_bound_node = 2;
-        }
-        else
-        {
-            avg_num_cells_per_node = 6;  // Rough estimate for 2D grids.
-            avg_num_cell_per_bound_node = 3;
-        }
-    }
-    else
-    {
-        if (num_faces_of_cell[0] == 6)
-        {
-            avg_num_cells_per_node = 8;  // Rough estimate for structured hexahedral grids.
-            avg_num_cell_per_bound_node = 4;
-        }
-        else
-        {
-            avg_num_cells_per_node = 14;  // Rough estimate for 3D grids.
-            avg_num_cell_per_bound_node = 6;
-        }
-    }
     const int num_bound_faces = bc_map.size();
 
     // Data structures for the computed stencils.
@@ -756,27 +727,16 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 const int glob_face_ind = glob_faces_of_cell[outer_face_counter];
                 const int loc_face_index = loc_faces_of_cell[outer_face_counter];
 
-                // Find the boundary condition for the face, if any.
-                bool is_boundary_face = false;
-
                 std::array<double, 3> flux_expr =
                     nK(loc_face_normals[loc_face_index], tensor, glob_cell_ind,
                        num_nodes_of_face[glob_face_ind]);
-
-                // Here we need a map to the local flux index to get the right storage in the
-                // matrices.
                 const int sign = grid.sign_of_face_cell(glob_face_ind, glob_cell_ind);
 
-                // We need the nK gradient for the flux expression, independent of
-                // whether this is an internal or boundary face, and the type of
-                // boundary condition.
                 std::vector<double> flux_vals = nKgrad(flux_expr, basis_functions);
 
-                // Decleare the vector for the Dirichlet values. This may or may not be
-                // used in calculations below.
                 std::vector<double> dirichlet_vals;
 
-                is_boundary_face = false;
+                bool is_boundary_face = false;
                 BoundaryCondition bc;
                 if (const auto optional_bc = loc_boundary_faces_type[loc_face_index];
                     optional_bc.has_value())

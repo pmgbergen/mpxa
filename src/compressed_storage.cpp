@@ -1,6 +1,6 @@
 #include "../include/compressed_storage.h"
 
-#include <iostream>
+#include <stdexcept>
 
 // Explicit template instantiation for CompressedDataStorage with double
 template class CompressedDataStorage<int>;

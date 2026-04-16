@@ -192,9 +192,6 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
                 vector_source.push_back(harmonic_mean * sign_b * face_cell_b_vec[i]);
                 col_idx_vector_source.push_back(cell_b * DIM + i);
             }
-
-            // Store the flux in the compressed data storage.
-            // flux->set_value(face_ind, flux);
         }
         else  // Boundary face.
         {
