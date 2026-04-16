@@ -20,8 +20,8 @@ class CompressedDataStorage
     // Destructor
     ~CompressedDataStorage();
 
-    const int num_rows();
-    const int num_cols();
+    int num_rows() const;
+    int num_cols() const;
 
     const std::vector<int>& row_ptr() const;
     const std::vector<int>& col_idx() const;

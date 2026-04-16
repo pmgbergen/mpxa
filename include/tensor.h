@@ -23,7 +23,7 @@ class SecondOrderTensor
     bool is_isotropic() const;
     bool is_diagonal() const;
 
-    const int dim() const;
+    int dim() const;
 
     // Return the isotropic value for a given cell
     inline double isotropic_data(int cell) const noexcept

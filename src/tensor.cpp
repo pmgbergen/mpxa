@@ -124,7 +124,7 @@ SecondOrderTensor& SecondOrderTensor::with_kyz(const std::vector<double>& k_yz)
 }
 
 // Getter methods
-const int SecondOrderTensor::dim() const
+int SecondOrderTensor::dim() const
 {
     return m_dim;
 }
