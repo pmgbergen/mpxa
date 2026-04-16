@@ -1,7 +1,6 @@
 #include "../include/multipoint_common.h"
 
 #include <cmath>
-#include <iostream>
 #include <unordered_set>
 
 // region BasisConstructor
@@ -81,11 +80,7 @@ compute_basis_functions(
         }
         const double inv_det = 1.0 / det;
 
-        // Compute inverse (assuming det != 0)
-        // double inv[3][3];
-        // inv[0][0] = (a22 * a33 - a23 * a32) * inv_det;
-        // inv[0][1] = (a13 * a32 - a12 * a33) * inv_det;
-        // inv[0][2] = (a12 * a23 - a13 * a22) * inv_det;
+        // Compute gradient rows of the inverse (rows 1 and 2 correspond to x and y partials).
         inv[1][0] = (a23 * a31 - a21 * a33) * inv_det * inv_sx;
         inv[1][1] = (a11 * a33 - a13 * a31) * inv_det * inv_sx;
         inv[1][2] = (a13 * a21 - a11 * a23) * inv_det * inv_sx;
@@ -169,58 +164,28 @@ compute_basis_functions(
         adj[3][2] = -det3x3(a11, a12, a14, a21, a22, a24, a31, a32, a34);
         adj[3][3] = det3x3(a11, a12, a13, a21, a22, a23, a31, a32, a33);
 
-        // Compute inverse by dividing adjugate by determinant
-        // double inv[4][4];
-        // for (int i = 0; i < 4; ++i)
-        // {
-
+        // Compute gradient rows of the inverse (rows 1-3 correspond to x, y, z partials).
         for (int j = 0; j < 4; ++j)
         {
             inv[1][j] = adj[j][1] * inv_detA * inv_sx;
             inv[2][j] = adj[j][2] * inv_detA * inv_sy;
             inv[3][j] = adj[j][3] * inv_detA * inv_sz;
-            // inv[i][j] = adj[j][i] * inv_detA;
         }
-        // }
     }
     else
     {
         throw std::runtime_error("MPFA basis function computation not implemented for dim > 3.");
     }
 
-    // for (int i = 0; i <= m_dim; ++i)
-    // {
-    //     // m_coord_matrix(i, 0) = 1.0;  // Set the first column to ones for the constant term.
-    //     // Fill the coord_matrix with the coordinates provided in the input.
-    //     for (int j = 1; j <= m_dim; ++j)
-    //     {
-    //         m_coord_matrix(i, j) = coords[i][j - 1];
-    //     }
-    // }
-
-    // // Solve the linear system with m_coord_matrix as the left-hand side and
-    // // m_rhs_matrix as the right-hand side.
-    // Eigen::PartialPivLU<Eigen::MatrixXd> lu_decomp(m_coord_matrix);
-    // m_basis_matrix = lu_decomp.solve(m_rhs_matrix);
-
-    // // Store the computed basis functions in the output vector.
     std::vector<std::array<double, 3>> basis_functions(m_dim + 1);
 
-    // Some index gymnastics here: The basis functions are stored column-wise in the
-    // m_basis_matrix, but we want to return them row-wise, stored in the vector of
-    // vectors. Use j as the column index, i as the row index in the matrix (for the
-    // basis function they become respectively the basis function counter and the
-    // coordinate index). Also, having a tight loop over the outer index for one of the
-    // variables seem unavoidable, unless we switch to a less intuitive data structure
-    // for the basis functions, which would be worse for readability.
+    // The gradient rows of inv (rows 1..m_dim) give the basis-function gradients,
+    // stored column-wise; transpose here to row-wise output.
     for (int j = 0; j <= m_dim; ++j)
     {
-        // Start indexing from 1, since the first row of the basis functions is the
-        // constant term, which we ignore.
         for (int i = 1; i <= m_dim; ++i)
         {
-            // Store the computed basis functions in the output vector.
-            basis_functions[j][i - 1] = inv[i][j];  // m_basis_matrix(i, j);
+            basis_functions[j][i - 1] = inv[i][j];
         }
     }
     return basis_functions;
