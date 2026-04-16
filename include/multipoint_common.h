@@ -1,14 +1,11 @@
 #ifndef MULTIPOINT_COMMON_H
 #define MULTIPOINT_COMMON_H
 
-#include <Eigen/Dense>
 #include <array>
 #include <map>
 #include <vector>
 
 #include "grid.h"
-
-using Eigen::MatrixXd;
 
 // This file contains common definitions and includes for the multipoint flux and
 // stress methods.
@@ -16,27 +13,21 @@ using Eigen::MatrixXd;
 class BasisConstructor
 {
    public:
-    // Constructor
     BasisConstructor(const int dim);
-
-    // Destructor
     ~BasisConstructor() = default;
 
-    // Function to compute the basis functions and their gradients. The signature is
-    // highly uncertain.
+    // Compute gradients of the linear basis functions for the simplex defined by coords.
+    // Returns one gradient vector per vertex; each gradient has m_dim components.
     std::vector<std::array<double, 3>> compute_basis_functions(
         const std::vector<std::array<double, 3>>& coords);
 
    private:
-    // Dimension of the problem
     int m_dim;
-    // Matrix to store the coordinates of the nodes. Will be the left-hand side of the
-    // equation.
-    MatrixXd m_coord_matrix;
-    // Matrix to store the computed basis functions.
-    MatrixXd m_basis_matrix;
-    // Matrix to represent the right hand side. Should be an identity matrix.
-    MatrixXd m_rhs_matrix;
+
+    std::vector<std::array<double, 3>> compute_basis_functions_2d(
+        const std::vector<std::array<double, 3>>& coords);
+    std::vector<std::array<double, 3>> compute_basis_functions_3d(
+        const std::vector<std::array<double, 3>>& coords);
 };
 
 class InteractionRegion

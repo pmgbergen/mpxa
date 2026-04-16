@@ -5,7 +5,7 @@
 class BasisFunctionComputationTest : public ::testing::Test
 {
    protected:
-    BasisConstructor* basis_constructor;
+    BasisConstructor* basis_constructor = nullptr;
 
     void TearDown() override
     {
@@ -81,4 +81,65 @@ TEST_F(BasisFunctionComputationTest, ComputeBasisFunctions_3D)
     EXPECT_NEAR(basis_functions[3][0], -0.3, 1e-6);
     EXPECT_NEAR(basis_functions[3][1], 0.1, 1e-6);
     EXPECT_NEAR(basis_functions[3][2], 0.6, 1e-6);
+}
+
+TEST_F(BasisFunctionComputationTest, InvalidDimThrows)
+{
+    BasisConstructor bc1(0);
+    BasisConstructor bc4(4);
+    const std::vector<std::array<double, 3>> dummy = {{0, 0, 0}};
+    EXPECT_THROW(bc1.compute_basis_functions(dummy), std::runtime_error);
+    EXPECT_THROW(bc4.compute_basis_functions(dummy), std::runtime_error);
+}
+
+TEST_F(BasisFunctionComputationTest, NonZeroZCoordIn2DThrows)
+{
+    BasisConstructor bc(2);
+    const std::vector<std::array<double, 3>> coords = {
+        {0.0, 0.0, 1.0}, {1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}};
+    EXPECT_THROW(bc.compute_basis_functions(coords), std::logic_error);
+}
+
+TEST_F(BasisFunctionComputationTest, DegenerateTriangleThrows)
+{
+    BasisConstructor bc(2);
+    // Three collinear points — det = 0.
+    const std::vector<std::array<double, 3>> coords = {
+        {0.0, 0.0, 0.0}, {1.0, 1.0, 0.0}, {2.0, 2.0, 0.0}};
+    EXPECT_THROW(bc.compute_basis_functions(coords), std::logic_error);
+}
+
+// Verify partition-of-unity: sum of all basis-function gradients must be zero.
+TEST_F(BasisFunctionComputationTest, PartitionOfUnity2D)
+{
+    BasisConstructor bc(2);
+    const std::vector<std::array<double, 3>> coords = {
+        {0.0, 0.0, 0.0}, {2.0, 0.0, 0.0}, {1.0, 3.0, 0.0}};
+    auto bf = bc.compute_basis_functions(coords);
+    double sum_x = 0.0, sum_y = 0.0;
+    for (const auto& g : bf)
+    {
+        sum_x += g[0];
+        sum_y += g[1];
+    }
+    EXPECT_NEAR(sum_x, 0.0, 1e-10);
+    EXPECT_NEAR(sum_y, 0.0, 1e-10);
+}
+
+TEST_F(BasisFunctionComputationTest, PartitionOfUnity3D)
+{
+    BasisConstructor bc(3);
+    const std::vector<std::array<double, 3>> coords = {
+        {0.0, 0.0, 0.0}, {2.0, 0.0, 1.0}, {1.0, 3.0, 0.0}, {1.0, 1.0, 2.0}};
+    auto bf = bc.compute_basis_functions(coords);
+    double sum_x = 0.0, sum_y = 0.0, sum_z = 0.0;
+    for (const auto& g : bf)
+    {
+        sum_x += g[0];
+        sum_y += g[1];
+        sum_z += g[2];
+    }
+    EXPECT_NEAR(sum_x, 0.0, 1e-10);
+    EXPECT_NEAR(sum_y, 0.0, 1e-10);
+    EXPECT_NEAR(sum_z, 0.0, 1e-10);
 }
