@@ -9,11 +9,14 @@
 #include <array>
 #include <map>
 #include <memory>
+#include <optional>
+#include <unordered_map>
 #include <vector>
 
 #include "compressed_storage.h"
 #include "discr.h"
 #include "grid.h"
+#include "multipoint_common.h"
 #include "stencil_data.h"
 #include "tensor.h"
 
@@ -43,6 +46,82 @@ struct LocalBalanceMatrices
     Eigen::MatrixXd nK_matrix;
     Eigen::MatrixXd nK_one_sided;
     std::map<int, std::vector<std::array<double, 3>>> basis_map;
+};
+
+// Derived local flux matrices computed from LocalBalanceMatrices.
+struct LocalFluxMatrices
+{
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> balance_faces_inv;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> bound_flux;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> flux;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> vector_source_cell;
+};
+
+// Cached geometry for one interaction region.
+struct InteractionRegionGeometry
+{
+    std::vector<std::array<double, 3>> cell_centers;
+    std::vector<std::array<double, 3>> face_centers;
+    std::vector<std::array<double, 3>> face_normals;
+};
+
+// Classification of boundary faces within an interaction region.
+struct BoundaryFaceClassification
+{
+    // types[loc_face_ind] holds the BC type for boundary faces, nullopt for internal faces.
+    std::vector<std::optional<BoundaryCondition>> types;
+    // (local face index, global face index) pairs for all boundary faces.
+    std::vector<std::pair<int, int>> boundary_face_map;
+};
+
+// Read-only discretisation inputs shared across the entire grid.
+struct DiscrContext
+{
+    const Grid& grid;
+    const SecondOrderTensor& tensor;
+    const std::vector<int>& num_nodes_of_face;
+    const std::unordered_map<int, BoundaryCondition>& bc_map;
+};
+
+// Bundles all read-only inputs needed by compute_continuity_points_for_cell,
+// dropping the parameter count from 7 to 2.
+struct ContinuityPointContext
+{
+    const InteractionRegion& region;
+    const InteractionRegionGeometry& geom;
+    const std::array<double, 3>& node_coord;
+    const std::vector<std::optional<BoundaryCondition>>& bc_types;
+    bool is_simplex;
+    int dim;
+};
+
+// Bundles all read-only inputs needed by fill_cell_contributions,
+// dropping the parameter count from 6 to 2.
+struct FaceCellContribContext
+{
+    const InteractionRegion& region;
+    const DiscrContext& discr_ctx;
+    const InteractionRegionGeometry& geom;
+    const std::vector<std::optional<BoundaryCondition>>& bc_types;
+    const std::vector<std::array<double, 3>>& basis_functions;
+    int loc_cell_ind;
+};
+
+// Bundles inputs for the Neumann pressure reconstruction in accumulate_boundary_data.
+// One instance is created per interaction region and reused for all Neumann faces.
+// All Eigen matrix members use RowMajor storage to match LocalFluxMatrices exactly and
+// avoid any implicit conversion (which would create a temporary and a dangling reference).
+using RowMajorXd = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
+struct NeumannReconstructionContext
+{
+    const InteractionRegion& region;
+    const InteractionRegionGeometry& geom;
+    const LocalBalanceMatrices& matrices;
+    const RowMajorXd& balance_faces_inv;
+    const RowMajorXd& bound_vector_source_matrix;
+    const RowMajorXd& face_pressure_from_cells;
+    const std::vector<std::optional<BoundaryCondition>>& bc_types;
+    const std::vector<int>& glob_indices_iareg_faces;
 };
 
 // ---------------------------------------------------------------------------
@@ -77,6 +156,17 @@ std::vector<int> count_faces_of_cells(const Grid& grid);
 bool check_if_simplex(const std::vector<int>& num_faces_of_cell, int dim);
 
 // ---------------------------------------------------------------------------
+// Interaction-region geometry and classification helpers
+// ---------------------------------------------------------------------------
+
+InteractionRegionGeometry compute_interaction_region_geometry(const InteractionRegion& region,
+                                                               const Grid& grid);
+
+BoundaryFaceClassification classify_boundary_faces(
+    const InteractionRegion& region,
+    const std::unordered_map<int, BoundaryCondition>& bc_map);
+
+// ---------------------------------------------------------------------------
 // CSR matrix helpers
 // ---------------------------------------------------------------------------
 
@@ -98,12 +188,70 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
 // Create zero-initialised local balance matrices for an interaction region.
 LocalBalanceMatrices make_local_balance_matrices(int num_faces, int num_cells);
 
+// Compute derived local flux matrices from balance matrices and boundary conditions.
+LocalFluxMatrices compute_local_flux(
+    const LocalBalanceMatrices& matrices,
+    const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type);
+
 // Initialise a FluxStencilData with pre-reserved capacity.
 FluxStencilData init_flux_stencil(int num_faces, int nodes_per_face, int dim);
 
 // Initialise a BoundaryStencilData with pre-reserved capacity.
 BoundaryStencilData init_boundary_stencil(int num_faces, int num_bound_faces,
                                           int nodes_per_face, int dim);
+
+// ---------------------------------------------------------------------------
+// Per-cell contribution helpers
+// ---------------------------------------------------------------------------
+
+// Compute continuity points for one cell within an interaction region.
+std::vector<std::array<double, 3>> compute_continuity_points_for_cell(
+    int loc_cell_ind, const ContinuityPointContext& ctx);
+
+// Fill balance and flux matrix contributions for one cell within an interaction region.
+void fill_cell_contributions(const FaceCellContribContext& ctx, LocalBalanceMatrices& matrices);
+
+// ---------------------------------------------------------------------------
+// Boundary stencil accumulation helpers
+// ---------------------------------------------------------------------------
+
+// Build bound_flux entries for all faces in the interaction region.
+void accumulate_bound_flux_entries(const InteractionRegion& region,
+                                   const LocalFluxMatrices& local_flux,
+                                   const BoundaryFaceClassification& bc_class,
+                                   const std::vector<int>& num_nodes_of_face,
+                                   BoundaryStencilData& out);
+
+// Add a unit pressure_face entry for a Dirichlet boundary face.
+void accumulate_dirichlet_pressure_face(int glob_face_ind, double inv_num_nodes,
+                                        BoundaryStencilData& out);
+
+// Add pressure_cell, pressure_face, and vector_source entries for one Neumann face.
+void accumulate_neumann_pressure_reconstruction(const NeumannReconstructionContext& ctx,
+                                                int loc_face_ind, int glob_face_ind,
+                                                double inv_num_nodes, BoundaryStencilData& out);
+
+// Accumulate all boundary stencil data for one interaction region.
+void accumulate_boundary_data(const InteractionRegion& interaction_region,
+                              const LocalFluxMatrices& local_flux,
+                              const BoundaryFaceClassification& bc_class,
+                              const InteractionRegionGeometry& geom,
+                              const LocalBalanceMatrices& matrices,
+                              const std::vector<int>& num_nodes_of_face,
+                              BoundaryStencilData& out);
+
+// ---------------------------------------------------------------------------
+// Main loop helper
+// ---------------------------------------------------------------------------
+
+// Process one interaction region: compute local matrices, accumulate flux and
+// boundary stencil data.  This function contains the per-node loop body of
+// mpfa() and is ready for OpenMP parallelisation once thread-safe accumulators
+// are introduced.
+void process_interaction_region(int node_ind, const DiscrContext& ctx,
+                                 const std::vector<int>& num_faces_of_cell,
+                                 FluxStencilData& flux_out, BoundaryStencilData& bound_out,
+                                 int& tot_num_trm);
 
 }  // namespace mpfa_detail
 

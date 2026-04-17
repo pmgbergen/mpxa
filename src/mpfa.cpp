@@ -468,13 +468,6 @@ create_flux_vector_source_matrix(const FluxStencilData& stencil, const int num_r
 }
 
 
-struct InteractionRegionGeometry
-{
-    std::vector<std::array<double, 3>> cell_centers;
-    std::vector<std::array<double, 3>> face_centers;
-    std::vector<std::array<double, 3>> face_normals;
-};
-
 InteractionRegionGeometry compute_interaction_region_geometry(
     const InteractionRegion& region, const Grid& grid)
 {
@@ -493,12 +486,6 @@ InteractionRegionGeometry compute_interaction_region_geometry(
     }
     return geom;
 }
-
-struct BoundaryFaceClassification
-{
-    std::vector<std::optional<BoundaryCondition>> types;
-    std::vector<std::pair<int, int>> boundary_face_map;
-};
 
 BoundaryFaceClassification classify_boundary_faces(
     const InteractionRegion& region,
@@ -530,13 +517,6 @@ BoundaryFaceClassification classify_boundary_faces(
     return result;
 }
 
-struct DiscrContext
-{
-    const Grid& grid;
-    const SecondOrderTensor& tensor;
-    const std::vector<int>& num_nodes_of_face;
-};
-
 LocalBalanceMatrices make_local_balance_matrices(int num_faces, int num_cells)
 {
     constexpr int SPATIAL_DIM = 3;
@@ -549,14 +529,6 @@ LocalBalanceMatrices make_local_balance_matrices(int num_faces, int num_cells)
     m.nK_one_sided = Eigen::MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
     return m;
 }
-
-struct LocalFluxMatrices
-{
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> balance_faces_inv;
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> bound_flux;
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> flux;
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> vector_source_cell;
-};
 
 LocalFluxMatrices compute_local_flux(
     const LocalBalanceMatrices& matrices,
@@ -636,44 +608,38 @@ BoundaryStencilData init_boundary_stencil(int num_faces, int num_bound_faces,
 }
 
 std::vector<std::array<double, 3>> compute_continuity_points_for_cell(
-    int loc_cell_ind,
-    const InteractionRegion& region,
-    const InteractionRegionGeometry& geom,
-    const std::array<double, 3>& node_coord,
-    const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type,
-    bool is_simplex,
-    int dim)
+    int loc_cell_ind, const ContinuityPointContext& ctx)
 {
     constexpr int SPATIAL_DIM = 3;
-    const int glob_cell_ind = region.cells()[loc_cell_ind];
-    std::vector<std::array<double, 3>> continuity_points(dim + 1,
+    const int glob_cell_ind = ctx.region.cells()[loc_cell_ind];
+    std::vector<std::array<double, 3>> continuity_points(ctx.dim + 1,
                                                          std::array<double, 3>{0.0, 0.0, 0.0});
-    continuity_points[0] = geom.cell_centers[loc_cell_ind];
+    continuity_points[0] = ctx.geom.cell_centers[loc_cell_ind];
     int face_counter = 1;
-    for (const int glob_face_ind : region.faces_of_cells().at(glob_cell_ind))
+    for (const int glob_face_ind : ctx.region.faces_of_cells().at(glob_cell_ind))
     {
-        const int loc_face_index = region.faces().at(glob_face_ind);
+        const int loc_face_index = ctx.region.faces().at(glob_face_ind);
         bool in_dir = false;
         bool in_neu = false;
-        if (const auto bc = loc_boundary_faces_type[loc_face_index]; bc.has_value())
+        if (const auto bc = ctx.bc_types[loc_face_index]; bc.has_value())
         {
             in_dir = *bc == BoundaryCondition::Dirichlet;
             in_neu = *bc == BoundaryCondition::Neumann;
         }
-        if (is_simplex && (!in_dir) && (!in_neu))
+        if (ctx.is_simplex && (!in_dir) && (!in_neu))
         {
             for (int i = 0; i < SPATIAL_DIM; ++i)
             {
                 continuity_points[face_counter][i] =
-                    2.0 / 3 * geom.face_centers[loc_face_index][i] +
-                    (1.0 / 3) * node_coord[i];
+                    2.0 / 3 * ctx.geom.face_centers[loc_face_index][i] +
+                    (1.0 / 3) * ctx.node_coord[i];
             }
         }
         else
         {
             for (int k{0}; k < SPATIAL_DIM; ++k)
             {
-                continuity_points[face_counter][k] = geom.face_centers[loc_face_index][k];
+                continuity_points[face_counter][k] = ctx.geom.face_centers[loc_face_index][k];
             }
         }
         ++face_counter;
@@ -681,16 +647,15 @@ std::vector<std::array<double, 3>> compute_continuity_points_for_cell(
     return continuity_points;
 }
 
-void fill_cell_contributions(
-    int loc_cell_ind,
-    const InteractionRegion& region,
-    const DiscrContext& ctx,
-    const InteractionRegionGeometry& geom,
-    const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type,
-    const std::vector<std::array<double, 3>>& basis_functions,
-    LocalBalanceMatrices& matrices)
+void fill_cell_contributions(const FaceCellContribContext& ctx, LocalBalanceMatrices& matrices)
 {
     constexpr int SPATIAL_DIM = 3;
+    const int loc_cell_ind = ctx.loc_cell_ind;
+    const auto& region = ctx.region;
+    const auto& discr_ctx = ctx.discr_ctx;
+    const auto& geom = ctx.geom;
+    const auto& loc_boundary_faces_type = ctx.bc_types;
+    const auto& basis_functions = ctx.basis_functions;
     const int glob_cell_ind = region.cells()[loc_cell_ind];
 
     // Build face index vectors for this cell (declared within to allow OpenMP later).
@@ -709,9 +674,9 @@ void fill_cell_contributions(
         const int loc_face_index = loc_faces_of_cell[outer_face_counter];
 
         std::array<double, 3> flux_expr =
-            nK(geom.face_normals[loc_face_index], ctx.tensor, glob_cell_ind,
-               ctx.num_nodes_of_face[glob_face_ind]);
-        const int sign = ctx.grid.sign_of_face_cell(glob_face_ind, glob_cell_ind);
+            nK(geom.face_normals[loc_face_index], discr_ctx.tensor, glob_cell_ind,
+               discr_ctx.num_nodes_of_face[glob_face_ind]);
+        const int sign = discr_ctx.grid.sign_of_face_cell(glob_face_ind, glob_cell_ind);
 
         std::vector<double> flux_vals = nKgrad(flux_expr, basis_functions);
 
@@ -784,6 +749,151 @@ void fill_cell_contributions(
     }
 }
 
+void accumulate_bound_flux_entries(const InteractionRegion& region,
+                                   const LocalFluxMatrices& local_flux,
+                                   const BoundaryFaceClassification& bc_class,
+                                   const std::vector<int>& num_nodes_of_face,
+                                   BoundaryStencilData& out)
+{
+    const auto& loc_boundary_faces_type = bc_class.types;
+    const auto& loc_boundary_face_map = bc_class.boundary_face_map;
+
+    for (const auto& face_pair : region.faces())
+    {
+        out.bound_flux.row_idx.emplace_back(face_pair.first);
+        out.bound_flux.col_idx.emplace_back();
+        out.bound_flux.values.emplace_back();
+        auto& bf_indices = out.bound_flux.col_idx.back();
+        auto& bf_val = out.bound_flux.values.back();
+
+        for (const auto& loc_face_pair : loc_boundary_face_map)
+        {
+            if (const auto bc = loc_boundary_faces_type[loc_face_pair.first];
+                bc.has_value() && *bc == BoundaryCondition::Neumann)
+            {
+                // Scale by 1/num_nodes: the BC is given as total flux over the face.
+                bf_val.push_back(local_flux.bound_flux(face_pair.second, loc_face_pair.first) /
+                                 num_nodes_of_face[loc_face_pair.first]);
+            }
+            else
+            {
+                bf_val.push_back(
+                    local_flux.bound_flux(face_pair.second, loc_face_pair.first));
+            }
+            bf_indices.push_back(loc_face_pair.second);
+        }
+    }
+}
+
+void accumulate_dirichlet_pressure_face(int glob_face_ind, double inv_num_nodes,
+                                        BoundaryStencilData& out)
+{
+    out.pressure_face.values.emplace_back(std::initializer_list<double>{inv_num_nodes});
+    out.pressure_face.row_idx.push_back(glob_face_ind);
+    out.pressure_face.col_idx.emplace_back(std::initializer_list<int>{glob_face_ind});
+}
+
+void accumulate_neumann_pressure_reconstruction(const NeumannReconstructionContext& ctx,
+                                                int loc_face_ind, int glob_face_ind,
+                                                double inv_num_nodes, BoundaryStencilData& out)
+{
+    constexpr int SPATIAL_DIM = 3;
+
+    // Find the cell adjacent to the boundary face and its local index.
+    const int glob_cell_ind = ctx.region.main_cell_of_faces().at(loc_face_ind);
+    const int loc_cell_ind =
+        std::find(ctx.region.cells().begin(), ctx.region.cells().end(), glob_cell_ind) -
+        ctx.region.cells().begin();
+
+    // Pressure difference between the face center and its adjacent cell center.
+    const std::vector<double> pressure_diff =
+        p_diff(ctx.geom.face_centers[loc_face_ind], ctx.geom.cell_centers[loc_cell_ind],
+               ctx.matrices.basis_map.at(glob_cell_ind));
+
+    std::vector<double> cell_contribution(ctx.region.cells().size(), 0.0);
+    std::vector<double> vector_source_cell_contribution(ctx.region.cells().size() * SPATIAL_DIM,
+                                                        0.0);
+
+    // The cell itself contributes a unit value (offset) plus the gradient correction.
+    cell_contribution[loc_cell_ind] = (1.0 + pressure_diff[0]) * inv_num_nodes;
+
+    std::vector<double> face_contribution(ctx.region.faces().size(), 0.0);
+
+    // Loop over the faces of the cell that also belong to the interaction region.
+    // Start at 1, since the first basis function is the cell center pressure.
+    int basis_vector_face_counter = 1;
+    for (const int face_ind : ctx.region.faces_of_cells().at(glob_cell_ind))
+    {
+        const int face_local_index = ctx.region.faces().at(face_ind);
+
+        std::vector<double> row_from_cells(
+            ctx.face_pressure_from_cells.row(face_local_index).data(),
+            ctx.face_pressure_from_cells.row(face_local_index).data() +
+                ctx.face_pressure_from_cells.row(face_local_index).size());
+
+        std::vector<double> row_from_cells_vector_source(
+            ctx.bound_vector_source_matrix.row(face_local_index).data(),
+            ctx.bound_vector_source_matrix.row(face_local_index).data() +
+                ctx.bound_vector_source_matrix.row(face_local_index).size());
+
+        for (int lci{0}; lci < static_cast<int>(ctx.region.cells().size()); ++lci)
+        {
+            cell_contribution[lci] +=
+                row_from_cells[lci] * pressure_diff[basis_vector_face_counter] * inv_num_nodes;
+            for (int k = 0; k < SPATIAL_DIM; ++k)
+            {
+                const int col = lci * SPATIAL_DIM + k;
+                vector_source_cell_contribution[col] +=
+                    row_from_cells_vector_source[col] *
+                    pressure_diff[basis_vector_face_counter] * inv_num_nodes;
+            }
+        }
+
+        std::vector<double> row_from_faces(
+            ctx.balance_faces_inv.row(face_local_index).data(),
+            ctx.balance_faces_inv.row(face_local_index).data() +
+                ctx.balance_faces_inv.row(face_local_index).size());
+
+        for (const auto& face_pair : ctx.region.faces())
+        {
+            const int loc_face_ind_inner = face_pair.second;
+            if (const auto bc = ctx.bc_types[loc_face_ind_inner]; bc.has_value())
+            {
+                double contribution_from_face = row_from_faces[loc_face_ind_inner] *
+                                               pressure_diff[basis_vector_face_counter] *
+                                               inv_num_nodes;
+                if (*bc == BoundaryCondition::Neumann)
+                {
+                    contribution_from_face *= inv_num_nodes;
+                }
+                face_contribution[loc_face_ind_inner] += contribution_from_face;
+            }
+        }
+        ++basis_vector_face_counter;
+    }
+
+    out.pressure_cell.values.push_back(std::move(cell_contribution));
+    out.pressure_cell.row_idx.push_back(glob_face_ind);
+    out.pressure_cell.col_idx.push_back(ctx.region.cells());
+    out.pressure_face.values.push_back(std::move(face_contribution));
+    out.pressure_face.row_idx.push_back(glob_face_ind);
+    out.pressure_face.col_idx.push_back(ctx.glob_indices_iareg_faces);
+
+    out.vector_source.values.push_back(std::move(vector_source_cell_contribution));
+    out.vector_source.row_idx.push_back(glob_face_ind);
+
+    std::vector<int> cell_ind_vector_source;
+    cell_ind_vector_source.reserve(ctx.region.cells().size() * SPATIAL_DIM);
+    for (const auto& cell_ind : ctx.region.cells())
+    {
+        for (int k = 0; k < SPATIAL_DIM; ++k)
+        {
+            cell_ind_vector_source.push_back(cell_ind * SPATIAL_DIM + k);
+        }
+    }
+    out.vector_source.col_idx.push_back(std::move(cell_ind_vector_source));
+}
+
 void accumulate_boundary_data(
     const InteractionRegion& interaction_region,
     const LocalFluxMatrices& local_flux,
@@ -799,42 +909,15 @@ void accumulate_boundary_data(
         return;
     }
 
-    constexpr int SPATIAL_DIM = 3;
-
     const auto& loc_boundary_faces_type = bc_class.types;
     const auto& balance_faces_inv = local_flux.balance_faces_inv;
-    const auto& bound_flux = local_flux.bound_flux;
+
+    accumulate_bound_flux_entries(interaction_region, local_flux, bc_class,
+                                  num_nodes_of_face, out);
 
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
         bound_vector_source_matrix;
     bound_vector_source_matrix.noalias() = balance_faces_inv * matrices.nK_matrix;
-
-    // For each face in the interaction region (internal + boundary), build the
-    // bound_flux discretization entries.
-    for (const auto& face_pair : interaction_region.faces())
-    {
-        out.bound_flux.row_idx.emplace_back(face_pair.first);
-        out.bound_flux.col_idx.emplace_back();
-        out.bound_flux.values.emplace_back();
-        auto& bf_indices = out.bound_flux.col_idx.back();
-        auto& bf_val = out.bound_flux.values.back();
-
-        for (const auto& loc_face_pair : loc_boundary_face_map)
-        {
-            if (const auto bc = loc_boundary_faces_type[loc_face_pair.first];
-                bc.has_value() && *bc == BoundaryCondition::Neumann)
-            {
-                // Scale by 1/num_nodes: the BC is given as total flux over the face.
-                bf_val.push_back(bound_flux(face_pair.second, loc_face_pair.first) /
-                                 num_nodes_of_face[loc_face_pair.first]);
-            }
-            else
-            {
-                bf_val.push_back(bound_flux(face_pair.second, loc_face_pair.first));
-            }
-            bf_indices.push_back(loc_face_pair.second);
-        }
-    }
 
     Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>
         face_pressure_from_cells;
@@ -849,6 +932,15 @@ void accumulate_boundary_data(
         glob_indices_iareg_faces.push_back(face_pair.first);
     }
 
+    NeumannReconstructionContext neumann_ctx{interaction_region,
+                                             geom,
+                                             matrices,
+                                             balance_faces_inv,
+                                             bound_vector_source_matrix,
+                                             face_pressure_from_cells,
+                                             loc_boundary_faces_type,
+                                             glob_indices_iareg_faces};
+
     // For each boundary face, build pressure-reconstruction and vector-source entries.
     for (const auto& loc_face_pair : loc_boundary_face_map)
     {
@@ -857,116 +949,75 @@ void accumulate_boundary_data(
         if (const auto bc = loc_boundary_faces_type[loc_face_pair.first];
             bc.has_value() && *bc == BoundaryCondition::Dirichlet)
         {
-            // For a Dirichlet boundary face, only a unit face contribution is needed.
-            out.pressure_face.values.emplace_back(
-                std::initializer_list<double>{inv_num_nodes_of_face});
-            out.pressure_face.row_idx.push_back(loc_face_pair.second);
-            out.pressure_face.col_idx.emplace_back(
-                std::initializer_list<int>{loc_face_pair.second});
-            continue;
+            accumulate_dirichlet_pressure_face(loc_face_pair.second, inv_num_nodes_of_face, out);
         }
-
-        // Find the cell adjacent to the boundary face and its local index.
-        const int glob_cell_ind =
-            interaction_region.main_cell_of_faces().at(loc_face_pair.first);
-        const int loc_cell_ind =
-            std::find(interaction_region.cells().begin(), interaction_region.cells().end(),
-                      glob_cell_ind) -
-            interaction_region.cells().begin();
-
-        // Pressure difference between the face center and its adjacent cell center.
-        const std::vector<double> pressure_diff =
-            p_diff(geom.face_centers[loc_face_pair.first], geom.cell_centers[loc_cell_ind],
-                   matrices.basis_map.at(glob_cell_ind));
-
-        std::vector<double> cell_contribution(interaction_region.cells().size(), 0.0);
-        std::vector<double> vector_source_cell_contribution(
-            interaction_region.cells().size() * SPATIAL_DIM, 0.0);
-
-        // The cell itself contributes a unit value (offset) plus the gradient correction.
-        cell_contribution[loc_cell_ind] = (1.0 + pressure_diff[0]) * inv_num_nodes_of_face;
-
-        std::vector<double> face_contribution(interaction_region.faces().size(), 0.0);
-
-        // Loop over the faces of the cell that also belong to the interaction region.
-        // Start at 1, since the first basis function is the cell center pressure.
-        int basis_vector_face_counter = 1;
-        for (const int face_ind : interaction_region.faces_of_cells().at(glob_cell_ind))
+        else
         {
-            const int face_local_index = interaction_region.faces().at(face_ind);
-
-            std::vector<double> row_from_cells(
-                face_pressure_from_cells.row(face_local_index).data(),
-                face_pressure_from_cells.row(face_local_index).data() +
-                    face_pressure_from_cells.row(face_local_index).size());
-
-            std::vector<double> row_from_cells_vector_source(
-                bound_vector_source_matrix.row(face_local_index).data(),
-                bound_vector_source_matrix.row(face_local_index).data() +
-                    bound_vector_source_matrix.row(face_local_index).size());
-
-            for (int loc_cell_ind{0};
-                 loc_cell_ind < static_cast<int>(interaction_region.cells().size());
-                 ++loc_cell_ind)
-            {
-                cell_contribution[loc_cell_ind] +=
-                    row_from_cells[loc_cell_ind] *
-                    pressure_diff[basis_vector_face_counter] * inv_num_nodes_of_face;
-                for (int k = 0; k < SPATIAL_DIM; ++k)
-                {
-                    const int col = loc_cell_ind * SPATIAL_DIM + k;
-                    vector_source_cell_contribution[col] +=
-                        row_from_cells_vector_source[col] *
-                        pressure_diff[basis_vector_face_counter] * inv_num_nodes_of_face;
-                }
-            }
-
-            std::vector<double> row_from_faces(
-                balance_faces_inv.row(face_local_index).data(),
-                balance_faces_inv.row(face_local_index).data() +
-                    balance_faces_inv.row(face_local_index).size());
-
-            for (const auto& face_pair : interaction_region.faces())
-            {
-                const int loc_face_ind = face_pair.second;
-                if (const auto bc = loc_boundary_faces_type[loc_face_ind]; bc.has_value())
-                {
-                    double contribution_from_face =
-                        row_from_faces[loc_face_ind] *
-                        pressure_diff[basis_vector_face_counter] * inv_num_nodes_of_face;
-
-                    if (*bc == BoundaryCondition::Neumann)
-                    {
-                        contribution_from_face *= inv_num_nodes_of_face;
-                    }
-
-                    face_contribution[loc_face_ind] += contribution_from_face;
-                }
-            }
-            ++basis_vector_face_counter;
+            accumulate_neumann_pressure_reconstruction(neumann_ctx, loc_face_pair.first,
+                                                       loc_face_pair.second,
+                                                       inv_num_nodes_of_face, out);
         }
-
-        out.pressure_cell.values.push_back(std::move(cell_contribution));
-        out.pressure_cell.row_idx.push_back(loc_face_pair.second);
-        out.pressure_cell.col_idx.push_back(interaction_region.cells());
-        out.pressure_face.values.push_back(std::move(face_contribution));
-        out.pressure_face.row_idx.push_back(loc_face_pair.second);
-        out.pressure_face.col_idx.push_back(glob_indices_iareg_faces);
-
-        out.vector_source.values.push_back(std::move(vector_source_cell_contribution));
-        out.vector_source.row_idx.push_back(loc_face_pair.second);
-
-        std::vector<int> cell_ind_vector_source;
-        cell_ind_vector_source.reserve(interaction_region.cells().size() * SPATIAL_DIM);
-        for (const auto& cell_ind : interaction_region.cells())
-        {
-            for (int k = 0; k < SPATIAL_DIM; ++k)
-            {
-                cell_ind_vector_source.push_back(cell_ind * SPATIAL_DIM + k);
-            }
-        }
-        out.vector_source.col_idx.push_back(std::move(cell_ind_vector_source));
     }
+}
+
+void process_interaction_region(int node_ind, const DiscrContext& ctx,
+                                 const std::vector<int>& num_faces_of_cell,
+                                 FluxStencilData& flux_out, BoundaryStencilData& bound_out,
+                                 int& tot_num_trm)
+{
+    const int DIM = ctx.grid.dim();
+    InteractionRegion region(node_ind, 1, ctx.grid);
+    const int num_faces = static_cast<int>(region.faces().size());
+    const int num_cells = static_cast<int>(region.cells().size());
+
+    const auto geom = compute_interaction_region_geometry(region, ctx.grid);
+    auto bc_classification = classify_boundary_faces(region, ctx.bc_map);
+    const bool is_simplex = check_if_simplex(num_faces_of_cell, DIM);
+
+    auto matrices = make_local_balance_matrices(num_faces, num_cells);
+    BasisConstructor basis_constructor(DIM);
+    const std::array<double, 3> node_coord = to_array3(ctx.grid.nodes()[node_ind]);
+
+    ContinuityPointContext cont_ctx{region, geom, node_coord,
+                                    bc_classification.types, is_simplex, DIM};
+
+    for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
+    {
+        const auto continuity_pts = compute_continuity_points_for_cell(loc_cell_ind, cont_ctx);
+        const auto basis_fns = basis_constructor.compute_basis_functions(continuity_pts);
+        FaceCellContribContext contrib_ctx{region, ctx, geom, bc_classification.types,
+                                           basis_fns, loc_cell_ind};
+        fill_cell_contributions(contrib_ctx, matrices);
+    }
+
+    const auto local_flux = compute_local_flux(matrices, bc_classification.types);
+    const auto& flux = local_flux.flux;
+    const auto& vector_source_cell = local_flux.vector_source_cell;
+
+    const size_t vs_cols = vector_source_cell.cols();
+    const size_t cols = flux.cols();
+    for (const auto face_inds : region.faces())
+    {
+        const long row_id = face_inds.second;
+
+        flux_out.flux_values.emplace_back(cols);
+        std::memcpy(flux_out.flux_values.back().data(), flux.row(row_id).data(),
+                    cols * sizeof(double));
+        flux_out.row_idx.push_back(face_inds.first);
+
+        flux_out.vs_values.emplace_back(vs_cols);
+        std::memcpy(flux_out.vs_values.back().data(), vector_source_cell.row(row_id).data(),
+                    vs_cols * sizeof(double));
+    }
+    for (int i = 0; i < num_faces; ++i)
+    {
+        flux_out.col_idx.emplace_back(region.cells());
+    }
+
+    tot_num_trm += num_faces * num_cells;
+
+    accumulate_boundary_data(region, local_flux, bc_classification, geom, matrices,
+                              ctx.num_nodes_of_face, bound_out);
 }
 
 }  // namespace mpfa_detail
@@ -981,9 +1032,6 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     if (grid.dim() < 2) {
         return tpfa(grid, tensor, bc_map);
     }
-    constexpr int SPATIAL_DIM = 3;  // Assuming 3D for now, can be generalized later.
-
-    BasisConstructor basis_constructor(grid.dim());
 
     std::vector<int> num_nodes_of_face = count_nodes_of_faces(grid);
     std::vector<int> num_faces_of_cell = count_faces_of_cells(grid);
@@ -997,88 +1045,13 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                                            num_nodes_of_face[0], DIM);
 
     int tot_num_transmissibilities = 0;
-    const DiscrContext ctx{grid, tensor, num_nodes_of_face};
+    const DiscrContext ctx{grid, tensor, num_nodes_of_face, bc_map};
 
     // NOTE: The node loop body is embarrassingly parallel — suitable for #pragma omp parallel for
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
     {
-        // Get the interaction region for the node.
-        InteractionRegion interaction_region(node_ind, 1, grid);
-
-        const int num_faces = interaction_region.faces().size();
-        const int num_cells = interaction_region.cells().size();
-
-        auto matrices = make_local_balance_matrices(num_faces, num_cells);
-
-        const auto geom = compute_interaction_region_geometry(interaction_region, grid);
-
-        // If all cells have grid.dim() + 1 faces, this is a simplex. Use a boolean to
-        // indicate whether this is a simplex or not.
-        const bool is_simplex = check_if_simplex(num_faces_of_cell, DIM);
-
-        // Classify boundary faces within this interaction region.
-        auto bc_classification = classify_boundary_faces(interaction_region, bc_map);
-        auto& loc_boundary_faces_type = bc_classification.types;
-        auto& loc_boundary_face_map = bc_classification.boundary_face_map;
-
-        const std::array<double, 3> node_coord_arr = to_array3(grid.nodes()[node_ind]);
-
-        // For each cell: compute continuity points, basis functions, and fill contributions.
-        for (int loc_cell_ind{0}; loc_cell_ind < num_cells; ++loc_cell_ind)
-        {
-            const auto continuity_pts = compute_continuity_points_for_cell(
-                loc_cell_ind, interaction_region, geom,
-                node_coord_arr, loc_boundary_faces_type, is_simplex, DIM);
-
-            const auto basis_fns =
-                basis_constructor.compute_basis_functions(continuity_pts);
-
-            fill_cell_contributions(
-                loc_cell_ind, interaction_region, ctx, geom,
-                loc_boundary_faces_type, basis_fns, matrices);
-        }  // End iteration of cells of the interaction region.
-
-        // Compute the local flux matrices (inversion + mask logic).
-        const auto local_flux = compute_local_flux(matrices, loc_boundary_faces_type);
-        const auto& flux = local_flux.flux;
-        const auto& vector_source_cell = local_flux.vector_source_cell;
-
-        // Store the computed flux in the flux_matrix_values, row_idx, and col_idx.
-        size_t vs_cols = vector_source_cell.cols();
-        size_t cols = flux.cols();
-        for (const auto face_inds : interaction_region.faces())
-        {
-            long row_id = face_inds.second;
-
-            // Constructing the vector IN PLACE at the end of the list. This avoids
-            // creating a temporary vector and then moving/copying it.
-            flux_stencil.flux_values.emplace_back();
-            auto& new_flux_row = flux_stencil.flux_values.back();
-            new_flux_row.resize(cols);
-
-            // Copying raw data. We use RowMajor format, so data is contiguous.
-            std::memcpy(new_flux_row.data(), flux.row(row_id).data(), cols * sizeof(double));
-
-            flux_stencil.row_idx.push_back(face_inds.first);
-
-            // Same for Vector Source.
-            flux_stencil.vs_values.emplace_back();
-            auto& new_vs_row = flux_stencil.vs_values.back();
-            new_vs_row.resize(vs_cols);
-            std::memcpy(new_vs_row.data(), vector_source_cell.row(row_id).data(),
-                        vs_cols * sizeof(double));
-        }
-        // Store column indices for the flux matrix.
-        for (int i = 0; i < num_faces; ++i)
-        {
-            flux_stencil.col_idx.emplace_back(interaction_region.cells());
-        }
-
-        tot_num_transmissibilities += num_faces * num_cells;
-
-        accumulate_boundary_data(
-            interaction_region, local_flux, bc_classification, geom, matrices,
-            num_nodes_of_face, bound_out);
+        process_interaction_region(node_ind, ctx, num_faces_of_cell,
+                                   flux_stencil, bound_out, tot_num_transmissibilities);
     }  // End iteration of nodes in the grid.
 
     // Gather the computed data into CSR matrices and further into the discretization
@@ -1112,7 +1085,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
     discretization.bound_pressure_vector_source = create_csr_matrix(
         bound_out.vector_source.row_idx, bound_out.vector_source.col_idx,
-        bound_out.vector_source.values, grid.num_faces(), SPATIAL_DIM * grid.num_cells(),
+        bound_out.vector_source.values, grid.num_faces(), 3 * grid.num_cells(),
         bound_out.vector_source.row_idx.size());
 
     return discretization;
