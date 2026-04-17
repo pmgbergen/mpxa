@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "../include/discr.h"
+#include "../include/stencil_data.h"
 
 namespace tpfa_detail  // Helper functions for tpfa().
 {
@@ -71,85 +72,86 @@ double nKproj(const std::vector<double>& face_normal, const SecondOrderTensor& t
     }
 }
 
-// Bundles all output accumulation vectors for a tpfa() call.
+// Bundles the stencil accumulators for a tpfa() call.
 struct TpfaAccumulator
 {
-    std::vector<double>& trm;
-    std::vector<int>& col_idx_flux;
-    std::vector<double>& trm_bound;
-    std::vector<int>& col_idx_bound_flux;
-    std::vector<double>& vector_source;
-    std::vector<int>& col_idx_vector_source;
-    std::vector<double>& vector_source_bound;
-    std::vector<int>& col_idx_vector_source_bound;
-    std::vector<double>& bound_pressure_cell;
-    std::vector<int>& col_idx_bound_pressure_cell;
-    std::vector<double>& bound_pressure_face;
-    std::vector<int>& col_idx_bound_pressure_face;
+    FluxStencilData& flux;
+    BoundaryStencilData& boundary;
 };
 
 // Accumulates transmissibility and vector-source contributions for an internal face.
-void accumulate_internal_face(TpfaAccumulator& acc, const int cell_a, const int cell_b,
-                               const int sign_a, const int sign_b, const double trm_a,
-                               const double trm_b,
+void accumulate_internal_face(TpfaAccumulator& acc, const int face_ind, const int cell_a,
+                               const int cell_b, const int sign_a, const int sign_b,
+                               const double trm_a, const double trm_b,
                                const std::array<double, 3>& face_cell_a_vec,
                                const std::array<double, 3>& face_cell_b_vec, const int dim)
 {
     const double harmonic_mean = trm_a * trm_b / (trm_a + trm_b);
-    acc.trm.push_back(harmonic_mean * sign_a);
-    acc.trm.push_back(harmonic_mean * sign_b);
-    acc.col_idx_flux.push_back(cell_a);
-    acc.col_idx_flux.push_back(cell_b);
 
-    for (int i{0}; i < dim; ++i)
-    {
-        acc.vector_source.push_back(harmonic_mean * sign_a * face_cell_a_vec[i]);
-        acc.col_idx_vector_source.push_back(cell_a * dim + i);
-    }
-    for (int i{0}; i < dim; ++i)
-    {
-        acc.vector_source.push_back(harmonic_mean * sign_b * face_cell_b_vec[i]);
-        acc.col_idx_vector_source.push_back(cell_b * dim + i);
-    }
+    acc.flux.row_idx.push_back(face_ind);
+    acc.flux.col_idx.push_back({cell_a, cell_b});
+    acc.flux.flux_values.push_back({harmonic_mean * sign_a, harmonic_mean * sign_b});
+
+    std::vector<double> vs_row;
+    vs_row.reserve(2 * dim);
+    for (int i = 0; i < dim; ++i)
+        vs_row.push_back(harmonic_mean * sign_a * face_cell_a_vec[i]);
+    for (int i = 0; i < dim; ++i)
+        vs_row.push_back(harmonic_mean * sign_b * face_cell_b_vec[i]);
+    acc.flux.vs_values.push_back(std::move(vs_row));
 }
 
 // Accumulates transmissibility contributions for a boundary face.
-void accumulate_boundary_face(TpfaAccumulator& acc, const int cell_a, const int sign_a,
-                               const double trm_a, const int face_ind,
+void accumulate_boundary_face(TpfaAccumulator& acc, const int face_ind, const int cell_a,
+                               const int sign_a, const double trm_a,
                                const std::array<double, 3>& face_cell_a_vec, const int dim,
                                const BoundaryCondition bc)
 {
     switch (bc)
     {
         case BoundaryCondition::Dirichlet:
-            acc.trm.push_back(trm_a * sign_a);
-            acc.col_idx_flux.push_back(cell_a);
-            acc.trm_bound.push_back(-trm_a * sign_a);
-            acc.col_idx_bound_flux.push_back(face_ind);
-
-            acc.bound_pressure_face.push_back(1.0);
-            acc.col_idx_bound_pressure_face.push_back(face_ind);
-
-            for (int i{0}; i < dim; ++i)
+            acc.flux.row_idx.push_back(face_ind);
+            acc.flux.col_idx.push_back({cell_a});
+            acc.flux.flux_values.push_back({trm_a * sign_a});
             {
-                acc.vector_source.push_back(trm_a * sign_a * face_cell_a_vec[i]);
-                acc.col_idx_vector_source.push_back(cell_a * dim + i);
+                std::vector<double> vs_row;
+                vs_row.reserve(dim);
+                for (int i = 0; i < dim; ++i)
+                    vs_row.push_back(trm_a * sign_a * face_cell_a_vec[i]);
+                acc.flux.vs_values.push_back(std::move(vs_row));
             }
+            acc.boundary.bound_flux.row_idx.push_back(face_ind);
+            acc.boundary.bound_flux.col_idx.push_back({face_ind});
+            acc.boundary.bound_flux.values.push_back({-trm_a * sign_a});
+            acc.boundary.pressure_face.row_idx.push_back(face_ind);
+            acc.boundary.pressure_face.col_idx.push_back({face_ind});
+            acc.boundary.pressure_face.values.push_back({1.0});
             break;
 
         case BoundaryCondition::Neumann:
-            acc.trm_bound.push_back(1.0 * sign_a);
-            acc.col_idx_bound_flux.push_back(face_ind);
-
-            acc.bound_pressure_cell.push_back(1.0);
-            acc.col_idx_bound_pressure_cell.push_back(cell_a);
-            acc.bound_pressure_face.push_back(-1.0 / trm_a);
-            acc.col_idx_bound_pressure_face.push_back(face_ind);
-
-            for (int i{0}; i < dim; ++i)
+            // Neumann faces have no cell contribution to the flux matrix (empty row).
+            acc.boundary.bound_flux.row_idx.push_back(face_ind);
+            acc.boundary.bound_flux.col_idx.push_back({face_ind});
+            acc.boundary.bound_flux.values.push_back({static_cast<double>(sign_a)});
+            acc.boundary.pressure_cell.row_idx.push_back(face_ind);
+            acc.boundary.pressure_cell.col_idx.push_back({cell_a});
+            acc.boundary.pressure_cell.values.push_back({1.0});
+            acc.boundary.pressure_face.row_idx.push_back(face_ind);
+            acc.boundary.pressure_face.col_idx.push_back({face_ind});
+            acc.boundary.pressure_face.values.push_back({-1.0 / trm_a});
             {
-                acc.vector_source_bound.push_back(face_cell_a_vec[i]);
-                acc.col_idx_vector_source_bound.push_back(cell_a * dim + i);
+                std::vector<double> vs_row;
+                std::vector<int> vs_col;
+                vs_row.reserve(dim);
+                vs_col.reserve(dim);
+                for (int i = 0; i < dim; ++i)
+                {
+                    vs_row.push_back(face_cell_a_vec[i]);
+                    vs_col.push_back(cell_a * dim + i);
+                }
+                acc.boundary.vector_source.row_idx.push_back(face_ind);
+                acc.boundary.vector_source.col_idx.push_back(std::move(vs_col));
+                acc.boundary.vector_source.values.push_back(std::move(vs_row));
             }
             break;
 
@@ -168,104 +170,41 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
 {
     using namespace tpfa_detail;
 
-    const int num_boundary_faces = bc_map.size();
+    const int num_boundary_faces = static_cast<int>(bc_map.size());
     const int num_internal_faces = grid.num_faces() - num_boundary_faces;
 
-    // All coordinates are in 3D space, and the tensor is a 3x3 matrix no matter what.
+    // All coordinates are in 3D space, and the tensor is a 3×3 matrix no matter what.
     constexpr int DIM = 3;
 
-    std::vector<int> row_ptr_flux;
-    row_ptr_flux.reserve(grid.num_faces() + 1);
-    row_ptr_flux.push_back(0);
+    FluxStencilData flux_stencil;
+    flux_stencil.row_idx.reserve(grid.num_faces());
+    flux_stencil.col_idx.reserve(grid.num_faces());
+    flux_stencil.flux_values.reserve(grid.num_faces());
+    flux_stencil.vs_values.reserve(grid.num_faces());
 
-    // Reserve space for the transmissibility matrix. The size is 2 * num_internal_faces
-    // + num_boundary_faces.
-    std::vector<double> trm;
-    std::vector<int> col_idx_flux;
-    trm.reserve(2 * num_internal_faces + num_boundary_faces);
-    col_idx_flux.reserve(2 * num_internal_faces + num_boundary_faces);
+    BoundaryStencilData bound_stencil;
+    bound_stencil.bound_flux.reserve(num_boundary_faces);
+    bound_stencil.pressure_cell.reserve(num_boundary_faces);
+    bound_stencil.pressure_face.reserve(num_boundary_faces);
+    bound_stencil.vector_source.reserve(num_boundary_faces);
 
-    // Boundary flux matrix. There will be an estimated num_boundary_faces entries in
-    // the matrix.
-    std::vector<double> trm_bound;
-    trm_bound.reserve(num_boundary_faces);
+    TpfaAccumulator acc{flux_stencil, bound_stencil};
 
-    std::vector<int> row_ptr_bound_flux;
-    row_ptr_bound_flux.reserve(grid.num_faces() + 1);
-    row_ptr_bound_flux.push_back(0);
-
-    std::vector<int> col_idx_bound_flux;
-    col_idx_bound_flux.reserve(num_boundary_faces);
-
-    // Discretization for the boundary face pressure reconstruction from cell pressures.
-    std::vector<double> bound_pressure_cell;
-    std::vector<int> row_ptr_bound_pressure_cell;
-    std::vector<int> col_idx_bound_pressure_cell;
-    bound_pressure_cell.reserve(num_boundary_faces);
-    row_ptr_bound_pressure_cell.reserve(grid.num_cells() + 1);
-    row_ptr_bound_pressure_cell.push_back(0);
-    col_idx_bound_pressure_cell.reserve(num_boundary_faces);
-
-    // Discretization for the boundary face pressure reconstruction from boundary
-    // conditions.
-    std::vector<double> bound_pressure_face;
-    std::vector<int> row_ptr_bound_pressure_face;
-    std::vector<int> col_idx_bound_pressure_face;
-    bound_pressure_face.reserve(num_boundary_faces);
-    row_ptr_bound_pressure_face.reserve(grid.num_faces() + 1);
-    row_ptr_bound_pressure_face.push_back(0);
-    col_idx_bound_pressure_face.reserve(num_boundary_faces);
-
-    // Discretization for the vector source.
-    std::vector<double> vector_source;
-    std::vector<int> row_ptr_vector_source;
-    std::vector<int> col_idx_vector_source;
-    vector_source.reserve(grid.num_faces() * 3);
-    row_ptr_vector_source.reserve(grid.num_faces() + 1);
-    col_idx_vector_source.reserve(grid.num_faces() * 3);
-    row_ptr_vector_source.push_back(0);
-
-    // Discretization for the vector source contribution to the boundary face pressure
-    // reconstruction.
-    std::vector<double> vector_source_bound;
-    vector_source_bound.reserve(num_boundary_faces);
-    std::vector<int> col_idx_vector_source_bound;
-    col_idx_vector_source_bound.reserve(num_boundary_faces);
-    std::vector<int> row_ptr_vector_source_bound;
-    row_ptr_vector_source_bound.reserve(grid.num_faces() + 1);
-    row_ptr_vector_source_bound.push_back(0);
-
-    // Preallocate holders of local geometric data.
+    // Preallocate holders of local geometric data (reused each iteration).
     std::array<double, DIM> face_cell_a_vec{};
     std::array<double, DIM> face_cell_b_vec{};
-    std::vector<double> face_center(DIM);
-    std::vector<double> normal(DIM);
-
-    TpfaAccumulator acc{trm,
-                         col_idx_flux,
-                         trm_bound,
-                         col_idx_bound_flux,
-                         vector_source,
-                         col_idx_vector_source,
-                         vector_source_bound,
-                         col_idx_vector_source_bound,
-                         bound_pressure_cell,
-                         col_idx_bound_pressure_cell,
-                         bound_pressure_face,
-                         col_idx_bound_pressure_face};
 
     for (int face_ind{0}; face_ind < grid.num_faces(); ++face_ind)
     {
-        auto cells = grid.cells_of_face(face_ind);
-        face_center = grid.face_center(face_ind);
-        normal = grid.face_normal(face_ind);
+        const auto cells = grid.cells_of_face(face_ind);
+        const auto& face_center = grid.face_center(face_ind);
+        const auto& normal = grid.face_normal(face_ind);
         const int cell_a = cells[0];
         const int sign_a = grid.sign_of_face_cell(face_ind, cell_a);
 
         for (int i{0}; i < DIM; ++i)
-        {
             face_cell_a_vec[i] = face_center[i] - grid.cell_center(cell_a)[i];
-        }
+
         const double trm_a = nKproj(normal, tensor, face_cell_a_vec, sign_a, cell_a);
 
         if (cells.size() == 2)  // Internal face.
@@ -274,45 +213,37 @@ ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
             const int sign_b = grid.sign_of_face_cell(face_ind, cell_b);
 
             for (int i{0}; i < DIM; ++i)
-            {
                 face_cell_b_vec[i] = face_center[i] - grid.cell_center(cell_b)[i];
-            }
+
             const double trm_b = nKproj(normal, tensor, face_cell_b_vec, sign_b, cell_b);
 
-            accumulate_internal_face(acc, cell_a, cell_b, sign_a, sign_b, trm_a, trm_b,
-                                     face_cell_a_vec, face_cell_b_vec, DIM);
+            accumulate_internal_face(acc, face_ind, cell_a, cell_b, sign_a, sign_b, trm_a,
+                                     trm_b, face_cell_a_vec, face_cell_b_vec, DIM);
         }
         else  // Boundary face.
         {
-            accumulate_boundary_face(acc, cell_a, sign_a, trm_a, face_ind, face_cell_a_vec,
+            accumulate_boundary_face(acc, face_ind, cell_a, sign_a, trm_a, face_cell_a_vec,
                                      DIM, bc_map.at(face_ind));
         }
-
-        row_ptr_flux.push_back(col_idx_flux.size());
-        row_ptr_bound_flux.push_back(col_idx_bound_flux.size());
-        row_ptr_vector_source.push_back(vector_source.size());
-        row_ptr_vector_source_bound.push_back(vector_source_bound.size());
-        row_ptr_bound_pressure_cell.push_back(col_idx_bound_pressure_cell.size());
-        row_ptr_bound_pressure_face.push_back(col_idx_bound_pressure_face.size());
     }
 
-    // Create the ScalarDiscretization object and return it.
+    // Convert stencils to CSR matrices and assemble the discretization.
     ScalarDiscretization discr;
-    discr.flux = std::make_shared<CompressedDataStorage<double>>(grid.num_faces(), grid.num_cells(),
-                                                                 std::move(row_ptr_flux), std::move(col_idx_flux), std::move(trm));
-    discr.bound_flux = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_faces(), std::move(row_ptr_bound_flux), std::move(col_idx_bound_flux), std::move(trm_bound));
-    discr.vector_source = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_cells() * DIM, std::move(row_ptr_vector_source), std::move(col_idx_vector_source),
-        std::move(vector_source));
-    discr.bound_pressure_vector_source = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_cells() * DIM, std::move(row_ptr_vector_source_bound),
-        std::move(col_idx_vector_source_bound), std::move(vector_source_bound));
-    discr.bound_pressure_cell = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_cells(), std::move(row_ptr_bound_pressure_cell),
-        std::move(col_idx_bound_pressure_cell), std::move(bound_pressure_cell));
-    discr.bound_pressure_face = std::make_shared<CompressedDataStorage<double>>(
-        grid.num_faces(), grid.num_faces(), std::move(row_ptr_bound_pressure_face),
-        std::move(col_idx_bound_pressure_face), std::move(bound_pressure_face));
+
+    auto [flux_mat, vs_mat] =
+        flux_stencil_to_csr(flux_stencil, grid.num_faces(), grid.num_cells(), DIM);
+    discr.flux = flux_mat;
+    discr.vector_source = vs_mat;
+
+    discr.bound_flux = stencil_to_csr(bound_stencil.bound_flux, grid.num_faces(),
+                                       grid.num_faces());
+    discr.bound_pressure_cell = stencil_to_csr(bound_stencil.pressure_cell,
+                                                grid.num_faces(), grid.num_cells());
+    discr.bound_pressure_face = stencil_to_csr(bound_stencil.pressure_face,
+                                                grid.num_faces(), grid.num_faces());
+    discr.bound_pressure_vector_source =
+        stencil_to_csr(bound_stencil.vector_source, grid.num_faces(),
+                        grid.num_cells() * DIM);
+
     return discr;
 }
