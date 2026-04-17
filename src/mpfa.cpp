@@ -3,8 +3,6 @@
 #include <map>
 #include <numeric>
 #include <optional>
-#include <tuple>
-#include <unordered_set>
 #include <vector>
 
 #include "../include/discr.h"
@@ -15,6 +13,59 @@ using Eigen::MatrixXd;
 
 namespace mpfa_detail
 {
+
+std::array<double, 3> to_array3(const std::vector<double>& v)
+{
+    std::array<double, 3> arr{0.0, 0.0, 0.0};
+    for (size_t i = 0; i < std::min(v.size(), arr.size()); ++i)
+    {
+        arr[i] = v[i];
+    }
+    return arr;
+}
+
+std::vector<int> count_nodes_of_faces(const Grid& grid)
+{
+    // Count the number of nodes for each face in the grid.
+    std::vector<int> num_nodes_of_face(grid.num_faces(), 0);
+
+    const auto& face_nodes = grid.face_nodes();
+
+    const auto& col_idx = face_nodes.col_idx();
+
+    for (const int face_ind : col_idx)
+    {
+        ++num_nodes_of_face[face_ind];
+    }
+
+    return num_nodes_of_face;
+}
+
+std::vector<int> count_faces_of_cells(const Grid& grid)
+{
+    // Count the number of faces for each cell in the grid.
+    std::vector<int> num_faces_of_cell(grid.num_cells(), 0);
+    const auto& cell_faces = grid.cell_faces();
+    const auto& col_idx = cell_faces.col_idx();
+    for (const int face_ind : col_idx)
+    {
+        num_faces_of_cell[face_ind]++;
+    }
+    return num_faces_of_cell;
+}
+
+
+bool check_if_simplex(const std::vector<int>& num_faces_of_cell, int dim)
+{
+    for (const int num : num_faces_of_cell)
+    {
+        if (num != (dim + 1))
+        {
+            return false;
+        }
+    }
+    return true;
+}
 
 const std::array<double, 3> nK(const std::array<double, 3>& face_normal,
                                const SecondOrderTensor& tensor, const int cell_ind,
@@ -63,43 +114,6 @@ const std::array<double, 3> nK(const std::array<double, 3>& face_normal,
 }
 
 // Helper function to get cell center coordinates for all cells in an interaction region
-// Convert a std::vector<double> to a 3-element array, padding with zeros.
-std::array<double, 3> to_array3(const std::vector<double>& v)
-{
-    std::array<double, 3> arr{0.0, 0.0, 0.0};
-    for (size_t i = 0; i < std::min(v.size(), arr.size()); ++i)
-    {
-        arr[i] = v[i];
-    }
-    return arr;
-}
-
-// Cell centers, face centers, and face normals for all cells/faces in an interaction region.
-struct InteractionRegionGeometry
-{
-    std::vector<std::array<double, 3>> cell_centers;
-    std::vector<std::array<double, 3>> face_centers;
-    std::vector<std::array<double, 3>> face_normals;
-};
-
-InteractionRegionGeometry compute_interaction_region_geometry(
-    const InteractionRegion& region, const Grid& grid)
-{
-    InteractionRegionGeometry geom;
-    geom.cell_centers.reserve(region.cells().size());
-    for (const int cell_ind : region.cells())
-    {
-        geom.cell_centers.push_back(to_array3(grid.cell_center(cell_ind)));
-    }
-    geom.face_centers.reserve(region.faces().size());
-    geom.face_normals.reserve(region.faces().size());
-    for (const auto& pair : region.faces())
-    {
-        geom.face_centers.push_back(to_array3(grid.face_center(pair.first)));
-        geom.face_normals.push_back(to_array3(grid.face_normal(pair.first)));
-    }
-    return geom;
-}
 
 std::vector<double> nKgrad(const std::array<double, 3>& nK,
                            const std::vector<std::array<double, 3>>& basis_functions)
@@ -137,59 +151,6 @@ std::vector<double> p_diff(const std::array<double, 3>& face_center,
     return diff;
 }
 
-std::vector<int> count_nodes_of_faces(const Grid& grid)
-{
-    // Count the number of nodes for each face in the grid.
-    std::vector<int> num_nodes_of_face(grid.num_faces(), 0);
-
-    const auto& face_nodes = grid.face_nodes();
-
-    const auto& col_idx = face_nodes.col_idx();
-
-    for (const int face_ind : col_idx)
-    {
-        ++num_nodes_of_face[face_ind];
-    }
-
-    return num_nodes_of_face;
-}
-
-std::vector<int> count_faces_of_cells(const Grid& grid)
-{
-    // Count the number of faces for each cell in the grid.
-    std::vector<int> num_faces_of_cell(grid.num_cells(), 0);
-    const auto& cell_faces = grid.cell_faces();
-    const auto& col_idx = cell_faces.col_idx();
-    for (const int face_ind : col_idx)
-    {
-        num_faces_of_cell[face_ind]++;
-    }
-    return num_faces_of_cell;
-}
-
-// Returns true if all cells in the grid have exactly dim+1 faces (i.e., the grid is simplicial).
-bool check_if_simplex(const std::vector<int>& num_faces_of_cell, int dim)
-{
-    for (const int num : num_faces_of_cell)
-    {
-        if (num != (dim + 1))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-struct PairHash
-{
-    std::size_t operator()(const std::pair<int, int>& p) const noexcept
-    {
-        return std::hash<int>()(p.first) ^ (std::hash<int>()(p.second) << 1);
-    }
-};
-
-// Compute sorted row indices, per-row occurrence counts, and per-entry column sizes.
-// This is common setup for both CSR matrix builders.
 RowSortingInfo compute_row_sorting(const std::vector<int>& row_indices,
                                    const std::vector<std::vector<int>>& col_indices,
                                    int num_rows)
@@ -281,7 +242,7 @@ std::shared_ptr<CompressedDataStorage<double>> create_csr_matrix(
                                  loc_data_values.end());
         }
 
-        if (this_row_col_indices.size() == 0)
+        if (this_row_col_indices.empty())
         {
             // No entries for this row, just copy the previous row pointer.
             row_ptr.push_back(col_idx.size());
@@ -422,7 +383,7 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
             }
         }
 
-        if (row_entries.size() == 0)
+        if (row_entries.empty())
         {
             // No entries for this row, just copy the previous row pointer.
             row_ptr_flux.push_back(col_idx_flux.size());
@@ -495,33 +456,49 @@ create_flux_vector_source_matrix(const std::vector<int>& row_indices,
     return {flux_matrix, vector_source_matrix};
 }
 
+// Overload that accepts FluxStencilData directly.
+std::pair<std::shared_ptr<CompressedDataStorage<double>>,
+          std::shared_ptr<CompressedDataStorage<double>>>
+create_flux_vector_source_matrix(const FluxStencilData& stencil, const int num_rows,
+                                 const int num_cols, const int tot_num_transmissibilities)
+{
+    return create_flux_vector_source_matrix(stencil.row_idx, stencil.col_idx, stencil.flux_values,
+                                            stencil.vs_values, num_rows, num_cols,
+                                            tot_num_transmissibilities);
+}
+
+
+struct InteractionRegionGeometry
+{
+    std::vector<std::array<double, 3>> cell_centers;
+    std::vector<std::array<double, 3>> face_centers;
+    std::vector<std::array<double, 3>> face_normals;
+};
+
+InteractionRegionGeometry compute_interaction_region_geometry(
+    const InteractionRegion& region, const Grid& grid)
+{
+    InteractionRegionGeometry geom;
+    geom.cell_centers.reserve(region.cells().size());
+    for (const int cell_ind : region.cells())
+    {
+        geom.cell_centers.push_back(to_array3(grid.cell_center(cell_ind)));
+    }
+    geom.face_centers.reserve(region.faces().size());
+    geom.face_normals.reserve(region.faces().size());
+    for (const auto& pair : region.faces())
+    {
+        geom.face_centers.push_back(to_array3(grid.face_center(pair.first)));
+        geom.face_normals.push_back(to_array3(grid.face_normal(pair.first)));
+    }
+    return geom;
+}
+
 struct BoundaryFaceClassification
 {
     std::vector<std::optional<BoundaryCondition>> types;
     std::vector<std::pair<int, int>> boundary_face_map;
 };
-
-// Read-only inputs from the discretisation context, bundled to reduce parameter counts.
-struct DiscrContext
-{
-    const Grid& grid;
-    const SecondOrderTensor& tensor;
-    const std::vector<int>& num_nodes_of_face;
-};
-
-// Local Eigen matrices for one interaction region, bundled to reduce parameter counts.
-LocalBalanceMatrices make_local_balance_matrices(int num_faces, int num_cells)
-{
-    constexpr int SPATIAL_DIM = 3;
-    LocalBalanceMatrices m;
-    m.balance_cells = Eigen::MatrixXd::Zero(num_faces, num_cells);
-    m.balance_faces = Eigen::MatrixXd::Zero(num_faces, num_faces);
-    m.flux_cells = Eigen::MatrixXd::Zero(num_faces, num_cells);
-    m.flux_faces = Eigen::MatrixXd::Zero(num_faces, num_faces);
-    m.nK_matrix = Eigen::MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
-    m.nK_one_sided = Eigen::MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
-    return m;
-}
 
 BoundaryFaceClassification classify_boundary_faces(
     const InteractionRegion& region,
@@ -551,6 +528,111 @@ BoundaryFaceClassification classify_boundary_faces(
         }
     }
     return result;
+}
+
+struct DiscrContext
+{
+    const Grid& grid;
+    const SecondOrderTensor& tensor;
+    const std::vector<int>& num_nodes_of_face;
+};
+
+LocalBalanceMatrices make_local_balance_matrices(int num_faces, int num_cells)
+{
+    constexpr int SPATIAL_DIM = 3;
+    LocalBalanceMatrices m;
+    m.balance_cells = Eigen::MatrixXd::Zero(num_faces, num_cells);
+    m.balance_faces = Eigen::MatrixXd::Zero(num_faces, num_faces);
+    m.flux_cells = Eigen::MatrixXd::Zero(num_faces, num_cells);
+    m.flux_faces = Eigen::MatrixXd::Zero(num_faces, num_faces);
+    m.nK_matrix = Eigen::MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
+    m.nK_one_sided = Eigen::MatrixXd::Zero(num_faces, SPATIAL_DIM * num_cells);
+    return m;
+}
+
+struct LocalFluxMatrices
+{
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> balance_faces_inv;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> bound_flux;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> flux;
+    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> vector_source_cell;
+};
+
+LocalFluxMatrices compute_local_flux(
+    const LocalBalanceMatrices& matrices,
+    const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type)
+{
+    LocalFluxMatrices result;
+
+    result.balance_faces_inv = matrices.balance_faces.inverse();
+    result.bound_flux.noalias() = matrices.flux_faces * result.balance_faces_inv;
+
+    bool has_dirichlet = false;
+    for (const auto& bc : loc_boundary_faces_type)
+    {
+        if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
+        {
+            has_dirichlet = true;
+            break;
+        }
+    }
+
+    if (!has_dirichlet)
+    {
+        result.flux.noalias() = result.bound_flux * matrices.balance_cells + matrices.flux_cells;
+    }
+    else
+    {
+        const int num_faces = static_cast<int>(loc_boundary_faces_type.size());
+        Eigen::VectorXd mask = Eigen::VectorXd::Ones(num_faces);
+        for (int face{0}; face < num_faces; ++face)
+        {
+            const auto bc = loc_boundary_faces_type[face];
+            if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
+            {
+                mask(face) = 0.0;
+            }
+        }
+        result.flux.noalias() =
+            result.bound_flux * mask.asDiagonal() * matrices.balance_cells + matrices.flux_cells;
+    }
+
+    result.vector_source_cell.noalias() =
+        result.bound_flux * matrices.nK_matrix + matrices.nK_one_sided;
+    return result;
+}
+
+FluxStencilData init_flux_stencil(int num_faces, int nodes_per_face, int dim)
+{
+    const int capacity = num_faces * nodes_per_face + 1;
+    FluxStencilData s;
+    s.row_idx.reserve(capacity);
+    s.col_idx.reserve(capacity);
+    s.flux_values.reserve(capacity);
+    s.vs_values.reserve(num_faces * dim * nodes_per_face + 1);
+    return s;
+}
+
+BoundaryStencilData init_boundary_stencil(int num_faces, int num_bound_faces,
+                                          int nodes_per_face, int dim)
+{
+    BoundaryStencilData s;
+    s.bound_flux.row_idx.reserve(num_faces * nodes_per_face);
+    s.bound_flux.col_idx.reserve(num_bound_faces * nodes_per_face);
+    s.bound_flux.values.reserve(num_bound_faces * nodes_per_face);
+
+    s.pressure_cell.values.reserve(num_bound_faces * nodes_per_face);
+    s.pressure_cell.row_idx.reserve(num_faces * nodes_per_face);
+    s.pressure_cell.col_idx.reserve(num_bound_faces * nodes_per_face);
+
+    s.pressure_face.values.reserve(num_bound_faces * nodes_per_face);
+    s.pressure_face.row_idx.reserve(num_faces * nodes_per_face);
+    s.pressure_face.col_idx.reserve(num_bound_faces * nodes_per_face);
+
+    s.vector_source.values.reserve(num_bound_faces * dim * nodes_per_face + 1);
+    s.vector_source.row_idx.reserve(num_faces * dim * nodes_per_face + 1);
+    s.vector_source.col_idx.reserve(num_bound_faces * dim * nodes_per_face + 1);
+    return s;
 }
 
 std::vector<std::array<double, 3>> compute_continuity_points_for_cell(
@@ -702,93 +784,6 @@ void fill_cell_contributions(
     }
 }
 
-struct LocalFluxMatrices
-{
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> balance_faces_inv;
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> bound_flux;
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> flux;
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> vector_source_cell;
-};
-
-LocalFluxMatrices compute_local_flux(
-    const LocalBalanceMatrices& matrices,
-    const std::vector<std::optional<BoundaryCondition>>& loc_boundary_faces_type)
-{
-    LocalFluxMatrices result;
-
-    result.balance_faces_inv = matrices.balance_faces.inverse();
-    result.bound_flux.noalias() = matrices.flux_faces * result.balance_faces_inv;
-
-    bool has_dirichlet = false;
-    for (const auto& bc : loc_boundary_faces_type)
-    {
-        if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
-        {
-            has_dirichlet = true;
-            break;
-        }
-    }
-
-    if (!has_dirichlet)
-    {
-        result.flux.noalias() = result.bound_flux * matrices.balance_cells + matrices.flux_cells;
-    }
-    else
-    {
-        const int num_faces = static_cast<int>(loc_boundary_faces_type.size());
-        Eigen::VectorXd mask = Eigen::VectorXd::Ones(num_faces);
-        for (int face{0}; face < num_faces; ++face)
-        {
-            const auto bc = loc_boundary_faces_type[face];
-            if (bc.has_value() && *bc == BoundaryCondition::Dirichlet)
-            {
-                mask(face) = 0.0;
-            }
-        }
-        result.flux.noalias() =
-            result.bound_flux * mask.asDiagonal() * matrices.balance_cells + matrices.flux_cells;
-    }
-
-    result.vector_source_cell.noalias() =
-        result.bound_flux * matrices.nK_matrix + matrices.nK_one_sided;
-    return result;
-}
-
-FluxStencilData init_flux_stencil(int num_faces, int nodes_per_face, int dim)
-{
-    const int capacity = num_faces * nodes_per_face + 1;
-    FluxStencilData s;
-    s.row_idx.reserve(capacity);
-    s.col_idx.reserve(capacity);
-    s.flux_values.reserve(capacity);
-    s.vs_values.reserve(num_faces * dim * nodes_per_face + 1);
-    return s;
-}
-
-BoundaryStencilData init_boundary_stencil(int num_faces, int num_bound_faces,
-                                          int nodes_per_face, int dim)
-{
-    BoundaryStencilData s;
-    s.bound_flux.row_idx.reserve(num_faces * nodes_per_face);
-    s.bound_flux.col_idx.reserve(num_bound_faces * nodes_per_face);
-    s.bound_flux.values.reserve(num_bound_faces * nodes_per_face);
-
-    s.pressure_cell.values.reserve(num_bound_faces * nodes_per_face);
-    s.pressure_cell.row_idx.reserve(num_faces * nodes_per_face);
-    s.pressure_cell.col_idx.reserve(num_bound_faces * nodes_per_face);
-
-    s.pressure_face.values.reserve(num_bound_faces * nodes_per_face);
-    s.pressure_face.row_idx.reserve(num_faces * nodes_per_face);
-    s.pressure_face.col_idx.reserve(num_bound_faces * nodes_per_face);
-
-    s.vector_source.values.reserve(num_bound_faces * dim * nodes_per_face + 1);
-    s.vector_source.row_idx.reserve(num_faces * dim * nodes_per_face + 1);
-    s.vector_source.col_idx.reserve(num_bound_faces * dim * nodes_per_face + 1);
-    return s;
-}
-
-// Accumulate boundary discretization data for a single interaction region into
-// the output accumulators. Does nothing if the interaction region has no boundary faces.
 void accumulate_boundary_data(
     const InteractionRegion& interaction_region,
     const LocalFluxMatrices& local_flux,
@@ -864,7 +859,7 @@ void accumulate_boundary_data(
         {
             // For a Dirichlet boundary face, only a unit face contribution is needed.
             out.pressure_face.values.emplace_back(
-                std::initializer_list<double>{1.0 * inv_num_nodes_of_face});
+                std::initializer_list<double>{inv_num_nodes_of_face});
             out.pressure_face.row_idx.push_back(loc_face_pair.second);
             out.pressure_face.col_idx.emplace_back(
                 std::initializer_list<int>{loc_face_pair.second});
@@ -972,17 +967,6 @@ void accumulate_boundary_data(
         }
         out.vector_source.col_idx.push_back(std::move(cell_ind_vector_source));
     }
-}
-
-// Overload that accepts FluxStencilData directly.
-std::pair<std::shared_ptr<CompressedDataStorage<double>>,
-          std::shared_ptr<CompressedDataStorage<double>>>
-create_flux_vector_source_matrix(const FluxStencilData& stencil, const int num_rows,
-                                 const int num_cols, const int tot_num_transmissibilities)
-{
-    return create_flux_vector_source_matrix(stencil.row_idx, stencil.col_idx, stencil.flux_values,
-                                            stencil.vs_values, num_rows, num_cols,
-                                            tot_num_transmissibilities);
 }
 
 }  // namespace mpfa_detail
