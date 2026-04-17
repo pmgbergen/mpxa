@@ -166,6 +166,19 @@ std::vector<int> count_faces_of_cells(const Grid& grid)
     return num_faces_of_cell;
 }
 
+// Returns true if all cells in the grid have exactly dim+1 faces (i.e., the grid is simplicial).
+bool check_if_simplex(const std::vector<int>& num_faces_of_cell, int dim)
+{
+    for (const int num : num_faces_of_cell)
+    {
+        if (num != (dim + 1))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 struct PairHash
 {
     std::size_t operator()(const std::pair<int, int>& p) const noexcept
@@ -759,21 +772,72 @@ LocalFluxMatrices compute_local_flux(
     return result;
 }
 
-struct BoundaryOutputAccumulators
+// Row-index / column-index / values triplet for building one sparse matrix.
+struct StencilData
 {
-    std::vector<int>& bound_flux_row_idx;
-    std::vector<std::vector<int>>& bound_flux_col_idx;
-    std::vector<std::vector<double>>& bound_flux_values;
-    std::vector<std::vector<double>>& pressure_cell_values;
-    std::vector<int>& pressure_cell_row_idx;
-    std::vector<std::vector<int>>& pressure_cell_col_idx;
-    std::vector<std::vector<double>>& pressure_face_values;
-    std::vector<int>& pressure_face_row_idx;
-    std::vector<std::vector<int>>& pressure_face_col_idx;
-    std::vector<std::vector<double>>& vector_source_values;
-    std::vector<int>& vector_source_row_idx;
-    std::vector<std::vector<int>>& vector_source_col_idx;
+    std::vector<int> row_idx;
+    std::vector<std::vector<int>> col_idx;
+    std::vector<std::vector<double>> values;
+
+    void reserve(int capacity)
+    {
+        row_idx.reserve(capacity);
+        col_idx.reserve(capacity);
+        values.reserve(capacity);
+    }
 };
+
+// Stencil data for the flux matrix and its associated vector source term.
+// The two share the same sparsity pattern (row_idx and col_idx).
+struct FluxStencilData
+{
+    std::vector<int> row_idx;
+    std::vector<std::vector<int>> col_idx;
+    std::vector<std::vector<double>> flux_values;
+    std::vector<std::vector<double>> vs_values;
+};
+
+FluxStencilData init_flux_stencil(int num_faces, int nodes_per_face, int dim)
+{
+    const int capacity = num_faces * nodes_per_face + 1;
+    FluxStencilData s;
+    s.row_idx.reserve(capacity);
+    s.col_idx.reserve(capacity);
+    s.flux_values.reserve(capacity);
+    s.vs_values.reserve(num_faces * dim * nodes_per_face + 1);
+    return s;
+}
+
+// Stencil data for the four boundary discretisation matrices, grouped by matrix.
+struct BoundaryStencilData
+{
+    StencilData bound_flux;
+    StencilData pressure_cell;
+    StencilData pressure_face;
+    StencilData vector_source;
+};
+
+BoundaryStencilData init_boundary_stencil(int num_faces, int num_bound_faces,
+                                          int nodes_per_face, int dim)
+{
+    BoundaryStencilData s;
+    s.bound_flux.row_idx.reserve(num_faces * nodes_per_face);
+    s.bound_flux.col_idx.reserve(num_bound_faces * nodes_per_face);
+    s.bound_flux.values.reserve(num_bound_faces * nodes_per_face);
+
+    s.pressure_cell.values.reserve(num_bound_faces * nodes_per_face);
+    s.pressure_cell.row_idx.reserve(num_faces * nodes_per_face);
+    s.pressure_cell.col_idx.reserve(num_bound_faces * nodes_per_face);
+
+    s.pressure_face.values.reserve(num_bound_faces * nodes_per_face);
+    s.pressure_face.row_idx.reserve(num_faces * nodes_per_face);
+    s.pressure_face.col_idx.reserve(num_bound_faces * nodes_per_face);
+
+    s.vector_source.values.reserve(num_bound_faces * dim * nodes_per_face + 1);
+    s.vector_source.row_idx.reserve(num_faces * dim * nodes_per_face + 1);
+    s.vector_source.col_idx.reserve(num_bound_faces * dim * nodes_per_face + 1);
+    return s;
+}
 
 // Accumulate boundary discretization data for a single interaction region into
 // the output accumulators. Does nothing if the interaction region has no boundary faces.
@@ -784,7 +848,7 @@ void accumulate_boundary_data(
     const InteractionRegionGeometry& geom,
     const LocalBalanceMatrices& matrices,
     const std::vector<int>& num_nodes_of_face,
-    BoundaryOutputAccumulators& out)
+    BoundaryStencilData& out)
 {
     const auto& loc_boundary_face_map = bc_class.boundary_face_map;
     if (loc_boundary_face_map.empty())
@@ -806,11 +870,11 @@ void accumulate_boundary_data(
     // bound_flux discretization entries.
     for (const auto& face_pair : interaction_region.faces())
     {
-        out.bound_flux_row_idx.emplace_back(face_pair.first);
-        out.bound_flux_col_idx.emplace_back();
-        out.bound_flux_values.emplace_back();
-        auto& bf_indices = out.bound_flux_col_idx.back();
-        auto& bf_val = out.bound_flux_values.back();
+        out.bound_flux.row_idx.emplace_back(face_pair.first);
+        out.bound_flux.col_idx.emplace_back();
+        out.bound_flux.values.emplace_back();
+        auto& bf_indices = out.bound_flux.col_idx.back();
+        auto& bf_val = out.bound_flux.values.back();
 
         for (const auto& loc_face_pair : loc_boundary_face_map)
         {
@@ -851,10 +915,10 @@ void accumulate_boundary_data(
             bc.has_value() && *bc == BoundaryCondition::Dirichlet)
         {
             // For a Dirichlet boundary face, only a unit face contribution is needed.
-            out.pressure_face_values.emplace_back(
+            out.pressure_face.values.emplace_back(
                 std::initializer_list<double>{1.0 * inv_num_nodes_of_face});
-            out.pressure_face_row_idx.push_back(loc_face_pair.second);
-            out.pressure_face_col_idx.emplace_back(
+            out.pressure_face.row_idx.push_back(loc_face_pair.second);
+            out.pressure_face.col_idx.emplace_back(
                 std::initializer_list<int>{loc_face_pair.second});
             continue;
         }
@@ -939,15 +1003,15 @@ void accumulate_boundary_data(
             ++basis_vector_face_counter;
         }
 
-        out.pressure_cell_values.push_back(std::move(cell_contribution));
-        out.pressure_cell_row_idx.push_back(loc_face_pair.second);
-        out.pressure_cell_col_idx.push_back(interaction_region.cells());
-        out.pressure_face_values.push_back(std::move(face_contribution));
-        out.pressure_face_row_idx.push_back(loc_face_pair.second);
-        out.pressure_face_col_idx.push_back(glob_indices_iareg_faces);
+        out.pressure_cell.values.push_back(std::move(cell_contribution));
+        out.pressure_cell.row_idx.push_back(loc_face_pair.second);
+        out.pressure_cell.col_idx.push_back(interaction_region.cells());
+        out.pressure_face.values.push_back(std::move(face_contribution));
+        out.pressure_face.row_idx.push_back(loc_face_pair.second);
+        out.pressure_face.col_idx.push_back(glob_indices_iareg_faces);
 
-        out.vector_source_values.push_back(std::move(vector_source_cell_contribution));
-        out.vector_source_row_idx.push_back(loc_face_pair.second);
+        out.vector_source.values.push_back(std::move(vector_source_cell_contribution));
+        out.vector_source.row_idx.push_back(loc_face_pair.second);
 
         std::vector<int> cell_ind_vector_source;
         cell_ind_vector_source.reserve(interaction_region.cells().size() * SPATIAL_DIM);
@@ -958,8 +1022,19 @@ void accumulate_boundary_data(
                 cell_ind_vector_source.push_back(cell_ind * SPATIAL_DIM + k);
             }
         }
-        out.vector_source_col_idx.push_back(std::move(cell_ind_vector_source));
+        out.vector_source.col_idx.push_back(std::move(cell_ind_vector_source));
     }
+}
+
+// Overload that accepts FluxStencilData directly.
+std::pair<std::shared_ptr<CompressedDataStorage<double>>,
+          std::shared_ptr<CompressedDataStorage<double>>>
+create_flux_vector_source_matrix(const FluxStencilData& stencil, const int num_rows,
+                                 const int num_cols, const int tot_num_transmissibilities)
+{
+    return create_flux_vector_source_matrix(stencil.row_idx, stencil.col_idx, stencil.flux_values,
+                                            stencil.vs_values, num_rows, num_cols,
+                                            tot_num_transmissibilities);
 }
 
 }  // namespace
@@ -980,74 +1055,15 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     std::vector<int> num_faces_of_cell = count_faces_of_cells(grid);
 
     const int num_bound_faces = bc_map.size();
+    const int DIM = grid.dim();
 
     // Data structures for the computed stencils.
-    std::vector<int> flux_matrix_row_idx;
-    flux_matrix_row_idx.reserve(grid.num_faces() * num_nodes_of_face[0] + 1);
-    std::vector<std::vector<int>> flux_matrix_col_idx;
-    flux_matrix_col_idx.reserve(grid.num_faces() * num_nodes_of_face[0] + 1);
-    std::vector<std::vector<double>> flux_matrix_values;
-    flux_matrix_values.reserve(grid.num_faces() * num_nodes_of_face[0] + 1);
+    auto flux_stencil = init_flux_stencil(grid.num_faces(), num_nodes_of_face[0], DIM);
+    auto bound_out = init_boundary_stencil(grid.num_faces(), num_bound_faces,
+                                           num_nodes_of_face[0], DIM);
 
-    // Data structures for the discretization of boundary conditions.
-    std::vector<int> bound_flux_matrix_row_idx;
-    bound_flux_matrix_row_idx.reserve(grid.num_faces() * num_nodes_of_face[0]);
-    std::vector<std::vector<int>> bound_flux_matrix_col_idx;
-    bound_flux_matrix_col_idx.reserve(num_bound_faces * num_nodes_of_face[0]);
-    std::vector<std::vector<double>> bound_flux_matrix_values;
-    bound_flux_matrix_values.reserve(num_bound_faces * num_nodes_of_face[0]);
-
-    // Data structures for pressure reconstruction on boundary faces. Cell contributions.
-    std::vector<std::vector<double>> pressure_reconstruction_cell_values;
-    pressure_reconstruction_cell_values.reserve(num_bound_faces * num_nodes_of_face[0]);
-    std::vector<int> pressure_reconstruction_cell_row_idx;
-    pressure_reconstruction_cell_row_idx.reserve(grid.num_faces() * num_nodes_of_face[0]);
-    std::vector<std::vector<int>> pressure_reconstruction_cell_col_idx;
-    pressure_reconstruction_cell_col_idx.reserve(num_bound_faces * num_nodes_of_face[0]);
-    // .. and for the face contributions.
-    std::vector<std::vector<double>> pressure_reconstruction_face_values;
-    pressure_reconstruction_face_values.reserve(num_bound_faces * num_nodes_of_face[0]);
-    std::vector<int> pressure_reconstruction_face_row_idx;
-    pressure_reconstruction_face_row_idx.reserve(grid.num_faces() * num_nodes_of_face[0]);
-    std::vector<std::vector<int>> pressure_reconstruction_face_col_idx;
-    pressure_reconstruction_face_col_idx.reserve(num_bound_faces * num_nodes_of_face[0]);
-
-    // Data structures for the vector source terms.
-    //
-    // For the term representing imbalances in nK. Here we only need the values, since
-    // the row and column indices can be inferred from the flux matrix.
-    std::vector<std::vector<double>> vector_source_cell_values;
-    vector_source_cell_values.reserve(grid.num_faces() * grid.dim() * num_nodes_of_face[0] + 1);
-
-    // And for the face pressure reconstruction term (bound_pressure_vector_source).
-    std::vector<std::vector<double>> vector_source_bound_pressure_values;
-    vector_source_bound_pressure_values.reserve(
-        num_bound_faces * grid.dim() * num_nodes_of_face[0] + 1);
-    std::vector<int> vector_source_bound_pressure_row_idx;
-    vector_source_bound_pressure_row_idx.reserve(
-        grid.num_faces() * grid.dim() * num_nodes_of_face[0] + 1);
-    std::vector<std::vector<int>> vector_source_bound_pressure_col_idx;
-    vector_source_bound_pressure_col_idx.reserve(
-        num_bound_faces * grid.dim() * num_nodes_of_face[0] + 1);
-
-    const int DIM = grid.dim();
     int tot_num_transmissibilities = 0;
-
     const DiscrContext ctx{grid, tensor, num_nodes_of_face};
-
-    BoundaryOutputAccumulators bound_out{
-        bound_flux_matrix_row_idx,
-        bound_flux_matrix_col_idx,
-        bound_flux_matrix_values,
-        pressure_reconstruction_cell_values,
-        pressure_reconstruction_cell_row_idx,
-        pressure_reconstruction_cell_col_idx,
-        pressure_reconstruction_face_values,
-        pressure_reconstruction_face_row_idx,
-        pressure_reconstruction_face_col_idx,
-        vector_source_bound_pressure_values,
-        vector_source_bound_pressure_row_idx,
-        vector_source_bound_pressure_col_idx};
 
     // NOTE: The node loop body is embarrassingly parallel — suitable for #pragma omp parallel for
     for (int node_ind{0}; node_ind < grid.num_nodes(); ++node_ind)
@@ -1064,15 +1080,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
         // If all cells have grid.dim() + 1 faces, this is a simplex. Use a boolean to
         // indicate whether this is a simplex or not.
-        bool is_simplex = true;
-        for (const int num : num_faces_of_cell)
-        {
-            if (num != (DIM + 1))
-            {
-                is_simplex = false;
-                break;
-            }
-        }
+        const bool is_simplex = check_if_simplex(num_faces_of_cell, DIM);
 
         // Classify boundary faces within this interaction region.
         auto bc_classification = classify_boundary_faces(interaction_region, bc_map);
@@ -1110,18 +1118,18 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
 
             // Constructing the vector IN PLACE at the end of the list. This avoids
             // creating a temporary vector and then moving/copying it.
-            flux_matrix_values.emplace_back();
-            auto& new_flux_row = flux_matrix_values.back();
+            flux_stencil.flux_values.emplace_back();
+            auto& new_flux_row = flux_stencil.flux_values.back();
             new_flux_row.resize(cols);
 
             // Copying raw data. We use RowMajor format, so data is contiguous.
             std::memcpy(new_flux_row.data(), flux.row(row_id).data(), cols * sizeof(double));
 
-            flux_matrix_row_idx.push_back(face_inds.first);
+            flux_stencil.row_idx.push_back(face_inds.first);
 
             // Same for Vector Source.
-            vector_source_cell_values.emplace_back();
-            auto& new_vs_row = vector_source_cell_values.back();
+            flux_stencil.vs_values.emplace_back();
+            auto& new_vs_row = flux_stencil.vs_values.back();
             new_vs_row.resize(vs_cols);
             std::memcpy(new_vs_row.data(), vector_source_cell.row(row_id).data(),
                         vs_cols * sizeof(double));
@@ -1129,7 +1137,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
         // Store column indices for the flux matrix.
         for (int i = 0; i < num_faces; ++i)
         {
-            flux_matrix_col_idx.emplace_back(interaction_region.cells());
+            flux_stencil.col_idx.emplace_back(interaction_region.cells());
         }
 
         tot_num_transmissibilities += num_faces * num_cells;
@@ -1147,8 +1155,7 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     // matrices, since they have similar sparsity pattern, and the construction of these
     // take considerable time.
     auto flux_and_vs = create_flux_vector_source_matrix(
-        flux_matrix_row_idx, flux_matrix_col_idx, flux_matrix_values, vector_source_cell_values,
-        grid.num_faces(), grid.num_cells(), tot_num_transmissibilities);
+        flux_stencil, grid.num_faces(), grid.num_cells(), tot_num_transmissibilities);
     discretization.flux = flux_and_vs.first;
     discretization.vector_source = flux_and_vs.second;
 
@@ -1156,23 +1163,23 @@ ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
     // savings to be gained here as well, but in the bigger picture, the time spent
     // here is not that important.
     discretization.bound_flux = create_csr_matrix(
-        bound_flux_matrix_row_idx, bound_flux_matrix_col_idx, bound_flux_matrix_values,
-        grid.num_faces(), grid.num_faces(), bound_flux_matrix_row_idx.size());
+        bound_out.bound_flux.row_idx, bound_out.bound_flux.col_idx, bound_out.bound_flux.values,
+        grid.num_faces(), grid.num_faces(), bound_out.bound_flux.row_idx.size());
 
     discretization.bound_pressure_cell = create_csr_matrix(
-        pressure_reconstruction_cell_row_idx, pressure_reconstruction_cell_col_idx,
-        pressure_reconstruction_cell_values, grid.num_faces(), grid.num_cells(),
-        pressure_reconstruction_cell_row_idx.size());
+        bound_out.pressure_cell.row_idx, bound_out.pressure_cell.col_idx,
+        bound_out.pressure_cell.values, grid.num_faces(), grid.num_cells(),
+        bound_out.pressure_cell.row_idx.size());
 
     discretization.bound_pressure_face = create_csr_matrix(
-        pressure_reconstruction_face_row_idx, pressure_reconstruction_face_col_idx,
-        pressure_reconstruction_face_values, grid.num_faces(), grid.num_faces(),
-        pressure_reconstruction_face_row_idx.size());
+        bound_out.pressure_face.row_idx, bound_out.pressure_face.col_idx,
+        bound_out.pressure_face.values, grid.num_faces(), grid.num_faces(),
+        bound_out.pressure_face.row_idx.size());
 
     discretization.bound_pressure_vector_source = create_csr_matrix(
-        vector_source_bound_pressure_row_idx, vector_source_bound_pressure_col_idx,
-        vector_source_bound_pressure_values, grid.num_faces(), SPATIAL_DIM * grid.num_cells(),
-        vector_source_bound_pressure_row_idx.size());
+        bound_out.vector_source.row_idx, bound_out.vector_source.col_idx,
+        bound_out.vector_source.values, grid.num_faces(), SPATIAL_DIM * grid.num_cells(),
+        bound_out.vector_source.row_idx.size());
 
     return discretization;
 }
