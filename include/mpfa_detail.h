@@ -14,6 +14,7 @@
 #include "compressed_storage.h"
 #include "discr.h"
 #include "grid.h"
+#include "stencil_data.h"
 #include "tensor.h"
 
 namespace mpfa_detail
@@ -42,40 +43,6 @@ struct LocalBalanceMatrices
     Eigen::MatrixXd nK_matrix;
     Eigen::MatrixXd nK_one_sided;
     std::map<int, std::vector<std::array<double, 3>>> basis_map;
-};
-
-// Row-index / column-index / values triplet for building one sparse matrix.
-struct StencilData
-{
-    std::vector<int> row_idx;
-    std::vector<std::vector<int>> col_idx;
-    std::vector<std::vector<double>> values;
-
-    void reserve(int capacity)
-    {
-        row_idx.reserve(capacity);
-        col_idx.reserve(capacity);
-        values.reserve(capacity);
-    }
-};
-
-// Stencil data for the flux matrix and its associated vector source term.
-// The two share the same sparsity pattern (row_idx and col_idx).
-struct FluxStencilData
-{
-    std::vector<int> row_idx;
-    std::vector<std::vector<int>> col_idx;
-    std::vector<std::vector<double>> flux_values;
-    std::vector<std::vector<double>> vs_values;
-};
-
-// Stencil data for the four boundary discretisation matrices, grouped by matrix.
-struct BoundaryStencilData
-{
-    StencilData bound_flux;
-    StencilData pressure_cell;
-    StencilData pressure_face;
-    StencilData vector_source;
 };
 
 // ---------------------------------------------------------------------------
