@@ -29,17 +29,50 @@ jobs:
       - name: Install C++ dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake libgtest-dev libeigen3-dev python3-pybind11 pybind11-dev
+          sudo apt-get install -y \
+              build-essential \
+              cmake \
+              libgtest-dev \
+              libeigen3-dev \
+              python3-pybind11 \ 
+              pybind11-dev \
+              libglu1-mesa \
+              libgeos-dev \
+              libffi-dev
           
       - name: Install Python dependencies
         run: |
-          python -m venv .venv
-          source .venv/bin/activate
           python -m pip install --upgrade pip
           pip install .[testing]
           pip install .
           pip freeze
           python -c "import mpxa; print(mpxa)"
+
+      - name: Clone and Install PorePy
+        run: |
+          # Clone the PorePy repository
+          git clone https://github.com/pmgbergen/porepy.git ../porepy
+
+          # Navigate to the PorePy directory
+          cd ../porepy
+
+          # Use the same virtual environment as MPXA
+          python -m venv ../mpxa/.venv
+          source ../mpxa/.venv/bin/activate
+
+          # Install PorePy
+          pip install .
+
+          # Return to the MPXA directory
+          cd ../mpxa
+
+      - name: Install MPXA
+        run: |
+          # Use the same virtual environment as PorePy
+          source .venv/bin/activate
+
+          # Install MPXA
+          pip install .
 
       - name: Build and run C++ tests
         run: |
