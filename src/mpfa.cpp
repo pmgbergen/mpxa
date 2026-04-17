@@ -703,13 +703,12 @@ void fill_cell_contributions(
                     region.faces().at(glob_face_index_secondary);
                 matrices.flux_faces(loc_face_index, loc_face_index_secondary) = flux_vals[i];
             }
-            if (!(is_boundary_face && (bc == BoundaryCondition::Dirichlet)))
+            // nK_one_sided is set for all faces, including Dirichlet boundary faces.
+            // This matches the reference PorePy implementation.
+            for (int k = 0; k < SPATIAL_DIM; ++k)
             {
-                for (int k = 0; k < SPATIAL_DIM; ++k)
-                {
-                    matrices.nK_one_sided(loc_face_index, k + loc_cell_ind * SPATIAL_DIM) =
-                        -flux_expr[k];
-                }
+                matrices.nK_one_sided(loc_face_index, k + loc_cell_ind * SPATIAL_DIM) =
+                    -flux_expr[k];
             }
         }
 
