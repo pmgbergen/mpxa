@@ -8,11 +8,12 @@
 #include <vector>
 
 #include "../include/discr.h"
+#include "../include/mpfa_detail.h"
 #include "../include/multipoint_common.h"
 
 using Eigen::MatrixXd;
 
-namespace
+namespace mpfa_detail
 {
 
 const std::array<double, 3> nK(const std::array<double, 3>& face_normal,
@@ -185,13 +186,6 @@ struct PairHash
     {
         return std::hash<int>()(p.first) ^ (std::hash<int>()(p.second) << 1);
     }
-};
-
-struct RowSortingInfo
-{
-    std::vector<int> sorted_row_indices;
-    std::vector<int> num_row_occurrences;
-    std::vector<int> col_index_sizes;
 };
 
 // Compute sorted row indices, per-row occurrence counts, and per-entry column sizes.
@@ -516,17 +510,6 @@ struct DiscrContext
 };
 
 // Local Eigen matrices for one interaction region, bundled to reduce parameter counts.
-struct LocalBalanceMatrices
-{
-    Eigen::MatrixXd balance_cells;
-    Eigen::MatrixXd balance_faces;
-    Eigen::MatrixXd flux_cells;
-    Eigen::MatrixXd flux_faces;
-    Eigen::MatrixXd nK_matrix;
-    Eigen::MatrixXd nK_one_sided;
-    std::map<int, std::vector<std::array<double, 3>>> basis_map;
-};
-
 LocalBalanceMatrices make_local_balance_matrices(int num_faces, int num_cells)
 {
     constexpr int SPATIAL_DIM = 3;
@@ -771,31 +754,6 @@ LocalFluxMatrices compute_local_flux(
     return result;
 }
 
-// Row-index / column-index / values triplet for building one sparse matrix.
-struct StencilData
-{
-    std::vector<int> row_idx;
-    std::vector<std::vector<int>> col_idx;
-    std::vector<std::vector<double>> values;
-
-    void reserve(int capacity)
-    {
-        row_idx.reserve(capacity);
-        col_idx.reserve(capacity);
-        values.reserve(capacity);
-    }
-};
-
-// Stencil data for the flux matrix and its associated vector source term.
-// The two share the same sparsity pattern (row_idx and col_idx).
-struct FluxStencilData
-{
-    std::vector<int> row_idx;
-    std::vector<std::vector<int>> col_idx;
-    std::vector<std::vector<double>> flux_values;
-    std::vector<std::vector<double>> vs_values;
-};
-
 FluxStencilData init_flux_stencil(int num_faces, int nodes_per_face, int dim)
 {
     const int capacity = num_faces * nodes_per_face + 1;
@@ -806,15 +764,6 @@ FluxStencilData init_flux_stencil(int num_faces, int nodes_per_face, int dim)
     s.vs_values.reserve(num_faces * dim * nodes_per_face + 1);
     return s;
 }
-
-// Stencil data for the four boundary discretisation matrices, grouped by matrix.
-struct BoundaryStencilData
-{
-    StencilData bound_flux;
-    StencilData pressure_cell;
-    StencilData pressure_face;
-    StencilData vector_source;
-};
 
 BoundaryStencilData init_boundary_stencil(int num_faces, int num_bound_faces,
                                           int nodes_per_face, int dim)
@@ -1036,11 +985,13 @@ create_flux_vector_source_matrix(const FluxStencilData& stencil, const int num_r
                                             tot_num_transmissibilities);
 }
 
-}  // namespace
+}  // namespace mpfa_detail
 
 ScalarDiscretization mpfa(const Grid& grid, const SecondOrderTensor& tensor,
                           const std::unordered_map<int, BoundaryCondition>& bc_map)
 {
+    using namespace mpfa_detail;
+
     // MPFA reduces to TPFA in 1D or 0D. We do it explicitly here, and further code
     // assumes a 2D or 3D grid.
     if (grid.dim() < 2) {
