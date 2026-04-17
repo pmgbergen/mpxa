@@ -4,7 +4,7 @@
 
 #include "../include/discr.h"
 
-namespace  // Anonymous namespace for helper functions.
+namespace tpfa_detail  // Helper functions for tpfa().
 {
 // Helper function to compute the product between normal vector, tensor, and cell-face
 // vector.
@@ -58,7 +58,10 @@ double nKproj(const std::vector<double>& face_normal, const SecondOrderTensor& t
                     double tensor_val = full_data[i];  // 0,1,2 for diagonal
                     prod += sign * face_normal[i] * cell_face_vec[j] * tensor_val;
                 } else {
-                    int k = 2 + i + j;
+                    // Full tensor storage: [K_00, K_11, K_22, K_01, K_02, K_12].
+                    // Off-diagonal pairs (i,j) with i≠j map to indices 3,4,5 via k = 2+i+j
+                    // because i+j gives 1,2,3 for (0,1),(0,2),(1,2) and their symmetric pairs.
+                    const int k = 2 + i + j;
                     double tensor_val = full_data[k];
                     prod += sign * face_normal[i] * cell_face_vec[j] * tensor_val;
                 }
@@ -158,11 +161,13 @@ void accumulate_boundary_face(TpfaAccumulator& acc, const int cell_a, const int 
     }
 }
 
-}  // namespace
+}  // namespace tpfa_detail
 
 ScalarDiscretization tpfa(const Grid& grid, const SecondOrderTensor& tensor,
                           const std::unordered_map<int, BoundaryCondition>& bc_map)
 {
+    using namespace tpfa_detail;
+
     const int num_boundary_faces = bc_map.size();
     const int num_internal_faces = grid.num_faces() - num_boundary_faces;
 
