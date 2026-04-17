@@ -66,7 +66,9 @@ FaceSideData compute_face_side_data(int face_ind, int cell_ind, const Grid& grid
 
     const auto& face_center = grid.face_center(face_ind);
     const auto& cell_center = grid.cell_center(cell_ind);
-    for (int i{0}; i < SPATIAL_DIM; ++i)
+    side.face_cell_vec = {0.0, 0.0, 0.0};  // zero-pad to SPATIAL_DIM
+    const int coord_dim = static_cast<int>(face_center.size());
+    for (int i{0}; i < coord_dim; ++i)
         side.face_cell_vec[i] = face_center[i] - cell_center[i];
 
     side.trm = nKproj(grid.face_normal(face_ind), tensor, side.face_cell_vec, side.sign,
