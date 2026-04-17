@@ -4,7 +4,10 @@
 
 #include "../../include/discr.h"
 #include "../../include/grid.h"
+#include "../../include/mpfa_detail.h"
 #include "../../include/tensor.h"
+
+using namespace mpfa_detail;
 
 // Test fixture for MPFA
 class MPFA : public ::testing::Test
@@ -482,5 +485,359 @@ TEST_F(MPFA, RowSortingInfo_AccumulatedFluxIsCorrectForInternalFace)
     // The sum must be zero (flux is antisymmetric across an internal face for
     // these two dominant entries when the grid is isotropic diagonal).
     EXPECT_NEAR(discr_2d.flux->value(5, 3) + discr_2d.flux->value(5, 4), 0.0, 1e-10);
+}
+
+// ===========================================================================
+// Direct unit tests for mpfa_detail helper functions.
+// The anonymous namespace was renamed to mpfa_detail so these functions are
+// accessible from the test translation unit.
+// ===========================================================================
+
+// ---------------------------------------------------------------------------
+// nK: normal-times-tensor product
+// ---------------------------------------------------------------------------
+
+TEST(MpfaDetail_nK, IsotropicTensor)
+{
+    SecondOrderTensor t(2, 1, {2.0});
+    const std::array<double, 3> n = {1.0, 0.0, 0.0};
+    const auto result = nK(n, t, 0, 1);
+    EXPECT_DOUBLE_EQ(result[0], -2.0);
+    EXPECT_DOUBLE_EQ(result[1], 0.0);
+    EXPECT_DOUBLE_EQ(result[2], 0.0);
+}
+
+TEST(MpfaDetail_nK, IsotropicTensorScalesByNumNodes)
+{
+    SecondOrderTensor t(2, 1, {4.0});
+    const std::array<double, 3> n = {1.0, 0.0, 0.0};
+    const auto result = nK(n, t, 0, 2);
+    EXPECT_DOUBLE_EQ(result[0], -2.0);  // -4/2
+    EXPECT_DOUBLE_EQ(result[1], 0.0);
+    EXPECT_DOUBLE_EQ(result[2], 0.0);
+}
+
+TEST(MpfaDetail_nK, DiagonalTensor)
+{
+    // kxx=2, kyy=3 -> diagonal
+    SecondOrderTensor t(2, 1, {2.0});
+    t.with_kyy({3.0});
+    const std::array<double, 3> n = {0.0, 1.0, 0.0};
+    const auto result = nK(n, t, 0, 1);
+    EXPECT_DOUBLE_EQ(result[0], 0.0);
+    EXPECT_DOUBLE_EQ(result[1], -3.0);
+    EXPECT_DOUBLE_EQ(result[2], 0.0);
+}
+
+TEST(MpfaDetail_nK, FullTensorOffDiagonal)
+{
+    // kxx=2, kyy=3, kxy=0.5 -> full tensor
+    SecondOrderTensor t(2, 1, {2.0});
+    t.with_kyy({3.0}).with_kxy({0.5});
+    // face_normal = {1, 0, 0}, num_nodes = 1
+    // result[0] = -(1*xx + 0*xy + 0*xz) = -xx = -2
+    // result[1] = -(1*xy + 0*yy + 0*yz) = -xy = -0.5
+    // result[2] = -(1*xz + 0*yz + 0*zz) = 0
+    const std::array<double, 3> n = {1.0, 0.0, 0.0};
+    const auto result = nK(n, t, 0, 1);
+    EXPECT_DOUBLE_EQ(result[0], -2.0);
+    EXPECT_DOUBLE_EQ(result[1], -0.5);
+    EXPECT_DOUBLE_EQ(result[2], 0.0);
+}
+
+// ---------------------------------------------------------------------------
+// to_array3: vector → 3-element array with zero padding
+// ---------------------------------------------------------------------------
+
+TEST(MpfaDetail_to_array3, EmptyVector)
+{
+    const auto result = to_array3({});
+    EXPECT_DOUBLE_EQ(result[0], 0.0);
+    EXPECT_DOUBLE_EQ(result[1], 0.0);
+    EXPECT_DOUBLE_EQ(result[2], 0.0);
+}
+
+TEST(MpfaDetail_to_array3, PartialVector)
+{
+    const auto result = to_array3({1.0, 2.0});
+    EXPECT_DOUBLE_EQ(result[0], 1.0);
+    EXPECT_DOUBLE_EQ(result[1], 2.0);
+    EXPECT_DOUBLE_EQ(result[2], 0.0);
+}
+
+TEST(MpfaDetail_to_array3, ExactlyThreeElements)
+{
+    const auto result = to_array3({1.0, 2.0, 3.0});
+    EXPECT_DOUBLE_EQ(result[0], 1.0);
+    EXPECT_DOUBLE_EQ(result[1], 2.0);
+    EXPECT_DOUBLE_EQ(result[2], 3.0);
+}
+
+TEST(MpfaDetail_to_array3, LongerVectorTruncated)
+{
+    const auto result = to_array3({1.0, 2.0, 3.0, 4.0});
+    EXPECT_DOUBLE_EQ(result[0], 1.0);
+    EXPECT_DOUBLE_EQ(result[1], 2.0);
+    EXPECT_DOUBLE_EQ(result[2], 3.0);
+}
+
+// ---------------------------------------------------------------------------
+// nKgrad: dot product of nK with each basis function
+// ---------------------------------------------------------------------------
+
+TEST(MpfaDetail_nKgrad, SingleBasisFunction)
+{
+    const std::array<double, 3> nk = {1.0, 0.0, 0.0};
+    const std::vector<std::array<double, 3>> basis = {{{1.0, 0.0, 0.0}}};
+    const auto result = nKgrad(nk, basis);
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_DOUBLE_EQ(result[0], 1.0);
+}
+
+TEST(MpfaDetail_nKgrad, MultipleBasisFunctions)
+{
+    const std::array<double, 3> nk = {1.0, 2.0, 3.0};
+    const std::vector<std::array<double, 3>> basis = {
+        {1.0, 0.0, 0.0},
+        {0.0, 1.0, 0.0},
+        {0.0, 0.0, 1.0}};
+    const auto result = nKgrad(nk, basis);
+    ASSERT_EQ(result.size(), 3u);
+    EXPECT_DOUBLE_EQ(result[0], 1.0);
+    EXPECT_DOUBLE_EQ(result[1], 2.0);
+    EXPECT_DOUBLE_EQ(result[2], 3.0);
+}
+
+TEST(MpfaDetail_nKgrad, GeneralDotProduct)
+{
+    const std::array<double, 3> nk = {1.0, 2.0, 0.0};
+    // basis[0] = {3, 4, 0} -> dot with nk = 3*1 + 4*2 = 11
+    const std::vector<std::array<double, 3>> basis = {{{3.0, 4.0, 0.0}}};
+    const auto result = nKgrad(nk, basis);
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_DOUBLE_EQ(result[0], 11.0);
+}
+
+// ---------------------------------------------------------------------------
+// p_diff: projection of (face_center - cell_center) onto basis functions
+// ---------------------------------------------------------------------------
+
+TEST(MpfaDetail_p_diff, ZeroDistance)
+{
+    const std::array<double, 3> fc = {1.0, 2.0, 3.0};
+    const std::array<double, 3> cc = {1.0, 2.0, 3.0};
+    const std::vector<std::array<double, 3>> basis = {{{1.0, 0.0, 0.0}}, {{0.0, 1.0, 0.0}}};
+    const auto result = p_diff(fc, cc, basis);
+    ASSERT_EQ(result.size(), 2u);
+    EXPECT_DOUBLE_EQ(result[0], 0.0);
+    EXPECT_DOUBLE_EQ(result[1], 0.0);
+}
+
+TEST(MpfaDetail_p_diff, UnitDistanceAlongX)
+{
+    const std::array<double, 3> fc = {1.0, 0.0, 0.0};
+    const std::array<double, 3> cc = {0.0, 0.0, 0.0};
+    // basis[0] = {1,0,0}: dist·basis = 1; basis[1] = {0,1,0}: dist·basis = 0
+    const std::vector<std::array<double, 3>> basis = {{{1.0, 0.0, 0.0}}, {{0.0, 1.0, 0.0}}};
+    const auto result = p_diff(fc, cc, basis);
+    ASSERT_EQ(result.size(), 2u);
+    EXPECT_DOUBLE_EQ(result[0], 1.0);
+    EXPECT_DOUBLE_EQ(result[1], 0.0);
+}
+
+TEST(MpfaDetail_p_diff, DiagonalDistance)
+{
+    const std::array<double, 3> fc = {1.0, 1.0, 0.0};
+    const std::array<double, 3> cc = {0.0, 0.0, 0.0};
+    const std::vector<std::array<double, 3>> basis = {{{1.0, 1.0, 0.0}}};
+    // dist = {1, 1, 0}, basis[0] = {1,1,0} -> dot = 2
+    const auto result = p_diff(fc, cc, basis);
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_DOUBLE_EQ(result[0], 2.0);
+}
+
+// ---------------------------------------------------------------------------
+// count_nodes_of_faces / count_faces_of_cells
+// ---------------------------------------------------------------------------
+
+// Helper: build a 3×3 Cartesian 2D grid.
+static std::unique_ptr<Grid> make_3x3_grid()
+{
+    auto g = Grid::create_cartesian_grid(2, {3, 3}, {3.0, 3.0});
+    g->compute_geometry();
+    return g;
+}
+
+TEST(MpfaDetail_CountHelpers, CountNodesOfFacesAllTwo)
+{
+    auto g = make_3x3_grid();
+    const auto counts = count_nodes_of_faces(*g);
+    ASSERT_EQ(static_cast<int>(counts.size()), g->num_faces());
+    for (int f = 0; f < g->num_faces(); ++f)
+    {
+        EXPECT_EQ(counts[f], 2) << "face " << f;
+    }
+}
+
+TEST(MpfaDetail_CountHelpers, CountFacesOfCellsAllFour)
+{
+    auto g = make_3x3_grid();
+    const auto counts = count_faces_of_cells(*g);
+    ASSERT_EQ(static_cast<int>(counts.size()), g->num_cells());
+    for (int c = 0; c < g->num_cells(); ++c)
+    {
+        EXPECT_EQ(counts[c], 4) << "cell " << c;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// check_if_simplex
+// ---------------------------------------------------------------------------
+
+TEST(MpfaDetail_check_if_simplex, AllCellsHaveDimPlusOneFaces)
+{
+    EXPECT_TRUE(check_if_simplex({3, 3, 3}, 2));
+    EXPECT_TRUE(check_if_simplex({4, 4}, 3));
+}
+
+TEST(MpfaDetail_check_if_simplex, OneCellHasTooManyFaces)
+{
+    EXPECT_FALSE(check_if_simplex({3, 4, 3}, 2));
+    EXPECT_FALSE(check_if_simplex({4, 5, 4}, 3));
+}
+
+TEST(MpfaDetail_check_if_simplex, EmptyVectorReturnsTrue)
+{
+    EXPECT_TRUE(check_if_simplex({}, 2));
+}
+
+// ---------------------------------------------------------------------------
+// compute_row_sorting
+// ---------------------------------------------------------------------------
+
+TEST(MpfaDetail_compute_row_sorting, SortsRowsAscending)
+{
+    // row_indices[0]=2, row_indices[1]=0, row_indices[2]=1
+    // sorted order: index 1 (row 0), index 2 (row 1), index 0 (row 2)
+    const std::vector<int> row_idx = {2, 0, 1};
+    const std::vector<std::vector<int>> col_idx = {{3}, {1}, {2}};
+    const auto info = compute_row_sorting(row_idx, col_idx, 3);
+
+    ASSERT_EQ(info.sorted_row_indices.size(), 3u);
+    EXPECT_EQ(info.sorted_row_indices[0], 1);
+    EXPECT_EQ(info.sorted_row_indices[1], 2);
+    EXPECT_EQ(info.sorted_row_indices[2], 0);
+}
+
+TEST(MpfaDetail_compute_row_sorting, CountsOccurrencesCorrectly)
+{
+    const std::vector<int> row_idx = {0, 0, 1};
+    const std::vector<std::vector<int>> col_idx = {{1, 2}, {3}, {4}};
+    const auto info = compute_row_sorting(row_idx, col_idx, 2);
+
+    EXPECT_EQ(info.num_row_occurrences[0], 2);
+    EXPECT_EQ(info.num_row_occurrences[1], 1);
+}
+
+TEST(MpfaDetail_compute_row_sorting, ColIndexSizesMatchInputs)
+{
+    const std::vector<int> row_idx = {0, 1, 0};
+    const std::vector<std::vector<int>> col_idx = {{5, 6}, {7}, {8, 9, 10}};
+    const auto info = compute_row_sorting(row_idx, col_idx, 2);
+
+    ASSERT_EQ(info.col_index_sizes.size(), 3u);
+    EXPECT_EQ(info.col_index_sizes[0], 2);
+    EXPECT_EQ(info.col_index_sizes[1], 1);
+    EXPECT_EQ(info.col_index_sizes[2], 3);
+}
+
+TEST(MpfaDetail_compute_row_sorting, EmptyRowGivesZeroOccurrences)
+{
+    // Row 1 never appears in row_idx
+    const std::vector<int> row_idx = {0, 2};
+    const std::vector<std::vector<int>> col_idx = {{0}, {1}};
+    const auto info = compute_row_sorting(row_idx, col_idx, 3);
+
+    EXPECT_EQ(info.num_row_occurrences[0], 1);
+    EXPECT_EQ(info.num_row_occurrences[1], 0);
+    EXPECT_EQ(info.num_row_occurrences[2], 1);
+}
+
+// ---------------------------------------------------------------------------
+// create_csr_matrix
+// ---------------------------------------------------------------------------
+
+TEST(MpfaDetail_create_csr_matrix, SimpleCase)
+{
+    const std::vector<int> row_idx = {0, 1};
+    const std::vector<std::vector<int>> col_idx = {{0, 1}, {2}};
+    const std::vector<std::vector<double>> vals = {{1.0, 2.0}, {3.0}};
+    auto mat = create_csr_matrix(row_idx, col_idx, vals, 2, 3, 3);
+
+    EXPECT_EQ(mat->num_rows(), 2);
+    EXPECT_EQ(mat->num_cols(), 3);
+    EXPECT_DOUBLE_EQ(mat->value(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(mat->value(0, 1), 2.0);
+    EXPECT_DOUBLE_EQ(mat->value(1, 2), 3.0);
+}
+
+TEST(MpfaDetail_create_csr_matrix, AccumulatesRepeatedColumns)
+{
+    // Two contributions to (row 0, col 1): should sum to 5.0
+    const std::vector<int> row_idx = {0, 0};
+    const std::vector<std::vector<int>> col_idx = {{1}, {1}};
+    const std::vector<std::vector<double>> vals = {{2.0}, {3.0}};
+    auto mat = create_csr_matrix(row_idx, col_idx, vals, 1, 2, 1);
+
+    EXPECT_DOUBLE_EQ(mat->value(0, 1), 5.0);
+}
+
+TEST(MpfaDetail_create_csr_matrix, EmptyRowProducesNoEntries)
+{
+    // Row 1 has no contributions
+    const std::vector<int> row_idx = {0, 2};
+    const std::vector<std::vector<int>> col_idx = {{0}, {2}};
+    const std::vector<std::vector<double>> vals = {{1.0}, {3.0}};
+    auto mat = create_csr_matrix(row_idx, col_idx, vals, 3, 3, 2);
+
+    EXPECT_DOUBLE_EQ(mat->value(0, 0), 1.0);
+    EXPECT_DOUBLE_EQ(mat->value(1, 0), 0.0);  // empty row
+    EXPECT_DOUBLE_EQ(mat->value(2, 2), 3.0);
+}
+
+// ---------------------------------------------------------------------------
+// make_local_balance_matrices
+// ---------------------------------------------------------------------------
+
+TEST(MpfaDetail_make_local_balance_matrices, CorrectDimensions)
+{
+    constexpr int SPATIAL_DIM = 3;
+    const int nf = 4, nc = 3;
+    const auto m = make_local_balance_matrices(nf, nc);
+
+    EXPECT_EQ(m.balance_cells.rows(), nf);
+    EXPECT_EQ(m.balance_cells.cols(), nc);
+    EXPECT_EQ(m.balance_faces.rows(), nf);
+    EXPECT_EQ(m.balance_faces.cols(), nf);
+    EXPECT_EQ(m.flux_cells.rows(), nf);
+    EXPECT_EQ(m.flux_cells.cols(), nc);
+    EXPECT_EQ(m.flux_faces.rows(), nf);
+    EXPECT_EQ(m.flux_faces.cols(), nf);
+    EXPECT_EQ(m.nK_matrix.rows(), nf);
+    EXPECT_EQ(m.nK_matrix.cols(), SPATIAL_DIM * nc);
+    EXPECT_EQ(m.nK_one_sided.rows(), nf);
+    EXPECT_EQ(m.nK_one_sided.cols(), SPATIAL_DIM * nc);
+}
+
+TEST(MpfaDetail_make_local_balance_matrices, AllZeroInitialized)
+{
+    const auto m = make_local_balance_matrices(3, 2);
+
+    EXPECT_DOUBLE_EQ(m.balance_cells.norm(), 0.0);
+    EXPECT_DOUBLE_EQ(m.balance_faces.norm(), 0.0);
+    EXPECT_DOUBLE_EQ(m.flux_cells.norm(), 0.0);
+    EXPECT_DOUBLE_EQ(m.flux_faces.norm(), 0.0);
+    EXPECT_DOUBLE_EQ(m.nK_matrix.norm(), 0.0);
+    EXPECT_DOUBLE_EQ(m.nK_one_sided.norm(), 0.0);
 }
 
