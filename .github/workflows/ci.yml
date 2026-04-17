@@ -50,11 +50,6 @@ jobs:
           git clone https://github.com/pmgbergen/porepy.git /tmp/porepy
           pip install /tmp/porepy
 
-      - name: Install MPXA
-        run: |
-          pip install .
-          python -c "import mpxa; print(mpxa)"
-
       - name: Build and run C++ tests
         run: |
           ctest --test-dir build --output-on-failure
