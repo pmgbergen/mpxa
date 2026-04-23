@@ -81,6 +81,7 @@ set(PYTHON_PACKAGE_NAME "_mpxa")
 # Add the Google Test framework
 enable_testing()
 find_package(GTest REQUIRED)
+include(GoogleTest)
 include_directories(${GTEST_INCLUDE_DIRS})
 
 # Add the include directory globally to all targets
@@ -120,8 +121,6 @@ set_target_properties(${PYTHON_PACKAGE_NAME} PROPERTIES
 
 # Add a message to guide the user during development
 message(STATUS "Python bindings will be available in: ${CMAKE_BINARY_DIR}/bindings/python")
-
-add_test(NAME ${TEST_EXECUTABLE} COMMAND ${TEST_EXECUTABLE})
 
 # Add the profiling executable
 add_executable(profile_mpfa src/profile_mpfa.cpp)

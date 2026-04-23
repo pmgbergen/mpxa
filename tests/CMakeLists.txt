@@ -7,4 +7,5 @@ add_executable(${TEST_EXECUTABLE} ${TEST_FILES})
 # Link the test executable with Google Test and the library
 target_link_libraries(${TEST_EXECUTABLE} PRIVATE ${GTEST_LIBRARIES}  ${LIBRARY_NAME})
 
-# Add the test to CTest
+# Discover and register individual Google Test cases with CTest
+gtest_discover_tests(${TEST_EXECUTABLE})
