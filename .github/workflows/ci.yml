@@ -57,4 +57,4 @@ jobs:
 
       - name: Run Python tests
         run: |
-          pytest tests/python --ignore=tests/python/porepy
+          pytest tests/python
