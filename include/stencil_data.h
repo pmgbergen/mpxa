@@ -9,6 +9,7 @@
 // discretization produces exactly one contribution per row.
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "compressed_storage.h"

@@ -1,5 +1,6 @@
 #include "../include/multipoint_common.h"
 
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <unordered_set>

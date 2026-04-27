@@ -1,8 +1,11 @@
 #include <Eigen/Dense>
+#include <algorithm>
 #include <array>
+#include <cstring>
 #include <map>
 #include <numeric>
 #include <optional>
+#include <stdexcept>
 #include <vector>
 
 #include "../include/discr.h"
