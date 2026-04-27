@@ -1,4 +1,6 @@
 #include <array>
+#include <cmath>
+#include <stdexcept>
 #include <unordered_map>
 #include <vector>
 
