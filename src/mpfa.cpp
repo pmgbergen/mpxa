@@ -979,7 +979,7 @@ void process_interaction_region(int node_ind, const DiscrContext& ctx,
 
     auto matrices = make_local_balance_matrices(num_faces, num_cells);
     BasisConstructor basis_constructor(DIM);
-    const std::array<double, 3> node_coord = to_array3(ctx.grid.nodes()[node_ind]);
+    const std::array<double, 3> node_coord = ctx.grid.node(node_ind);
 
     ContinuityPointContext cont_ctx{region, geom, node_coord,
                                     bc_classification.types, is_simplex, DIM};

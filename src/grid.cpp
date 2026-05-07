@@ -2,24 +2,89 @@
 
 #include <cmath>
 #include <numeric>
+#include <stdexcept>
 #include <vector>
 
-Grid::Grid(const int dim, std::vector<std::vector<double>> nodes,
+namespace
+{
+constexpr int SPATIAL_DIM = 3;
+
+void validate_geometry_size(std::size_t size, std::size_t expected, const char* name)
+{
+    if (size != expected)
+    {
+        throw std::invalid_argument(std::string(name) + " size mismatch.");
+    }
+}
+
+inline double coord(std::span<const double> values, int num_entities, int coord_ind, int entity_ind)
+{
+    return values[coord_ind * num_entities + entity_ind];
+}
+
+inline std::array<double, SPATIAL_DIM> entity_as_array(std::span<const double> values,
+                                                       int num_entities, int entity_ind)
+{
+    std::array<double, SPATIAL_DIM> out{0.0, 0.0, 0.0};
+    for (int coord_ind = 0; coord_ind < SPATIAL_DIM; ++coord_ind)
+    {
+        out[coord_ind] = coord(values, num_entities, coord_ind, entity_ind);
+    }
+    return out;
+}
+}  // namespace
+
+Grid::Grid(int dim, std::vector<double> nodes,
            std::shared_ptr<CompressedDataStorage<int>> cell_faces,
            std::shared_ptr<CompressedDataStorage<int>> face_nodes)
     : m_dim(dim),
-      m_nodes(std::move(nodes)),
       m_cell_faces(std::move(cell_faces)),
-      m_face_nodes(std::move(face_nodes))
+      m_face_nodes(std::move(face_nodes)),
+      m_nodes_owned(std::move(nodes)),
+      m_nodes_view(m_nodes_owned)
 {
     m_num_nodes = m_face_nodes->num_rows();
     m_num_faces = m_face_nodes->num_cols();
     m_num_cells = m_cell_faces->num_cols();
-    m_cell_volumes.resize(m_num_cells);
-    m_face_areas.resize(m_num_faces);
-    m_face_normals.resize(m_num_faces, std::vector<double>(m_dim));
-    m_face_centers.resize(m_num_faces, std::vector<double>(m_dim));
-    m_cell_centers.resize(m_num_cells, std::vector<double>(m_dim));
+
+    validate_geometry_size(m_nodes_view.size(), SPATIAL_DIM * m_num_nodes, "nodes");
+
+    m_cell_volumes_owned.assign(m_num_cells, 0.0);
+    m_cell_volumes_view = m_cell_volumes_owned;
+    m_face_areas_owned.assign(m_num_faces, 0.0);
+    m_face_areas_view = m_face_areas_owned;
+    m_face_normals_owned.assign(SPATIAL_DIM * m_num_faces, 0.0);
+    m_face_normals_view = m_face_normals_owned;
+    m_face_centers_owned.assign(SPATIAL_DIM * m_num_faces, 0.0);
+    m_face_centers_view = m_face_centers_owned;
+    m_cell_centers_owned.assign(SPATIAL_DIM * m_num_cells, 0.0);
+    m_cell_centers_view = m_cell_centers_owned;
+}
+
+Grid::Grid(int dim, const double* nodes, std::size_t nodes_size,
+           std::shared_ptr<CompressedDataStorage<int>> cell_faces,
+           std::shared_ptr<CompressedDataStorage<int>> face_nodes)
+    : m_dim(dim),
+      m_cell_faces(std::move(cell_faces)),
+      m_face_nodes(std::move(face_nodes)),
+      m_nodes_view(nodes, nodes_size)
+{
+    m_num_nodes = m_face_nodes->num_rows();
+    m_num_faces = m_face_nodes->num_cols();
+    m_num_cells = m_cell_faces->num_cols();
+
+    validate_geometry_size(m_nodes_view.size(), SPATIAL_DIM * m_num_nodes, "nodes");
+
+    m_cell_volumes_owned.assign(m_num_cells, 0.0);
+    m_cell_volumes_view = m_cell_volumes_owned;
+    m_face_areas_owned.assign(m_num_faces, 0.0);
+    m_face_areas_view = m_face_areas_owned;
+    m_face_normals_owned.assign(SPATIAL_DIM * m_num_faces, 0.0);
+    m_face_normals_view = m_face_normals_owned;
+    m_face_centers_owned.assign(SPATIAL_DIM * m_num_faces, 0.0);
+    m_face_centers_view = m_face_centers_owned;
+    m_cell_centers_owned.assign(SPATIAL_DIM * m_num_cells, 0.0);
+    m_cell_centers_view = m_cell_centers_owned;
 }
 
 const std::vector<int> Grid::boundary_faces() const
@@ -96,75 +161,95 @@ int Grid::num_nodes_of_face(const int face) const
 }
 
 // Getters for geometric data
-const std::vector<std::vector<double>>& Grid::nodes() const
+std::span<const double> Grid::nodes() const
 {
-    return m_nodes;
+    return m_nodes_view;
 }
-const std::vector<std::vector<double>>& Grid::cell_centers() const
+std::span<const double> Grid::cell_centers() const
 {
-    return m_cell_centers;
+    return m_cell_centers_view;
 }
-const std::vector<double>& Grid::cell_volumes() const
+std::span<const double> Grid::cell_volumes() const
 {
-    return m_cell_volumes;
+    return m_cell_volumes_view;
 }
-const std::vector<double>& Grid::face_areas() const
+std::span<const double> Grid::face_areas() const
 {
-    return m_face_areas;
+    return m_face_areas_view;
 }
-const std::vector<std::vector<double>>& Grid::face_normals() const
+std::span<const double> Grid::face_normals() const
 {
-    return m_face_normals;
+    return m_face_normals_view;
 }
-const std::vector<std::vector<double>>& Grid::face_centers() const
+std::span<const double> Grid::face_centers() const
 {
-    return m_face_centers;
+    return m_face_centers_view;
 }
 // Getters for individual elements
-const std::vector<double>& Grid::cell_center(int cell) const
+std::array<double, 3> Grid::node(int node) const
 {
-    return m_cell_centers[cell];
+    return entity_as_array(m_nodes_view, m_num_nodes, node);
 }
-const double& Grid::cell_volume(int cell) const
+std::array<double, 3> Grid::cell_center(int cell) const
 {
-    return m_cell_volumes[cell];
+    return entity_as_array(m_cell_centers_view, m_num_cells, cell);
 }
-const double& Grid::face_area(int face) const
+double Grid::cell_volume(int cell) const
 {
-    return m_face_areas[face];
+    return m_cell_volumes_view[cell];
 }
-const std::vector<double>& Grid::face_normal(int face) const
+double Grid::face_area(int face) const
 {
-    return m_face_normals[face];
+    return m_face_areas_view[face];
 }
-const std::vector<double>& Grid::face_center(int face) const
+std::array<double, 3> Grid::face_normal(int face) const
 {
-    return m_face_centers[face];
+    return entity_as_array(m_face_normals_view, m_num_faces, face);
+}
+std::array<double, 3> Grid::face_center(int face) const
+{
+    return entity_as_array(m_face_centers_view, m_num_faces, face);
 }
 // Setters for the geometry data, in case these are computed externally.
-void Grid::set_cell_volumes(const std::vector<double>& cell_volumes)
+void Grid::set_cell_volumes(const double* data, std::size_t size)
 {
-    m_cell_volumes = cell_volumes;
+    validate_geometry_size(size, m_num_cells, "cell_volumes");
+    m_cell_volumes_view = std::span<const double>(data, size);
 }
-void Grid::set_face_areas(const std::vector<double>& face_areas)
+void Grid::set_face_areas(const double* data, std::size_t size)
 {
-    m_face_areas = face_areas;
+    validate_geometry_size(size, m_num_faces, "face_areas");
+    m_face_areas_view = std::span<const double>(data, size);
 }
-void Grid::set_face_normals(const std::vector<std::vector<double>>& face_normals)
+void Grid::set_face_normals(const double* data, std::size_t size)
 {
-    m_face_normals = face_normals;
+    validate_geometry_size(size, SPATIAL_DIM * m_num_faces, "face_normals");
+    m_face_normals_view = std::span<const double>(data, size);
 }
-void Grid::set_face_centers(const std::vector<std::vector<double>>& face_centers)
+void Grid::set_face_centers(const double* data, std::size_t size)
 {
-    m_face_centers = face_centers;
+    validate_geometry_size(size, SPATIAL_DIM * m_num_faces, "face_centers");
+    m_face_centers_view = std::span<const double>(data, size);
 }
-void Grid::set_cell_centers(const std::vector<std::vector<double>>& cell_centers)
+void Grid::set_cell_centers(const double* data, std::size_t size)
 {
-    m_cell_centers = cell_centers;
+    validate_geometry_size(size, SPATIAL_DIM * m_num_cells, "cell_centers");
+    m_cell_centers_view = std::span<const double>(data, size);
 }
 
 void Grid::compute_geometry()
 {
+    m_face_normals_owned.assign(SPATIAL_DIM * m_num_faces, 0.0);
+    m_face_normals_view = m_face_normals_owned;
+    m_face_centers_owned.assign(SPATIAL_DIM * m_num_faces, 0.0);
+    m_face_centers_view = m_face_centers_owned;
+    m_cell_centers_owned.assign(SPATIAL_DIM * m_num_cells, 0.0);
+    m_cell_centers_view = m_cell_centers_owned;
+    m_face_areas_owned.assign(m_num_faces, 0.0);
+    m_face_areas_view = m_face_areas_owned;
+    m_cell_volumes_owned.assign(m_num_cells, 0.0);
+    m_cell_volumes_view = m_cell_volumes_owned;
+
     compute_face_geometry();
     compute_cell_geometry();
     fix_normal_orientations();
@@ -181,78 +266,75 @@ void Grid::compute_face_geometry()
         std::vector<int> loc_nodes = nodes_of_face(i);
         const int num_nodes = loc_nodes.size();
 
-        // Compute the face center as the average of the node coordinates.
-        for (int j{0}; j < dim(); ++j)
+        for (int j{0}; j < SPATIAL_DIM; ++j)
         {
-            m_face_centers[i][j] = 0.0;
+            double sum = 0.0;
             for (int k{0}; k < num_nodes; ++k)
             {
-                m_face_centers[i][j] += m_nodes[loc_nodes[k]][j];
+                sum += coord(m_nodes_view, m_num_nodes, j, loc_nodes[k]);
             }
-            m_face_centers[i][j] /= num_nodes;
+            m_face_centers_owned[j * m_num_faces + i] = sum / num_nodes;
         }
 
         if (m_dim == 2)
         {
-            const double dx = m_nodes[loc_nodes[1]][0] - m_nodes[loc_nodes[0]][0];
-            const double dy = m_nodes[loc_nodes[1]][1] - m_nodes[loc_nodes[0]][1];
-            m_face_areas[i] = std::sqrt(dx * dx + dy * dy);
-            m_face_normals[i][0] = dy;
-            m_face_normals[i][1] = -dx;
+            const double dx = coord(m_nodes_view, m_num_nodes, 0, loc_nodes[1]) -
+                              coord(m_nodes_view, m_num_nodes, 0, loc_nodes[0]);
+            const double dy = coord(m_nodes_view, m_num_nodes, 1, loc_nodes[1]) -
+                              coord(m_nodes_view, m_num_nodes, 1, loc_nodes[0]);
+            m_face_areas_owned[i] = std::sqrt(dx * dx + dy * dy);
+            m_face_normals_owned[0 * m_num_faces + i] = dy;
+            m_face_normals_owned[1 * m_num_faces + i] = -dx;
         }
         else  // m_dim == 3
         {
             if (num_nodes == 3)
             {
-                // Triangle: compute area and unit normal from the cross product of two edge vectors.
-                std::vector<double> v1(3), v2(3);
-                for (int j{0}; j < m_dim; ++j)
+                std::array<double, SPATIAL_DIM> v1{0.0, 0.0, 0.0};
+                std::array<double, SPATIAL_DIM> v2{0.0, 0.0, 0.0};
+                for (int j{0}; j < SPATIAL_DIM; ++j)
                 {
-                    v1[j] = m_nodes[loc_nodes[1]][j] - m_nodes[loc_nodes[0]][j];
-                    v2[j] = m_nodes[loc_nodes[2]][j] - m_nodes[loc_nodes[0]][j];
+                    v1[j] = coord(m_nodes_view, m_num_nodes, j, loc_nodes[1]) -
+                            coord(m_nodes_view, m_num_nodes, j, loc_nodes[0]);
+                    v2[j] = coord(m_nodes_view, m_num_nodes, j, loc_nodes[2]) -
+                            coord(m_nodes_view, m_num_nodes, j, loc_nodes[0]);
                 }
-                std::vector<double> normal(3);
+                std::array<double, SPATIAL_DIM> normal{0.0, 0.0, 0.0};
                 normal[0] = v1[1] * v2[2] - v1[2] * v2[1];
                 normal[1] = v1[2] * v2[0] - v1[0] * v2[2];
                 normal[2] = v1[0] * v2[1] - v1[1] * v2[0];
-                m_face_areas[i] = 0.5 * std::sqrt(normal[0] * normal[0] + normal[1] * normal[1] +
-                                                   normal[2] * normal[2]);
-                for (int j{0}; j < m_dim; ++j)
+                m_face_areas_owned[i] =
+                    0.5 * std::sqrt(normal[0] * normal[0] + normal[1] * normal[1] +
+                                    normal[2] * normal[2]);
+                for (int j{0}; j < SPATIAL_DIM; ++j)
                 {
-                    m_face_normals[i][j] = normal[j] / m_face_areas[i];
+                    m_face_normals_owned[j * m_num_faces + i] = normal[j] / m_face_areas_owned[i];
                 }
             }
             else  // num_nodes == 4
             {
                 // NOTE: Valid only for axis-aligned quadrilateral faces.
                 // Use bounding-box extents to compute area and normal direction.
-                std::vector<double> min_coords(3), max_coords(3);
-                for (int j{0}; j < m_dim; ++j)
-                {
-                    min_coords[j] = m_nodes[loc_nodes[0]][j];
-                    max_coords[j] = m_nodes[loc_nodes[0]][j];
-                }
+                auto min_coords = node(loc_nodes[0]);
+                auto max_coords = min_coords;
                 for (int j{1}; j < num_nodes; ++j)
                 {
-                    for (int k{0}; k < m_dim; ++k)
+                    const auto loc_node = node(loc_nodes[j]);
+                    for (int k{0}; k < SPATIAL_DIM; ++k)
                     {
-                        min_coords[k] = std::min(min_coords[k], m_nodes[loc_nodes[j]][k]);
-                        max_coords[k] = std::max(max_coords[k], m_nodes[loc_nodes[j]][k]);
+                        min_coords[k] = std::min(min_coords[k], loc_node[k]);
+                        max_coords[k] = std::max(max_coords[k], loc_node[k]);
                     }
                 }
-                for (int j{0}; j < m_dim; ++j)
-                {
-                    m_face_normals[i][j] = 0.0;
-                }
-                for (int j{0}; j < m_dim; ++j)
+                for (int j{0}; j < SPATIAL_DIM; ++j)
                 {
                     if (min_coords[j] == max_coords[j])
                     {
-                        const int k = (j + 1) % m_dim;
-                        const int l = (j + 2) % m_dim;
-                        m_face_areas[i] =
+                        const int k = (j + 1) % SPATIAL_DIM;
+                        const int l = (j + 2) % SPATIAL_DIM;
+                        m_face_areas_owned[i] =
                             (max_coords[k] - min_coords[k]) * (max_coords[l] - min_coords[l]);
-                        m_face_normals[i][j] = m_face_areas[i];
+                        m_face_normals_owned[j * m_num_faces + i] = m_face_areas_owned[i];
                         break;
                     }
                 }
@@ -271,35 +353,29 @@ void Grid::compute_cell_geometry()
         std::vector<int> loc_faces = faces_of_cell(i);
         const int num_faces = loc_faces.size();
 
-        m_cell_centers[i] = std::vector<double>(m_dim);
-
-        // Cell center as the average of the adjacent face centers.
-        for (int j{0}; j < m_dim; ++j)
+        for (int j{0}; j < SPATIAL_DIM; ++j)
         {
-            m_cell_centers[i][j] = 0.0;
+            double sum = 0.0;
             for (int k{0}; k < num_faces; ++k)
             {
-                m_cell_centers[i][j] += m_face_centers[loc_faces[k]][j];
+                sum += coord(m_face_centers_view, m_num_faces, j, loc_faces[k]);
             }
-            m_cell_centers[i][j] /= num_faces;
+            m_cell_centers_owned[j * m_num_cells + i] = sum / num_faces;
         }
 
-        // Cell volume via the divergence theorem.
-        m_cell_volumes[i] = 0.0;
+        m_cell_volumes_owned[i] = 0.0;
         for (int j{0}; j < num_faces; ++j)
         {
-            std::vector<double> face_to_cell(m_dim);
-            for (int k{0}; k < m_dim; ++k)
-            {
-                face_to_cell[k] = m_cell_centers[i][k] - m_face_centers[loc_faces[j]][k];
-            }
             double dist = 0.0;
-            for (int k{0}; k < m_dim; ++k)
+            for (int k{0}; k < SPATIAL_DIM; ++k)
             {
-                dist +=
-                    face_to_cell[k] * m_face_normals[loc_faces[j]][k] / m_face_areas[loc_faces[j]];
+                const double face_to_cell = coord(m_cell_centers_view, m_num_cells, k, i) -
+                                            coord(m_face_centers_view, m_num_faces, k,
+                                                  loc_faces[j]);
+                dist += face_to_cell * coord(m_face_normals_view, m_num_faces, k, loc_faces[j]) /
+                        m_face_areas_view[loc_faces[j]];
             }
-            m_cell_volumes[i] += m_face_areas[loc_faces[j]] * std::abs(dist) / m_dim;
+            m_cell_volumes_owned[i] += m_face_areas_view[loc_faces[j]] * std::abs(dist) / m_dim;
         }
     }
 }
@@ -313,18 +389,19 @@ void Grid::fix_normal_orientations()
         const auto loc_cells = cells_of_face(i);
 
         double dot_prod = 0.0;
-        for (int j{0}; j < m_dim; ++j)
+        for (int j{0}; j < SPATIAL_DIM; ++j)
         {
-            const double face_to_cell = m_face_centers[i][j] - m_cell_centers[loc_cells[0]][j];
-            dot_prod += face_to_cell * m_face_normals[i][j];
+            const double face_to_cell = coord(m_face_centers_view, m_num_faces, j, i) -
+                                        coord(m_cell_centers_view, m_num_cells, j, loc_cells[0]);
+            dot_prod += face_to_cell * coord(m_face_normals_view, m_num_faces, j, i);
         }
 
         if ((sign_of_face_cell(i, loc_cells[0]) < 0 && dot_prod > 0) ||
             (sign_of_face_cell(i, loc_cells[0]) > 0 && dot_prod < 0))
         {
-            for (int j{0}; j < m_dim; ++j)
+            for (int j{0}; j < SPATIAL_DIM; ++j)
             {
-                m_face_normals[i][j] *= -1;
+                m_face_normals_owned[j * m_num_faces + i] *= -1;
             }
         }
     }
@@ -338,12 +415,12 @@ static std::unique_ptr<Grid> construct_grid_1d(const int num_cells, const double
     const int num_nodes = num_cells + 1;
     const int dim = 1;
     const double dx = length / num_cells;
-    std::vector<std::vector<double>> nodes(num_nodes, std::vector<double>(dim));
+    std::vector<double> nodes(SPATIAL_DIM * num_nodes, 0.0);
 
     // Filling in nodes.
     for (int i = 0; i < num_nodes; ++i)
     {
-        nodes[i][0] = dx * i;
+        nodes[0 * num_nodes + i] = dx * i;
     }
 
     // Constructing face - cells mapping. shape=(num_faces, num_cells)
@@ -474,8 +551,7 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
     }
 
     // Data structures for node coordinates and face nodes.
-    // Define node coordinates as a num_nodes x dim array.
-    std::vector<std::vector<double>> nodes(num_nodes, std::vector<double>(dim));
+    std::vector<double> nodes(SPATIAL_DIM * num_nodes, 0.0);
     // We will eventually create a compressed row data storage for the face nodes.
     // However, for convenience store the column indices (the face numbers) in a vector
     // first. Data for the compressed storage will be created later.
@@ -492,8 +568,8 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
             for (int i = 0; i < num_nodes_per_dim[0]; ++i)
             {
                 const int node_index = i + j * num_nodes_per_dim[0];
-                nodes[node_index][0] = x[i];
-                nodes[node_index][1] = y[j];
+                nodes[0 * num_nodes + node_index] = x[i];
+                nodes[1 * num_nodes + node_index] = y[j];
 
                 // Create face nodes
                 row_ptr_face_nodes[node_index] = face_nodes_vector.size();
@@ -536,11 +612,11 @@ std::unique_ptr<Grid> Grid::create_cartesian_grid(const int dim, const std::vect
                 {
                     const int node_index = i + j * num_nodes_per_dim[0] +
                                            k * num_nodes_per_dim[0] * num_nodes_per_dim[1];
-                    nodes[node_index][0] = x[i];
-                    nodes[node_index][1] = y[j];
+                    nodes[0 * num_nodes + node_index] = x[i];
+                    nodes[1 * num_nodes + node_index] = y[j];
                     if (dim == 3)
                     {
-                        nodes[node_index][2] = z[k];
+                        nodes[2 * num_nodes + node_index] = z[k];
                     }
 
                     // Create face nodes

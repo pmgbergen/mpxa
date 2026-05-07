@@ -48,6 +48,9 @@ struct TpfaAccumulator
 
 // Compute n·K·(face_center − cell_center) / |face_center − cell_center|² for
 // one cell side.  sign is +1 or −1 (from sign_of_face_cell).
+double nKproj(const std::array<double, SPATIAL_DIM>& face_normal,
+              const SecondOrderTensor& tensor,
+              const std::array<double, SPATIAL_DIM>& cell_face_vec, int sign, int cell_ind);
 double nKproj(const std::vector<double>& face_normal, const SecondOrderTensor& tensor,
               const std::array<double, SPATIAL_DIM>& cell_face_vec, int sign, int cell_ind);
 

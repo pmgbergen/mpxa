@@ -135,6 +135,24 @@ const std::array<double, 3> nK(const std::array<double, 3>& face_normal,
 
 // Pad or truncate a std::vector<double> into a 3-element array (zeros for missing entries).
 std::array<double, 3> to_array3(const std::vector<double>& v);
+inline std::array<double, 3> to_array3(const std::array<double, 3>& a)
+{
+    return a;
+}
+inline std::array<double, 3> to_array3(std::initializer_list<double> values)
+{
+    std::array<double, 3> arr{0.0, 0.0, 0.0};
+    size_t i = 0;
+    for (double value : values)
+    {
+        if (i >= arr.size())
+        {
+            break;
+        }
+        arr[i++] = value;
+    }
+    return arr;
+}
 
 // Compute the dot product of nk_val with each basis function vector.
 std::vector<double> nKgrad(const std::array<double, 3>& nk_val,

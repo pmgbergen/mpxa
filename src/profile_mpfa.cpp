@@ -14,23 +14,13 @@ static std::unique_ptr<Grid> construct_bad_grid()
     return std::make_unique<Grid>(
         // dim
         2,
-        // nodes (transposed! PP stores them in a transposed format.)
-        std::vector<std::vector<double>>{{0.5, 0., 1.},
-                                         {0.5, 0., 0.5},
-                                         {0.5, 0., 0.5},
-                                         {0.5, 0., 0.},
-                                         {0.5, 0.5, 1.},
-                                         {0.5, 0.5, 1.},
-                                         {0.5, 0.5, 0.5},
-                                         {0.5, 0.5, 0.5},
-                                         {0.5, 0.5, 0.5},
-                                         {0.5, 0.5, 0.5},
-                                         {0.5, 0.5, 0.},
-                                         {0.5, 0.5, 0.},
-                                         {0.5, 1., 1.},
-                                         {0.5, 1., 0.5},
-                                         {0.5, 1., 0.5},
-                                         {0.5, 1., 0.}},
+        // nodes in flat (3, N) layout.
+        std::vector<double>{0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+                            0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+                            0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5,
+                            0.5, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0, 1.0,
+                            1.0, 0.5, 0.5, 0.0, 1.0, 1.0, 0.5, 0.5,
+                            0.5, 0.5, 0.0, 0.0, 1.0, 0.5, 0.5, 0.0},
         // cell_faces (in csr format! PP stores it in csc format.)
         std::make_shared<CompressedDataStorage<int>>(
             16, 4, std::vector<int>{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16},

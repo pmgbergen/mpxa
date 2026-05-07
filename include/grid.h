@@ -2,16 +2,20 @@
 #define GRID_GRID_H
 
 #include <algorithm>
+#include <array>
 #include <memory>
-#include <vector>
 #include <span>
+#include <vector>
 
 #include "../include/compressed_storage.h"
 
 class Grid
 {
    public:
-    Grid(const int dim, std::vector<std::vector<double>> nodes,
+    Grid(int dim, std::vector<double> nodes,
+         std::shared_ptr<CompressedDataStorage<int>> cell_faces,
+         std::shared_ptr<CompressedDataStorage<int>> face_nodes);
+    Grid(int dim, const double* nodes, std::size_t nodes_size,
          std::shared_ptr<CompressedDataStorage<int>> cell_faces,
          std::shared_ptr<CompressedDataStorage<int>> face_nodes);
 
@@ -44,27 +48,27 @@ class Grid
     const CompressedDataStorage<int>& cell_faces() const;
 
     // Getters for geometric data
-    const std::vector<std::vector<double>>& nodes() const;
-
-    const std::vector<std::vector<double>>& cell_centers() const;
-    const std::vector<double>& cell_volumes() const;
-    const std::vector<double>& face_areas() const;
-    const std::vector<std::vector<double>>& face_normals() const;
-    const std::vector<std::vector<double>>& face_centers() const;
+    std::span<const double> nodes() const;
+    std::span<const double> cell_centers() const;
+    std::span<const double> cell_volumes() const;
+    std::span<const double> face_areas() const;
+    std::span<const double> face_normals() const;
+    std::span<const double> face_centers() const;
 
     // Also provide access to individual elements
-    const std::vector<double>& cell_center(int cell) const;
-    const double& cell_volume(int cell) const;
-    const double& face_area(int face) const;
-    const std::vector<double>& face_normal(int face) const;
-    const std::vector<double>& face_center(int face) const;
+    std::array<double, 3> node(int node) const;
+    std::array<double, 3> cell_center(int cell) const;
+    double cell_volume(int cell) const;
+    double face_area(int face) const;
+    std::array<double, 3> face_normal(int face) const;
+    std::array<double, 3> face_center(int face) const;
 
     // Setters for the geometry data, in case these are computed externally.
-    void set_cell_volumes(const std::vector<double>& cell_volumes);
-    void set_face_areas(const std::vector<double>& face_areas);
-    void set_face_normals(const std::vector<std::vector<double>>& face_normals);
-    void set_face_centers(const std::vector<std::vector<double>>& face_centers);
-    void set_cell_centers(const std::vector<std::vector<double>>& cell_centers);
+    void set_cell_volumes(const double* data, std::size_t size);
+    void set_face_areas(const double* data, std::size_t size);
+    void set_face_normals(const double* data, std::size_t size);
+    void set_face_centers(const double* data, std::size_t size);
+    void set_cell_centers(const double* data, std::size_t size);
 
    private:
     // compute_geometry() helpers — called in order; each depends on the previous.
@@ -81,12 +85,18 @@ class Grid
     std::shared_ptr<CompressedDataStorage<int>> m_cell_faces;
     std::shared_ptr<CompressedDataStorage<int>> m_face_nodes;
 
-    std::vector<std::vector<double>> m_nodes;
-    std::vector<double> m_cell_volumes;
-    std::vector<double> m_face_areas;
-    std::vector<std::vector<double>> m_face_normals;
-    std::vector<std::vector<double>> m_face_centers;
-    std::vector<std::vector<double>> m_cell_centers;
+    std::vector<double> m_nodes_owned;
+    std::span<const double> m_nodes_view;
+    std::vector<double> m_cell_volumes_owned;
+    std::span<const double> m_cell_volumes_view;
+    std::vector<double> m_face_areas_owned;
+    std::span<const double> m_face_areas_view;
+    std::vector<double> m_face_normals_owned;
+    std::span<const double> m_face_normals_view;
+    std::vector<double> m_face_centers_owned;
+    std::span<const double> m_face_centers_view;
+    std::vector<double> m_cell_centers_owned;
+    std::span<const double> m_cell_centers_view;
 };
 
 #endif  // GRID_GRID_H

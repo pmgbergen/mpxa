@@ -40,31 +40,30 @@ TEST_F(GridTest, NodeCoordinates2dUnitCellSize)
 {
     EXPECT_EQ(grid_2d->num_nodes(), 12);
 
-    const auto& nodes = grid_2d->nodes();
-    EXPECT_EQ(nodes[0][0], 0.0);
-    EXPECT_EQ(nodes[0][1], 0.0);
-    EXPECT_EQ(nodes[1][0], 1.0);
-    EXPECT_EQ(nodes[1][1], 0.0);
-    EXPECT_EQ(nodes[2][0], 2.0);
-    EXPECT_EQ(nodes[2][1], 0.0);
-    EXPECT_EQ(nodes[3][0], 0.0);
-    EXPECT_EQ(nodes[3][1], 1.0);
-    EXPECT_EQ(nodes[4][0], 1.0);
-    EXPECT_EQ(nodes[4][1], 1.0);
-    EXPECT_EQ(nodes[5][0], 2.0);
-    EXPECT_EQ(nodes[5][1], 1.0);
-    EXPECT_EQ(nodes[6][0], 0.0);
-    EXPECT_EQ(nodes[6][1], 2.0);
-    EXPECT_EQ(nodes[7][0], 1.0);
-    EXPECT_EQ(nodes[7][1], 2.0);
-    EXPECT_EQ(nodes[8][0], 2.0);
-    EXPECT_EQ(nodes[8][1], 2.0);
-    EXPECT_EQ(nodes[9][0], 0.0);
-    EXPECT_EQ(nodes[9][1], 3.0);
-    EXPECT_EQ(nodes[10][0], 1.0);
-    EXPECT_EQ(nodes[10][1], 3.0);
-    EXPECT_EQ(nodes[11][0], 2.0);
-    EXPECT_EQ(nodes[11][1], 3.0);
+    EXPECT_EQ(grid_2d->node(0)[0], 0.0);
+    EXPECT_EQ(grid_2d->node(0)[1], 0.0);
+    EXPECT_EQ(grid_2d->node(1)[0], 1.0);
+    EXPECT_EQ(grid_2d->node(1)[1], 0.0);
+    EXPECT_EQ(grid_2d->node(2)[0], 2.0);
+    EXPECT_EQ(grid_2d->node(2)[1], 0.0);
+    EXPECT_EQ(grid_2d->node(3)[0], 0.0);
+    EXPECT_EQ(grid_2d->node(3)[1], 1.0);
+    EXPECT_EQ(grid_2d->node(4)[0], 1.0);
+    EXPECT_EQ(grid_2d->node(4)[1], 1.0);
+    EXPECT_EQ(grid_2d->node(5)[0], 2.0);
+    EXPECT_EQ(grid_2d->node(5)[1], 1.0);
+    EXPECT_EQ(grid_2d->node(6)[0], 0.0);
+    EXPECT_EQ(grid_2d->node(6)[1], 2.0);
+    EXPECT_EQ(grid_2d->node(7)[0], 1.0);
+    EXPECT_EQ(grid_2d->node(7)[1], 2.0);
+    EXPECT_EQ(grid_2d->node(8)[0], 2.0);
+    EXPECT_EQ(grid_2d->node(8)[1], 2.0);
+    EXPECT_EQ(grid_2d->node(9)[0], 0.0);
+    EXPECT_EQ(grid_2d->node(9)[1], 3.0);
+    EXPECT_EQ(grid_2d->node(10)[0], 1.0);
+    EXPECT_EQ(grid_2d->node(10)[1], 3.0);
+    EXPECT_EQ(grid_2d->node(11)[0], 2.0);
+    EXPECT_EQ(grid_2d->node(11)[1], 3.0);
 }
 
 // Test that grid nodes correct for a unit square domain (non-unit size grids). Only
@@ -74,14 +73,13 @@ TEST_F(GridTest, NodeCoordinates2dUnitSquareDomain)
     const int nx = 2;
     const int ny = 3;
 
-    const auto& nodes = unit_square->nodes();
-    EXPECT_EQ(nodes[0][0], 0.0);
-    EXPECT_EQ(nodes[0][1], 0.0);
-    EXPECT_EQ(nodes[1][0], 1.0 / nx);
-    EXPECT_EQ(nodes[1][1], 0.0);
-    EXPECT_EQ(nodes[2][0], 1.0);
-    EXPECT_EQ(nodes[3][1], 1.0 / ny);
-    EXPECT_EQ(nodes[9][1], 1.0);
+    EXPECT_EQ(unit_square->node(0)[0], 0.0);
+    EXPECT_EQ(unit_square->node(0)[1], 0.0);
+    EXPECT_EQ(unit_square->node(1)[0], 1.0 / nx);
+    EXPECT_EQ(unit_square->node(1)[1], 0.0);
+    EXPECT_EQ(unit_square->node(2)[0], 1.0);
+    EXPECT_EQ(unit_square->node(3)[1], 1.0 / ny);
+    EXPECT_EQ(unit_square->node(9)[1], 1.0);
 }
 
 // Test that
@@ -178,7 +176,6 @@ TEST_F(GridTest, GeometryComputation2d)
     // Compute the face areas and normals.
     unit_square->compute_geometry();
     const auto& face_areas = unit_square->face_areas();
-    const auto& face_normals = unit_square->face_normals();
 
     const double dx = 1.0 / 2;
     const double dy = 1.0 / 3;
@@ -191,15 +188,15 @@ TEST_F(GridTest, GeometryComputation2d)
     for (int i = 0; i < num_x_faces; ++i)
     {
         EXPECT_DOUBLE_EQ(face_areas[i], area_x);
-        EXPECT_DOUBLE_EQ(face_normals[i][0], area_x);
+        EXPECT_DOUBLE_EQ(unit_square->face_normal(i)[0], area_x);
 
-        EXPECT_DOUBLE_EQ(face_normals[i][1], 0.0);
+        EXPECT_DOUBLE_EQ(unit_square->face_normal(i)[1], 0.0);
     }
     for (int i{num_x_faces}; i < unit_square->num_faces(); ++i)
     {
         EXPECT_DOUBLE_EQ(face_areas[i], area_y);
-        EXPECT_DOUBLE_EQ(face_normals[i][0], 0);
-        EXPECT_DOUBLE_EQ(face_normals[i][1], area_y);
+        EXPECT_DOUBLE_EQ(unit_square->face_normal(i)[0], 0);
+        EXPECT_DOUBLE_EQ(unit_square->face_normal(i)[1], area_y);
     }
 
     // Known face centers
@@ -241,7 +238,6 @@ TEST_F(GridTest, NodeCoordinates3d)
 {
     EXPECT_EQ(grid_3d->num_nodes(), 27);
 
-    const auto& nodes = grid_3d->nodes();
     for (int i = 0; i < 3; ++i)
     {
         for (int j = 0; j < 3; ++j)
@@ -249,9 +245,9 @@ TEST_F(GridTest, NodeCoordinates3d)
             for (int k = 0; k < 3; ++k)
             {
                 int index = i + j * 3 + k * 9;
-                EXPECT_EQ(nodes[index][0], i * 2.0 / 2);
-                EXPECT_EQ(nodes[index][1], j * 2.0 / 2);
-                EXPECT_EQ(nodes[index][2], k * 2.0 / 2);
+                EXPECT_EQ(grid_3d->node(index)[0], i * 2.0 / 2);
+                EXPECT_EQ(grid_3d->node(index)[1], j * 2.0 / 2);
+                EXPECT_EQ(grid_3d->node(index)[2], k * 2.0 / 2);
             }
         }
     }
@@ -356,8 +352,6 @@ TEST_F(GridTest, GeometryComputation3d)
     // Compute the face areas and normals.
     grid_3d->compute_geometry();
     const auto& face_areas = grid_3d->face_areas();
-    const auto& face_normals = grid_3d->face_normals();
-    const auto& face_centers = grid_3d->face_centers();
 
     const double dx = 2.0 / 2;
     const double dy = 2.0 / 2;
@@ -371,24 +365,24 @@ TEST_F(GridTest, GeometryComputation3d)
     for (int i = 0; i < 12; ++i)  // xy faces
     {
         EXPECT_DOUBLE_EQ(face_areas[i], area_xy);
-        EXPECT_DOUBLE_EQ(face_normals[i][0], 1.0);
-        EXPECT_DOUBLE_EQ(face_normals[i][1], 0.0);
-        EXPECT_DOUBLE_EQ(face_normals[i][2], 0.0);
+        EXPECT_DOUBLE_EQ(grid_3d->face_normal(i)[0], 1.0);
+        EXPECT_DOUBLE_EQ(grid_3d->face_normal(i)[1], 0.0);
+        EXPECT_DOUBLE_EQ(grid_3d->face_normal(i)[2], 0.0);
     }
 
     for (int i = 12; i < 24; ++i)  // xz faces
     {
         EXPECT_DOUBLE_EQ(face_areas[i], area_xz);
-        EXPECT_DOUBLE_EQ(face_normals[i][0], 0.0);
-        EXPECT_DOUBLE_EQ(face_normals[i][1], 1.0);
-        EXPECT_DOUBLE_EQ(face_normals[i][2], 0.0);
+        EXPECT_DOUBLE_EQ(grid_3d->face_normal(i)[0], 0.0);
+        EXPECT_DOUBLE_EQ(grid_3d->face_normal(i)[1], 1.0);
+        EXPECT_DOUBLE_EQ(grid_3d->face_normal(i)[2], 0.0);
     }
     for (int i = 24; i < 36; ++i)  // yz faces
     {
         EXPECT_DOUBLE_EQ(face_areas[i], area_yz);
-        EXPECT_DOUBLE_EQ(face_normals[i][0], 0.0);
-        EXPECT_DOUBLE_EQ(face_normals[i][1], 0.0);
-        EXPECT_DOUBLE_EQ(face_normals[i][2], 1.0);
+        EXPECT_DOUBLE_EQ(grid_3d->face_normal(i)[0], 0.0);
+        EXPECT_DOUBLE_EQ(grid_3d->face_normal(i)[1], 0.0);
+        EXPECT_DOUBLE_EQ(grid_3d->face_normal(i)[2], 1.0);
     }
 
     // Known face centers
@@ -472,20 +466,19 @@ TEST_F(GridTest, GeometryComputation2dNonUnitCells)
     const double dy = 3.0 / 3;  // lengths_2d[1] / num_cells_2d[1]
 
     const auto& face_areas = grid_2d->face_areas();
-    const auto& face_normals = grid_2d->face_normals();
 
     const int num_x_faces = 3 * 3;  // (num_cells_x+1) * num_cells_y
     for (int i = 0; i < num_x_faces; ++i)
     {
         EXPECT_DOUBLE_EQ(face_areas[i], dy);
-        EXPECT_DOUBLE_EQ(std::abs(face_normals[i][0]), dy);
-        EXPECT_DOUBLE_EQ(face_normals[i][1], 0.0);
+        EXPECT_DOUBLE_EQ(std::abs(grid_2d->face_normal(i)[0]), dy);
+        EXPECT_DOUBLE_EQ(grid_2d->face_normal(i)[1], 0.0);
     }
     for (int i = num_x_faces; i < grid_2d->num_faces(); ++i)
     {
         EXPECT_DOUBLE_EQ(face_areas[i], dx);
-        EXPECT_DOUBLE_EQ(face_normals[i][0], 0.0);
-        EXPECT_DOUBLE_EQ(std::abs(face_normals[i][1]), dx);
+        EXPECT_DOUBLE_EQ(grid_2d->face_normal(i)[0], 0.0);
+        EXPECT_DOUBLE_EQ(std::abs(grid_2d->face_normal(i)[1]), dx);
     }
     for (int i = 0; i < grid_2d->num_cells(); ++i)
     {

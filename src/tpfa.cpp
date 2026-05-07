@@ -11,13 +11,14 @@
 namespace tpfa_detail
 {
 
-double nKproj(const std::vector<double>& face_normal, const SecondOrderTensor& tensor,
+double nKproj(const std::array<double, SPATIAL_DIM>& face_normal,
+              const SecondOrderTensor& tensor,
               const std::array<double, SPATIAL_DIM>& cell_face_vec, int sign, int cell_ind)
 {
     // Squared distance between cell center and face center; provides normalisation
     // for the cell-face unit vector and a distance measure for the gradient.
     double dist = 0.0;
-    const int dim = static_cast<int>(face_normal.size());
+    const int dim = tensor.dim();
 
     for (int i{0}; i < dim; ++i)
         dist += cell_face_vec[i] * cell_face_vec[i];
@@ -56,6 +57,17 @@ double nKproj(const std::vector<double>& face_normal, const SecondOrderTensor& t
         }
         return prod / dist;
     }
+}
+
+double nKproj(const std::vector<double>& face_normal, const SecondOrderTensor& tensor,
+              const std::array<double, SPATIAL_DIM>& cell_face_vec, int sign, int cell_ind)
+{
+    std::array<double, SPATIAL_DIM> padded_normal{0.0, 0.0, 0.0};
+    for (size_t i = 0; i < std::min(face_normal.size(), padded_normal.size()); ++i)
+    {
+        padded_normal[i] = face_normal[i];
+    }
+    return nKproj(padded_normal, tensor, cell_face_vec, sign, cell_ind);
 }
 
 FaceSideData compute_face_side_data(int face_ind, int cell_ind, const Grid& grid,
