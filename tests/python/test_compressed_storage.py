@@ -10,9 +10,10 @@ from mpxa import _mpxa
 @pytest.mark.parametrize("fmt", [int, float])
 def test_storage(fmt):
     # Create a 4 x 3 sparse matrix with a few non-zero elements
-    indptr = np.array([0, 2, 3, 3, 4], dtype=int)
-    indices = np.array([0, 2, 1, 0], dtype=int)
-    data = np.array([1, 2, 3, 4], dtype=fmt)
+    indptr = np.array([0, 2, 3, 3, 4], dtype=np.int32)
+    indices = np.array([0, 2, 1, 0], dtype=np.int32)
+    data_dtype = np.int32 if fmt is int else float
+    data = np.array([1, 2, 3, 4], dtype=data_dtype)
 
     if fmt is int:
         storage_class = _mpxa.CompressedDataStorageInt

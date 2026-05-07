@@ -12,66 +12,139 @@ namespace py = pybind11;
 
 void init_compressed_storage(py::module_& m)
 {
-    // Bindings for CompressedDataStorage.
-    // Note to self: This tells pybind11 to use std::shared_ptr for the CompressedDataStorage
-    // class (and not the unique_ptr, which is the default). This is necessary because we
-    // want to use CompressedStorage in the python-binding of the Grid class, with memory
-    // shared between the python and c++ side.
-    // TODO: Not sure if this actually makes sense, since we copy the data into a std::vector
-    // (actually, I believe it makes no sence), but it will have to do for now.
+    // Type aliases to work around C++ template argument parsing ambiguity when
+    // using py::keep_alive<N, M> directly in .def() argument lists.
+    // keep_alive<1, N>: used with py::init — keep argument N alive as long as self (pos 1) is alive.
+    using keep_alive_1_3 = py::keep_alive<1, 3>;
+    using keep_alive_1_4 = py::keep_alive<1, 4>;
+    using keep_alive_1_5 = py::keep_alive<1, 5>;
+    // keep_alive<0, N>: used with def_static — keep argument N alive as long as return value is alive.
+    using keep_alive_0_3 = py::keep_alive<0, 3>;
+    using keep_alive_0_4 = py::keep_alive<0, 4>;
+    using keep_alive_0_5 = py::keep_alive<0, 5>;
+
     py::class_<CompressedDataStorage<double>, std::shared_ptr<CompressedDataStorage<double>>>(
         m, "CompressedDataStorageDouble")
         .def(py::init(
-            [](int num_rows, int num_cols, py::array_t<int> indptr, py::array_t<int> indices,
-               py::array_t<double> data, bool csc)
-            {
-                // Convert numpy arrays to std::vector. Note to self: This creates a
-                // copy of the data (which on the one hand is not ideal, but on the
-                // other hand, it seems necessary if we want to use std::vector on the
-                // c++ side).
-                std::vector<int> indptr_vec(indptr.data(), indptr.data() + indptr.size());
-                std::vector<int> indices_vec(indices.data(), indices.data() + indices.size());
-                std::vector<double> data_vec(data.data(), data.data() + data.size());
+                 [](int num_rows, int num_cols,
+                    py::array_t<int, py::array::c_style | py::array::forcecast> indptr,
+                    py::array_t<int, py::array::c_style | py::array::forcecast> indices,
+                    py::array_t<double, py::array::c_style | py::array::forcecast> data,
+                    bool csc)
+                 {
+                     // Pass numpy array data pointers directly — no copy into std::vector.
+                     // The numpy arrays are kept alive by py::keep_alive below.
+                     py::buffer_info indptr_buf = indptr.request();
+                     py::buffer_info indices_buf = indices.request();
+                     py::buffer_info data_buf = data.request();
 
-                // Return a new instance of CompressedDataStorage
-                return std::make_shared<CompressedDataStorage<double>>(
-                    num_rows, num_cols, std::move(indptr_vec), std::move(indices_vec),
-                    std::move(data_vec), csc);
-            }))
+                     return std::make_shared<CompressedDataStorage<double>>(
+                         num_rows, num_cols,
+                         static_cast<const int*>(indptr_buf.ptr), indptr_buf.size,
+                         static_cast<const int*>(indices_buf.ptr), indices_buf.size,
+                         static_cast<const double*>(data_buf.ptr), data_buf.size, csc);
+                 }),
+             keep_alive_1_3{}, keep_alive_1_4{}, keep_alive_1_5{})
         .def("num_rows", &CompressedDataStorage<double>::num_rows)
         .def("num_cols", &CompressedDataStorage<double>::num_cols)
-        .def("row_ptr", &CompressedDataStorage<double>::row_ptr)
-        .def("col_idx", &CompressedDataStorage<double>::col_idx)
-        .def("data", &CompressedDataStorage<double>::data)
-        // .def("cols_in_row", &CompressedDataStorage<double>::cols_in_row)
-        // .def("rows_in_col", &CompressedDataStorage<double>::rows_in_col)
+        .def("row_ptr",
+             [](const CompressedDataStorage<double>& cds)
+             {
+                 auto sp = cds.row_ptr();
+                 return std::vector<int>(sp.begin(), sp.end());
+             })
+        .def("col_idx",
+             [](const CompressedDataStorage<double>& cds)
+             {
+                 auto sp = cds.col_idx();
+                 return std::vector<int>(sp.begin(), sp.end());
+             })
+        .def("data",
+             [](const CompressedDataStorage<double>& cds)
+             {
+                 auto sp = cds.data();
+                 return std::vector<double>(sp.begin(), sp.end());
+             })
         // TODO: Return as a numpy array instead of a list.
         .def("values", &CompressedDataStorage<double>::values)
-        .def("value", &CompressedDataStorage<double>::value);
+        .def("value", &CompressedDataStorage<double>::value)
+        .def_static(
+            "from_csc",
+            [](int num_rows, int num_cols,
+               py::array_t<int, py::array::c_style | py::array::forcecast> col_ptr,
+               py::array_t<int, py::array::c_style | py::array::forcecast> row_idx,
+               py::array_t<double, py::array::c_style | py::array::forcecast> values)
+            {
+                py::buffer_info col_ptr_buf = col_ptr.request();
+                py::buffer_info row_idx_buf = row_idx.request();
+                py::buffer_info values_buf = values.request();
+                return CompressedDataStorage<double>::from_csc(
+                    num_rows, num_cols,
+                    static_cast<const int*>(col_ptr_buf.ptr), col_ptr_buf.size,
+                    static_cast<const int*>(row_idx_buf.ptr), row_idx_buf.size,
+                    static_cast<const double*>(values_buf.ptr), values_buf.size);
+            },
+            keep_alive_0_3{}, keep_alive_0_4{}, keep_alive_0_5{});
 
     py::class_<CompressedDataStorage<int>, std::shared_ptr<CompressedDataStorage<int>>>(
         m, "CompressedDataStorageInt")
         .def(py::init(
-            [](int num_rows, int num_cols, py::array_t<int> indptr, py::array_t<int> indices,
-               py::array_t<int> data, bool csc)
-            {
-                // Convert numpy arrays to std::vector
-                std::vector<int> indptr_vec(indptr.data(), indptr.data() + indptr.size());
-                std::vector<int> indices_vec(indices.data(), indices.data() + indices.size());
-                std::vector<int> data_vec(data.data(), data.data() + data.size());
+                 [](int num_rows, int num_cols,
+                    py::array_t<int, py::array::c_style | py::array::forcecast> indptr,
+                    py::array_t<int, py::array::c_style | py::array::forcecast> indices,
+                    py::array_t<int, py::array::c_style | py::array::forcecast> data,
+                    bool csc)
+                 {
+                     // Pass numpy array data pointers directly — no copy into std::vector.
+                     // The numpy arrays are kept alive by py::keep_alive below.
+                     py::buffer_info indptr_buf = indptr.request();
+                     py::buffer_info indices_buf = indices.request();
+                     py::buffer_info data_buf = data.request();
 
-                // Return a new instance of CompressedDataStorage
-                return std::make_shared<CompressedDataStorage<int>>(
-                    num_rows, num_cols, std::move(indptr_vec), std::move(indices_vec),
-                    std::move(data_vec), csc);
-            }))
+                     return std::make_shared<CompressedDataStorage<int>>(
+                         num_rows, num_cols,
+                         static_cast<const int*>(indptr_buf.ptr), indptr_buf.size,
+                         static_cast<const int*>(indices_buf.ptr), indices_buf.size,
+                         static_cast<const int*>(data_buf.ptr), data_buf.size, csc);
+                 }),
+             keep_alive_1_3{}, keep_alive_1_4{}, keep_alive_1_5{})
         .def("num_rows", &CompressedDataStorage<int>::num_rows)
         .def("num_cols", &CompressedDataStorage<int>::num_cols)
-        .def("row_ptr", &CompressedDataStorage<int>::row_ptr)
-        .def("col_idx", &CompressedDataStorage<int>::col_idx)
-        .def("data", &CompressedDataStorage<int>::data)
-        // .def("cols_in_row", &CompressedDataStorage<int>::cols_in_row)
-        // .def("rows_in_col", &CompressedDataStorage<int>::rows_in_col)
+        .def("row_ptr",
+             [](const CompressedDataStorage<int>& cds)
+             {
+                 auto sp = cds.row_ptr();
+                 return std::vector<int>(sp.begin(), sp.end());
+             })
+        .def("col_idx",
+             [](const CompressedDataStorage<int>& cds)
+             {
+                 auto sp = cds.col_idx();
+                 return std::vector<int>(sp.begin(), sp.end());
+             })
+        .def("data",
+             [](const CompressedDataStorage<int>& cds)
+             {
+                 auto sp = cds.data();
+                 return std::vector<int>(sp.begin(), sp.end());
+             })
         .def("values", &CompressedDataStorage<int>::values)
-        .def("value", &CompressedDataStorage<int>::value);
+        .def("value", &CompressedDataStorage<int>::value)
+        .def_static(
+            "from_csc",
+            [](int num_rows, int num_cols,
+               py::array_t<int, py::array::c_style | py::array::forcecast> col_ptr,
+               py::array_t<int, py::array::c_style | py::array::forcecast> row_idx,
+               py::array_t<int, py::array::c_style | py::array::forcecast> values)
+            {
+                py::buffer_info col_ptr_buf = col_ptr.request();
+                py::buffer_info row_idx_buf = row_idx.request();
+                py::buffer_info values_buf = values.request();
+                return CompressedDataStorage<int>::from_csc(
+                    num_rows, num_cols,
+                    static_cast<const int*>(col_ptr_buf.ptr), col_ptr_buf.size,
+                    static_cast<const int*>(row_idx_buf.ptr), row_idx_buf.size,
+                    static_cast<const int*>(values_buf.ptr), values_buf.size);
+            },
+            keep_alive_0_3{}, keep_alive_0_4{}, keep_alive_0_5{});
 }
