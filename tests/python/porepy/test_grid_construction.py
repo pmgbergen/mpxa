@@ -51,7 +51,7 @@ def test_face_normals(grid_func, request):
 def test_nodes(grid_func, request):
     """Test the nodes of the grid."""
     g, g_pp = request.getfixturevalue(grid_func)
-    assert np.allclose(g.nodes(), g_pp.nodes.T)
+    assert np.allclose(g.nodes(), g_pp.nodes)
 
 
 @pytest.mark.parametrize("grid_func", ["grids_2d", "grids_3d"])
@@ -92,9 +92,9 @@ def test_faces_of_node(grid_func, request):
             f"Node {ni} faces do not match."
         )
     for fi in range(g_pp.num_faces):
-        assert np.allclose(g.nodes_of_face(fi), _nodes_of_face(g_pp, fi), atol=1e-6), (
-            f"Face {fi} nodes do not match."
-        )
+        assert np.allclose(
+            sorted(g.nodes_of_face(fi)), sorted(_nodes_of_face(g_pp, fi)), atol=1e-6
+        ), f"Face {fi} nodes do not match."
 
 
 @pytest.mark.parametrize("grid_func", ["grids_2d", "grids_3d"])

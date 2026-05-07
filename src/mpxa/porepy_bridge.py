@@ -128,7 +128,7 @@ def convert_csc_matrix_to_mpxa(
 
 def convert_grid_to_mpxa(source_grid: pp.Grid) -> _mpxa.Grid:
     dim = source_grid.dim
-    nodes = source_grid.nodes.T
+    nodes = np.ascontiguousarray(source_grid.nodes)
 
     def _to_csc(mat):
         return mat if mat.format == "csc" else mat.tocsc()
@@ -136,11 +136,11 @@ def convert_grid_to_mpxa(source_grid: pp.Grid) -> _mpxa.Grid:
     cell_faces = convert_csc_matrix_to_mpxa(_to_csc(source_grid.cell_faces))
     face_nodes = convert_csc_matrix_to_mpxa(_to_csc(source_grid.face_nodes))
     target_grid = _mpxa.Grid(dim, nodes, cell_faces, face_nodes)
-    target_grid.set_cell_volumes(np.ascontiguousarray(source_grid.cell_volumes))
-    target_grid.set_face_areas(np.ascontiguousarray(source_grid.face_areas))
-    target_grid.set_face_normals(np.ascontiguousarray(source_grid.face_normals.T))
-    target_grid.set_cell_centers(np.ascontiguousarray(source_grid.cell_centers.T))
-    target_grid.set_face_centers(np.ascontiguousarray(source_grid.face_centers.T))
+    target_grid.set_cell_volumes(source_grid.cell_volumes)
+    target_grid.set_face_areas(source_grid.face_areas)
+    target_grid.set_face_normals(np.ascontiguousarray(source_grid.face_normals))
+    target_grid.set_cell_centers(np.ascontiguousarray(source_grid.cell_centers))
+    target_grid.set_face_centers(np.ascontiguousarray(source_grid.face_centers))
     return target_grid
 
 
