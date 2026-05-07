@@ -27,12 +27,21 @@ def convert_matrix_scipy_to_mpxa(
     else:
         raise ValueError(f"Unsupported data type {dtype} for sparse matrix.")
 
+    if np.issubdtype(dtype, np.integer):
+        indptr = np.ascontiguousarray(sparse_matrix.indptr, dtype=np.int32)
+        indices = np.ascontiguousarray(sparse_matrix.indices, dtype=np.int32)
+        values = np.ascontiguousarray(sparse_matrix.data, dtype=np.int32)
+    else:
+        indptr = np.ascontiguousarray(sparse_matrix.indptr, dtype=np.int32)
+        indices = np.ascontiguousarray(sparse_matrix.indices, dtype=np.int32)
+        values = np.ascontiguousarray(sparse_matrix.data, dtype=np.float64)
+
     return matrix_class(
         sparse_matrix.shape[0],
         sparse_matrix.shape[1],
-        np.ascontiguousarray(sparse_matrix.indptr),
-        np.ascontiguousarray(sparse_matrix.indices),
-        np.ascontiguousarray(sparse_matrix.data),
+        indptr,
+        indices,
+        values,
         csc,
     )
 
@@ -83,11 +92,49 @@ def convert_vector_source_mpxa_to_scipy(
     return result_mat[:, mask]
 
 
+def convert_csc_matrix_to_mpxa(
+    sparse_matrix: sps.csc_matrix | sps.csc_array,
+) -> _mpxa.CompressedDataStorageDouble | _mpxa.CompressedDataStorageInt:
+    """Convert a CSC sparse matrix to mpxa without calling tocsr().
+
+    The CSC arrays (indptr, indices, data) are passed directly to C++ without
+    copying.  The CSR format is built once inside C++.
+
+    Parameters:
+        sparse_matrix: Input matrix in the CSC format.
+    """
+    if sparse_matrix.format != "csc":
+        raise ValueError(
+            "Expected sparse_matrix to be in CSC format, "
+            f"got format {sparse_matrix.format!r}."
+        )
+    dtype = sparse_matrix.data.dtype
+    # Ensure indptr/indices are int32 (C++ uses int).
+    col_ptr = np.asarray(sparse_matrix.indptr, dtype=np.int32)
+    row_idx = np.asarray(sparse_matrix.indices, dtype=np.int32)
+    if np.issubdtype(dtype, np.integer):
+        values = np.asarray(sparse_matrix.data, dtype=np.int32)
+        return _mpxa.CompressedDataStorageInt.from_csc(
+            sparse_matrix.shape[0], sparse_matrix.shape[1],
+            col_ptr, row_idx, values)
+    elif np.issubdtype(dtype, np.floating):
+        values = np.ascontiguousarray(sparse_matrix.data, dtype=np.float64)
+        return _mpxa.CompressedDataStorageDouble.from_csc(
+            sparse_matrix.shape[0], sparse_matrix.shape[1],
+            col_ptr, row_idx, values)
+    else:
+        raise ValueError(f"Unsupported data type {dtype} for sparse matrix.")
+
+
 def convert_grid_to_mpxa(source_grid: pp.Grid) -> _mpxa.Grid:
     dim = source_grid.dim
     nodes = source_grid.nodes.T
-    cell_faces = convert_matrix_scipy_to_mpxa(source_grid.cell_faces.tocsr(), csc=True)
-    face_nodes = convert_matrix_scipy_to_mpxa(source_grid.face_nodes.tocsr(), csc=True)
+
+    def _to_csc(mat):
+        return mat if mat.format == "csc" else mat.tocsc()
+
+    cell_faces = convert_csc_matrix_to_mpxa(_to_csc(source_grid.cell_faces))
+    face_nodes = convert_csc_matrix_to_mpxa(_to_csc(source_grid.face_nodes))
     target_grid = _mpxa.Grid(dim, nodes, cell_faces, face_nodes)
     target_grid.set_cell_volumes(np.ascontiguousarray(source_grid.cell_volumes))
     target_grid.set_face_areas(np.ascontiguousarray(source_grid.face_areas))
