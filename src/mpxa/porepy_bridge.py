@@ -49,11 +49,21 @@ def convert_matrix_scipy_to_mpxa(
 def convert_matrix_mpxa_to_scipy(
     mpxa_matrix: _mpxa.CompressedDataStorageInt | _mpxa.CompressedDataStorageDouble,
 ) -> sps.csr_matrix:
-    """Convert an mpxa.CompressedDataStorage to a scipy sparse matrix."""
+    """Convert an mpxa.CompressedDataStorage to a scipy sparse matrix.
+
+    The row_ptr, col_idx, and data accessors return zero-copy numpy views backed
+    by C++ span memory.  Passing copy=False lets SciPy use those buffers directly
+    so no intermediate allocation occurs during CSR construction.
+
+    Note: eliminate_zeros() is called afterwards to remove any explicit zeros that
+    the discretisation may produce (e.g. from sign-change cancellations).  If no
+    explicit zeros are present this call is a no-op; if they are present it
+    reallocates the internal arrays and is the only unavoidable copy.
+    """
     if isinstance(mpxa_matrix, _mpxa.CompressedDataStorageInt):
-        dtype = int
+        dtype = np.int32
     elif isinstance(mpxa_matrix, _mpxa.CompressedDataStorageDouble):
-        dtype = float
+        dtype = np.float64
     else:
         raise ValueError(
             f"Unsupported mpxa matrix type {type(mpxa_matrix)} for conversion."
@@ -63,6 +73,7 @@ def convert_matrix_mpxa_to_scipy(
         (mpxa_matrix.data(), mpxa_matrix.col_idx(), mpxa_matrix.row_ptr()),
         shape=(mpxa_matrix.num_rows(), mpxa_matrix.num_cols()),
         dtype=dtype,
+        copy=False,
     )
     mat.eliminate_zeros()
     return mat
@@ -115,13 +126,13 @@ def convert_csc_matrix_to_mpxa(
     if np.issubdtype(dtype, np.integer):
         values = np.asarray(sparse_matrix.data, dtype=np.int32)
         return _mpxa.CompressedDataStorageInt.from_csc(
-            sparse_matrix.shape[0], sparse_matrix.shape[1],
-            col_ptr, row_idx, values)
+            sparse_matrix.shape[0], sparse_matrix.shape[1], col_ptr, row_idx, values
+        )
     elif np.issubdtype(dtype, np.floating):
         values = np.ascontiguousarray(sparse_matrix.data, dtype=np.float64)
         return _mpxa.CompressedDataStorageDouble.from_csc(
-            sparse_matrix.shape[0], sparse_matrix.shape[1],
-            col_ptr, row_idx, values)
+            sparse_matrix.shape[0], sparse_matrix.shape[1], col_ptr, row_idx, values
+        )
     else:
         raise ValueError(f"Unsupported data type {dtype} for sparse matrix.")
 

@@ -47,25 +47,30 @@ void init_compressed_storage(py::module_& m)
              keep_alive_1_3{}, keep_alive_1_4{}, keep_alive_1_5{})
         .def("num_rows", &CompressedDataStorage<double>::num_rows)
         .def("num_cols", &CompressedDataStorage<double>::num_cols)
+        // Return zero-copy numpy views backed by the C++ span.  Passing `self`
+        // as the base object keeps the CompressedDataStorage Python wrapper alive
+        // as long as the returned array is alive, so the span memory is valid.
         .def("row_ptr",
-             [](const CompressedDataStorage<double>& cds)
+             [](py::object self)
              {
-                 auto sp = cds.row_ptr();
-                 return std::vector<int>(sp.begin(), sp.end());
+                 auto sp = self.cast<const CompressedDataStorage<double>&>().row_ptr();
+                 return py::array_t<int>({(py::ssize_t)sp.size()},
+                                        {(py::ssize_t)sizeof(int)}, sp.data(), self);
              })
         .def("col_idx",
-             [](const CompressedDataStorage<double>& cds)
+             [](py::object self)
              {
-                 auto sp = cds.col_idx();
-                 return std::vector<int>(sp.begin(), sp.end());
+                 auto sp = self.cast<const CompressedDataStorage<double>&>().col_idx();
+                 return py::array_t<int>({(py::ssize_t)sp.size()},
+                                        {(py::ssize_t)sizeof(int)}, sp.data(), self);
              })
         .def("data",
-             [](const CompressedDataStorage<double>& cds)
+             [](py::object self)
              {
-                 auto sp = cds.data();
-                 return std::vector<double>(sp.begin(), sp.end());
+                 auto sp = self.cast<const CompressedDataStorage<double>&>().data();
+                 return py::array_t<double>({(py::ssize_t)sp.size()},
+                                           {(py::ssize_t)sizeof(double)}, sp.data(), self);
              })
-        // TODO: Return as a numpy array instead of a list.
         .def("values", &CompressedDataStorage<double>::values)
         .def("value", &CompressedDataStorage<double>::value)
         .def_static(
@@ -110,23 +115,29 @@ void init_compressed_storage(py::module_& m)
              keep_alive_1_3{}, keep_alive_1_4{}, keep_alive_1_5{})
         .def("num_rows", &CompressedDataStorage<int>::num_rows)
         .def("num_cols", &CompressedDataStorage<int>::num_cols)
+        // Return zero-copy numpy views backed by the C++ span.  Passing `self`
+        // as the base object keeps the CompressedDataStorage Python wrapper alive
+        // as long as the returned array is alive, so the span memory is valid.
         .def("row_ptr",
-             [](const CompressedDataStorage<int>& cds)
+             [](py::object self)
              {
-                 auto sp = cds.row_ptr();
-                 return std::vector<int>(sp.begin(), sp.end());
+                 auto sp = self.cast<const CompressedDataStorage<int>&>().row_ptr();
+                 return py::array_t<int>({(py::ssize_t)sp.size()},
+                                        {(py::ssize_t)sizeof(int)}, sp.data(), self);
              })
         .def("col_idx",
-             [](const CompressedDataStorage<int>& cds)
+             [](py::object self)
              {
-                 auto sp = cds.col_idx();
-                 return std::vector<int>(sp.begin(), sp.end());
+                 auto sp = self.cast<const CompressedDataStorage<int>&>().col_idx();
+                 return py::array_t<int>({(py::ssize_t)sp.size()},
+                                        {(py::ssize_t)sizeof(int)}, sp.data(), self);
              })
         .def("data",
-             [](const CompressedDataStorage<int>& cds)
+             [](py::object self)
              {
-                 auto sp = cds.data();
-                 return std::vector<int>(sp.begin(), sp.end());
+                 auto sp = self.cast<const CompressedDataStorage<int>&>().data();
+                 return py::array_t<int>({(py::ssize_t)sp.size()},
+                                        {(py::ssize_t)sizeof(int)}, sp.data(), self);
              })
         .def("values", &CompressedDataStorage<int>::values)
         .def("value", &CompressedDataStorage<int>::value)
