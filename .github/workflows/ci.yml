@@ -51,6 +51,10 @@ jobs:
           git clone https://github.com/pmgbergen/porepy.git /tmp/porepy
           pip install /tmp/porepy
 
+      - name: Capture tested porepy SHA
+        id: porepy-sha
+        run: echo "sha=$(git -C /tmp/porepy rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Build and run C++ tests
         run: |
           ctest --test-dir build --output-on-failure
@@ -58,3 +62,35 @@ jobs:
       - name: Run Python tests
         run: |
           pytest tests/python
+
+      - name: Comment on originating porepy PR if nightly run failed
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.DOWNSTREAM_DISPATCH_PAT }}
+          POREPY_SHA: ${{ steps.porepy-sha.outputs.sha }}
+        run: |
+          PR_NUMBER=$(gh api "repos/pmgbergen/porepy/commits/$POREPY_SHA/pulls" --jq '.[0].number // empty')
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "### mpxa nightly test failed" >> "$GITHUB_STEP_SUMMARY"
+            echo "No originating porepy PR was found for \`$POREPY_SHA\`; nowhere to comment." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          MARKER="<!-- downstream-ci-comment: mpxa -->"
+          BODY="$MARKER
+          ### ❌ mpxa nightly integration test failed
+
+          The nightly build against porepy \`$POREPY_SHA\` failed in [mpxa]($RUN_URL).
+
+          [View run]($RUN_URL)"
+
+          EXISTING=$(gh api "repos/pmgbergen/porepy/issues/$PR_NUMBER/comments" \
+            --jq ".[] | select(.body | startswith(\"$MARKER\")) | .id" | head -n1)
+
+          if [ -n "$EXISTING" ]; then
+            gh api --method PATCH "repos/pmgbergen/porepy/issues/comments/$EXISTING" -f body="$BODY"
+          else
+            gh api --method POST "repos/pmgbergen/porepy/issues/$PR_NUMBER/comments" -f body="$BODY"
+          fi
