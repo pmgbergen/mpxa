@@ -1,4 +1,37 @@
 # Install and run mpxa. Tests for both C++ and the Python wrappers are run.
+#
+# This is mpxa's own everyday CI: it always tests against porepy's current
+# default branch (via a plain `git clone`, no pinned ref) and runs on mpxa's
+# own pushes/PRs/nightly schedule. It is intentionally unrelated to the
+# porepy-triggered dispatch mechanism in porepy-integration-test.yml (which
+# tests a *specific* porepy PR/SHA and is only ever started by porepy, via
+# workflow_dispatch) -- the two workflows share no state.
+#
+# The one piece of cross-repo behavior that *does* live here (added on top of
+# the pre-existing CI) is the last step: on a nightly (`schedule`) run only,
+# if the porepy build fails, resolve which porepy PR most recently merged the
+# tested SHA and post a comment there, so a porepy-side regression that only
+# shows up nightly doesn't go unnoticed for days. See
+# `.claude/downstream_testing.md` in the porepy repo for why this exists
+# (Phase 1 of that design) and how it relates to porepy-integration-test.yml
+# (Phase 2/3, same repo, same comment-upsert pattern, but triggered
+# immediately from porepy instead of waiting for the nightly cron).
+#
+# Debugging the nightly comment-back step specifically:
+#   - It only ever runs `if: failure() && github.event_name == 'schedule'` --
+#     an ordinary PR/push CI failure on mpxa never triggers a comment
+#     anywhere. To see it exercised, either wait for a nightly failure or
+#     temporarily change the `if:` while testing on a fork.
+#   - `POREPY_SHA` comes from the "Capture tested porepy SHA" step just
+#     above the test steps -- if that step didn't run (e.g. the workflow
+#     failed even earlier, during dependency install), this step has no SHA
+#     to look up and the PR-resolution API call will fail; check the run log
+#     for that step's output first.
+#   - The PR lookup (`commits/<sha>/pulls`) and the comment upsert
+#     (find-by-marker, then PATCH-or-POST) follow the same logic as
+#     porepy-integration-test.yml's failure step in this repo -- see that
+#     file's header comment for the mechanics (marker comments, PRs-as-issues
+#     in the GitHub API, etc.) if something here is unclear.
 name: MPXA_CI
 
 on:
@@ -52,6 +85,12 @@ jobs:
           git clone https://github.com/pmgbergen/porepy.git /tmp/porepy
           pip install /tmp/porepy
 
+      # This repo's CI always clones porepy's current default branch (no
+      # pinned ref), so the exact commit tested is only known after cloning.
+      # Recorded now (as a step `output`, readable later in this same job as
+      # `steps.porepy-sha.outputs.sha`) so the failure-comment step below can
+      # report/resolve it, without needing to re-derive it from a stale
+      # checkout after the test steps have run.
       - name: Capture tested porepy SHA
         id: porepy-sha
         run: echo "sha=$(git -C /tmp/porepy rev-parse HEAD)" >> "$GITHUB_OUTPUT"
