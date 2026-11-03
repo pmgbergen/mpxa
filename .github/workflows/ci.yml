@@ -1,20 +1,8 @@
 # Install and run mpxa. Tests for both C++ and the Python wrappers are run.
 #
-# This is mpxa's own everyday CI: it always tests against porepy's current
-# default branch (via a plain `git clone`, no pinned ref) and runs on mpxa's
-# own pushes/PRs/nightly schedule. It is intentionally unrelated to the
-# porepy-triggered dispatch mechanism in porepy-integration-test.yml (which
-# tests a *specific* porepy PR/SHA and is only ever started by porepy, via
-# workflow_dispatch) -- the two workflows share no state.
-#
-# The one addition on top of the pre-existing CI is the last step: on a
-# failed nightly (`schedule`) run, write the porepy commit that was tested to
-# the job summary, so a nightly failure can be traced to a porepy commit.
-# It deliberately does not comment on any porepy PR: porepy changes are
-# already reported on the responsible PR by porepy-integration-test.yml,
-# right when they are opened or merged. A nightly failure is more likely
-# caused by a change in mpxa itself or in its dependencies, and blaming
-# whichever porepy PR happens to be at the tip of develop would be wrong.
+# Tests against PorePy's current develop. On a failed nightly run, the tested
+# PorePy commit is written to the job summary. Testing of specific PorePy
+# commits is done in porepy-integration-test.yml.
 name: MPXA_CI
 
 on:
@@ -68,11 +56,7 @@ jobs:
           git clone https://github.com/pmgbergen/porepy.git /tmp/porepy
           pip install /tmp/porepy
 
-      # This repo's CI always clones porepy's current default branch (no
-      # pinned ref), so the exact commit tested is only known after cloning.
-      # Recorded now (as a step `output`, readable later in this same job as
-      # `steps.porepy-sha.outputs.sha`) so the nightly failure step below can
-      # report it.
+      # Reported by the nightly failure step below.
       - name: Capture tested porepy SHA
         id: porepy-sha
         run: echo "sha=$(git -C /tmp/porepy rev-parse HEAD)" >> "$GITHUB_OUTPUT"

@@ -1,61 +1,20 @@
-# Runs mpxa's test suite against a specific porepy ref/SHA. This workflow is
-# never triggered by anything happening in mpxa itself -- it only has a
-# `workflow_dispatch` trigger, meaning it starts only when something calls
-# the GitHub API to run it. That caller is porepy's
-# `.github/workflows/trigger-downstream-tests.yml`, on a push to porepy's
-# `develop` branch or on a porepy pull request; see that file's header
-# comment (in the porepy repo) for the full cross-repo picture and for
-# `.claude/downstream_testing.md`, the design doc this whole setup follows.
-# This file is separate from ci.yml so mpxa's own PR/push/nightly CI (which
-# always tests against porepy's current default branch, unrelated to this
-# dispatch mechanism) is untouched.
+# Run mpxa's tests against a given PorePy commit, and report the result on the
+# PorePy PR that the commit belongs to.
 #
-# On failure, if a porepy PR number was supplied, upserts (edits-or-creates)
-# a marked comment on that PR; otherwise the failure is only visible in this
-# run's job summary. On success, an existing marked comment is edited to say
-# the tests now pass, but no new comment is created -- a PR that never broke
-# mpxa gets no comment at all.
+# Triggered only by workflow_dispatch, from PorePy's
+# .github/workflows/trigger-downstream-tests.yml on PRs into, and pushes to,
+# PorePy's develop. The inputs below are the interface to that workflow. ci.yml
+# is mpxa's own CI and is unaffected.
 #
-# --- How this fits together (read this if you only know GitHub Actions
-#     superficially) ---
+# If porepy_pr_number is set, a failure creates or updates a comment on that
+# PR, found by a hidden marker. A pass only updates an existing comment, so PRs
+# that never broke mpxa get no comment. Without a PR number, failures are
+# written to the job summary.
 #
-#   1. `on: workflow_dispatch: inputs:` declares this workflow's parameters.
-#      Think of them like a function signature: whoever calls
-#      `gh workflow run porepy-integration-test.yml -f porepy_ref=... -f ...`
-#      (or uses "Run workflow" in the GitHub UI) must supply values matching
-#      these names. Inside the workflow they're read as `inputs.<name>`.
-#      Docs: https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow
-#      and https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#onworkflow_dispatchinputs
-#   2. The `build-and-test` job installs mpxa's own dependencies, then
-#      installs porepy from the requested `porepy_sha` (if set) or
-#      `porepy_ref`, then runs mpxa's C++ and Python test suites -- this
-#      part is otherwise identical to ci.yml's own steps.
-#   3. If a PR number was given, the "Update comment on porepy PR" step runs
-#      on both success and failure (not on cancellation) and reports the
-#      outcome there. If no PR number was given and a step failed, the
-#      failure is written to this run's job summary instead.
-#
-# Debugging / extending:
-#   - To manually re-run this exact workflow without needing a real porepy
-#     push/PR: GitHub Actions tab -> this workflow -> "Run workflow", and
-#     fill in the inputs by hand (e.g. porepy_ref=develop, leave the rest
-#     blank to test the "no PR to comment on" path).
-#   - If the run never even starts: check porepy's
-#     trigger-downstream-tests.yml run log for the `gh workflow run` call
-#     that should have triggered it -- a failure there (bad PAT scope, wrong
-#     ref/workflow_file in porepy's downstream-repos.json) means this
-#     workflow is never invoked at all, and nothing will appear here.
-#   - If the run happens but no comment appears on the porepy PR: check this
-#     run's own log for the "Update comment on porepy PR" step. Common
-#     causes: `porepy_pr_number` was empty (see the job summary instead),
-#     or `DOWNSTREAM_DISPATCH_PAT` lacks "Pull requests: Read and write" on
-#     porepy.
-#   - The upsert logic below treats the porepy PR as a GitHub "issue" (GitHub
-#     PRs are issues under the hood, sharing the issues/comments API) and
-#     finds any previous comment by its hidden `MARKER` HTML comment, editing
-#     it in place instead of posting a new one on every failed re-run. If you
-#     need to see the raw comment IDs, `gh api repos/pmgbergen/porepy/issues/<PR>/comments`
-#     lists them.
+# Debugging: run manually via "Run workflow" in the Actions tab. If no run
+# appears, check the dispatching run in PorePy. If no comment appears, check
+# that DOWNSTREAM_DISPATCH_PAT has write access to PorePy's pull requests.
+# Docs: https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow
 name: PorePy integration test
 
 on:
@@ -78,11 +37,7 @@ on:
         required: false
         default: 'push'
 
-# Concurrency groups are scoped to this repo, so this is independent of the
-# group used in porepy's trigger-downstream-tests.yml. Keying by the tested
-# SHA means a re-dispatch of the same porepy commit cancels the older run,
-# while runs for different commits (e.g. a PR's last pre-merge run and the
-# post-merge run for its merge commit) never cancel each other.
+# A re-dispatch of the same PorePy commit cancels the older run.
 concurrency:
   group: downstream-dispatch-${{ inputs.porepy_sha || inputs.porepy_ref }}
   cancel-in-progress: true
@@ -122,9 +77,7 @@ jobs:
 
       - name: Clone and install PorePy at requested ref
         run: |
-          # porepy_sha wins when set (it's the immutable, exact commit under
-          # test); porepy_ref is the fallback for a manual/dev run where only
-          # a branch name was given.
+          # porepy_sha takes precedence; porepy_ref is for manual runs.
           CHECKOUT_REF="${{ inputs.porepy_sha != '' && inputs.porepy_sha || inputs.porepy_ref }}"
           git clone https://github.com/pmgbergen/porepy.git /tmp/porepy
           git -C /tmp/porepy checkout "$CHECKOUT_REF"
@@ -138,10 +91,8 @@ jobs:
         run: |
           pytest tests/python
 
-      # Runs on success and failure, but not on cancellation (a superseded run
-      # has nothing to report). `job.status` is the outcome of the steps so
-      # far. On failure, create or edit the marked comment; on success, only
-      # edit an existing one, so the PR stops showing a stale failure.
+      # Not run on cancellation. On failure, create or edit the marked
+      # comment; on success, only edit an existing one.
       - name: Update comment on porepy PR
         if: (success() || failure()) && inputs.porepy_pr_number != ''
         env:
