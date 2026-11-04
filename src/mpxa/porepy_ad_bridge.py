@@ -72,8 +72,11 @@ def _rotate_1d_grid_to_x_axis(
     g: pp.Grid, k: pp.SecondOrderTensor
 ) -> tuple[pp.Grid, pp.SecondOrderTensor, np.ndarray]:
     # Unit vector along the grid. This breaks if the grid is not a straight line.
+    # Nodes may be duplicated (e.g., where a fracture is split at an intersection),
+    # so use the node farthest from the first one rather than an arbitrary pair.
     g = g.copy()
-    v = g.nodes[:, 1] - g.nodes[:, 0]
+    diff = g.nodes - g.nodes[:, [0]]
+    v = diff[:, np.argmax(np.linalg.norm(diff, axis=0))]
     v /= np.linalg.norm(v)
 
     # Project the grid geometry onto the line defined by v, and delete the other
