@@ -6,7 +6,7 @@ import scipy.sparse as sps
 import numpy as np
 import porepy as pp
 from porepy.numerics.ad.ad_utils import MergedOperator, wrap_discretization
-from porepy.numerics.ad.discretizations import Discretization
+from porepy.numerics.ad.discretizations import DiscretizationAd
 
 import mpxa
 from mpxa import _mpxa
@@ -286,8 +286,8 @@ class Mpfa(pp.FVElliptic):
         _store_discretization_matrices(sd, data, self.keyword, mpfa_cpp, rot_info)
 
 
-class TpfaAd(Discretization):
-    def __init__(self, keyword: str, subdomains: list[pp.Grid]) -> None:
+class TpfaAd(DiscretizationAd):
+    def __init__(self, keyword: str, subdomains: list[pp.Grid], nd: int) -> None:
         self.subdomains = subdomains
         self._name = "Tpfa"
         self._discretization = Tpfa(keyword)
@@ -301,11 +301,11 @@ class TpfaAd(Discretization):
         self.vector_source: Callable[[], MergedOperator]
         self.bound_pressure_vector_source: Callable[[], MergedOperator]
 
-        wrap_discretization(self, self._discretization, subdomains=subdomains)
+        wrap_discretization(self, self._discretization, nd=nd, subdomains=subdomains)
 
 
-class MpfaAd(Discretization):
-    def __init__(self, keyword: str, subdomains: list[pp.Grid]) -> None:
+class MpfaAd(DiscretizationAd):
+    def __init__(self, keyword: str, subdomains: list[pp.Grid], nd: int) -> None:
         self.subdomains = subdomains
         self._name = "Mpfa"
         self._discretization = Mpfa(keyword)
@@ -319,4 +319,4 @@ class MpfaAd(Discretization):
         self.vector_source: Callable[[], MergedOperator]
         self.bound_pressure_vector_source: Callable[[], MergedOperator]
 
-        wrap_discretization(self, self._discretization, subdomains=subdomains)
+        wrap_discretization(self, self._discretization, nd=nd, subdomains=subdomains)

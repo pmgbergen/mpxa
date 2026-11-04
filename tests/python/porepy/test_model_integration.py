@@ -56,22 +56,22 @@ def test_fluid_mass_balance_model_integration(
     class TestedModel(GeometryMixin, TestProblemBC):
         def darcy_flux_discretization(
             self, subdomains: list[pp.Grid]
-        ) -> pp.ad.Discretization:
+        ) -> pp.ad.DiscretizationAd:
             if discr_type == "mpfa":
-                return mpxa.MpfaAd(self.darcy_keyword, subdomains)
+                return mpxa.MpfaAd(self.darcy_keyword, subdomains, nd=self.nd)
             elif discr_type == "tpfa":
-                return mpxa.TpfaAd(self.darcy_keyword, subdomains)
+                return mpxa.TpfaAd(self.darcy_keyword, subdomains, nd=self.nd)
             else:
                 raise ValueError(f"{discr_type = }")
 
     class ExpectedModel(GeometryMixin, TestProblemBC):
         def darcy_flux_discretization(
             self, subdomains: list[pp.Grid]
-        ) -> pp.ad.Discretization:
+        ) -> pp.ad.DiscretizationAd:
             if discr_type == "mpfa":
-                return pp.ad.MpfaAd(self.darcy_keyword, subdomains)
+                return pp.ad.MpfaAd(self.darcy_keyword, subdomains, nd=self.nd)
             elif discr_type == "tpfa":
-                return pp.ad.TpfaAd(self.darcy_keyword, subdomains)
+                return pp.ad.TpfaAd(self.darcy_keyword, subdomains, nd=self.nd)
             else:
                 raise ValueError(f"{discr_type = }")
 
