@@ -25,6 +25,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
+          # The Python version is bound by the versions supported by PorePy.
           python-version: '3.14'
 
       - name: Install C++ dependencies
