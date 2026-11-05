@@ -51,10 +51,33 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # Cloned before Python is set up, since the Python version is read from it.
+      - name: Clone PorePy at requested ref
+        run: |
+          # porepy_sha takes precedence; porepy_ref is for manual runs.
+          CHECKOUT_REF="${{ inputs.porepy_sha != '' && inputs.porepy_sha || inputs.porepy_ref }}"
+          git clone https://github.com/pmgbergen/porepy.git /tmp/porepy
+          git -C /tmp/porepy checkout "$CHECKOUT_REF"
+
+      # Use the latest Python version PorePy tests on: the last entry of the
+      # version matrix in PorePy's run-pytest.yml (yq is preinstalled on GitHub's
+      # Ubuntu runners). Fails loudly if that file changes shape.
+      - name: Determine latest Python version supported by PorePy
+        id: python-version
+        run: |
+          VERSION=$(yq '.jobs.*.strategy.matrix.python-version[-1]' \
+            /tmp/porepy/.github/workflows/run-pytest.yml)
+          if ! [[ "$VERSION" =~ ^3\.[0-9]+$ ]]; then
+            echo "::error::Could not read Python version from PorePy's run-pytest.yml (got '$VERSION')."
+            exit 1
+          fi
+          echo "Using Python $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: ${{ steps.python-version.outputs.version }}
 
       - name: Install C++ dependencies
         run: |
@@ -75,12 +98,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install .[testing]
 
-      - name: Clone and install PorePy at requested ref
+      - name: Install PorePy
         run: |
-          # porepy_sha takes precedence; porepy_ref is for manual runs.
-          CHECKOUT_REF="${{ inputs.porepy_sha != '' && inputs.porepy_sha || inputs.porepy_ref }}"
-          git clone https://github.com/pmgbergen/porepy.git /tmp/porepy
-          git -C /tmp/porepy checkout "$CHECKOUT_REF"
           pip install /tmp/porepy
 
       - name: Build and run C++ tests
