@@ -37,9 +37,12 @@ on:
         required: false
         default: 'push'
 
-# A re-dispatch of the same PorePy commit cancels the older run.
+# Runs for the same PorePy PR share a group, so a newer commit on the PR (or
+# its merge) cancels the run for an older one. A cancelled run does not
+# comment, so a superseded commit cannot overwrite the latest result. Without
+# a PR number, runs are grouped by the tested commit.
 concurrency:
-  group: downstream-dispatch-${{ inputs.porepy_sha || inputs.porepy_ref }}
+  group: downstream-dispatch-${{ inputs.porepy_pr_number || inputs.porepy_sha || inputs.porepy_ref }}
   cancel-in-progress: true
 
 jobs:
@@ -52,12 +55,18 @@ jobs:
         uses: actions/checkout@v3
 
       # Cloned before Python is set up, since the Python version is read from it.
+      # The requested ref or SHA is fetched explicitly and checked out detached,
+      # since a SHA may not be on any branch fetched by the clone (e.g. if the PR
+      # branch was deleted). The ref is passed through the environment, so that
+      # it is not expanded as shell code.
       - name: Clone PorePy at requested ref
-        run: |
+        env:
           # porepy_sha takes precedence; porepy_ref is for manual runs.
-          CHECKOUT_REF="${{ inputs.porepy_sha != '' && inputs.porepy_sha || inputs.porepy_ref }}"
+          CHECKOUT_REF: ${{ inputs.porepy_sha != '' && inputs.porepy_sha || inputs.porepy_ref }}
+        run: |
           git clone https://github.com/pmgbergen/porepy.git /tmp/porepy
-          git -C /tmp/porepy checkout "$CHECKOUT_REF"
+          git -C /tmp/porepy fetch origin "$CHECKOUT_REF"
+          git -C /tmp/porepy checkout --detach FETCH_HEAD
 
       # Use the latest Python version PorePy tests on: the last entry of the
       # version matrix in PorePy's run-pytest.yml (yq is preinstalled on GitHub's
@@ -150,6 +159,10 @@ jobs:
 
       - name: Log failure to job summary if no PR to comment on
         if: failure() && inputs.porepy_pr_number == ''
+        # Passed through the environment, so that the ref is not expanded as shell
+        # code.
+        env:
+          TESTED_REF: ${{ inputs.porepy_sha || inputs.porepy_ref }}
         run: |
           echo "### mpxa integration test failed" >> "$GITHUB_STEP_SUMMARY"
-          echo "No originating porepy PR was resolved for \`${{ inputs.porepy_sha || inputs.porepy_ref }}\`; nowhere to comment." >> "$GITHUB_STEP_SUMMARY"
+          echo "No originating porepy PR was resolved for \`$TESTED_REF\`; nowhere to comment." >> "$GITHUB_STEP_SUMMARY"
